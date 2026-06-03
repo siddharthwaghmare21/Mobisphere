@@ -1,23 +1,313 @@
 
-import BackgroundHomeImage from "./components/home-components/BackgroundHomeImage";
-import BannerSection from "./components/home-components/BannerSection";
-import PricingSection from "./components/home-components/PricingSection";
-import LatestProduct from "./components/home-components/LatestProduct";
-import OtherFacilities from "./components/home-components/OtherFacilities";
-import EnquiryForm from "./components/home-components/EnquiryForm";
+"use client"
+
+import React, { useEffect, useState } from 'react'
+import BackgroundHomeImage from './components/home-components/BackgroundHomeImage'
+import BannerSection from './components/home-components/BannerSection'
+import PricingSection from './components/home-components/PricingSection'
+import LatestProduct from './components/home-components/LatestProduct'
+import OtherFacilities from './components/home-components/OtherFacilities'
+
+const initialSignupData = {
+  fullName: '',
+  password: '',
+  mobileNumber: '',
+  address: '',
+}
+
+const initialLoginData = {
+  fullName: '',
+  password: '',
+  mobileNumber: '',
+  address: '',
+}
+
+const isValidIndianMobile = (value) => /^[6-9]\d{9}$/.test(value)
+
+const getStoredAccounts = () => {
+  if (typeof window === 'undefined') return []
+  try {
+    return JSON.parse(localStorage.getItem('mobisphereCustomers') || '[]')
+  } catch {
+    return []
+  }
+}
+
+const getStoredUser = () => {
+  if (typeof window === 'undefined') return null
+  try {
+    return JSON.parse(localStorage.getItem('mobisphereLoggedIn') || 'null')
+  } catch {
+    return null
+  }
+}
+
+const saveAccounts = (accounts) => {
+  if (typeof window === 'undefined') return
+  localStorage.setItem('mobisphereCustomers', JSON.stringify(accounts))
+}
+
+const saveLoggedInUser = (user) => {
+  if (typeof window === 'undefined') return
+  localStorage.setItem('mobisphereLoggedIn', JSON.stringify(user))
+  window.dispatchEvent(new Event('mobisphereUserChanged'))
+}
 
 export default function Home() {
+  const [tab, setTab] = useState('signup')
+  const [signupData, setSignupData] = useState(initialSignupData)
+  const [loginData, setLoginData] = useState(initialLoginData)
+  const [accounts, setAccounts] = useState([])
+  const [loggedInUser, setLoggedInUser] = useState(null)
+  const [message, setMessage] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    setAccounts(getStoredAccounts())
+    setLoggedInUser(getStoredUser())
+  }, [])
+
+  useEffect(() => {
+    if (loggedInUser) {
+      setMessage(`Welcome back, ${loggedInUser.fullName}!`)
+    }
+  }, [loggedInUser])
+
+  const handleSignupChange = (field, value) => {
+    setSignupData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleLoginChange = (field, value) => {
+    setLoginData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleSignup = () => {
+    setMessage('')
+
+    if (!signupData.fullName.trim() || !signupData.password || !signupData.mobileNumber.trim() || !signupData.address.trim()) {
+      setMessage('Please complete all fields before signing up.')
+      return
+    }
+
+    if (signupData.password.length < 6) {
+      setMessage('Password must be at least 6 characters long.')
+      return
+    }
+
+    if (!isValidIndianMobile(signupData.mobileNumber.trim())) {
+      setMessage('Mobile number must be a valid 10-digit Indian number.')
+      return
+    }
+
+    setIsSubmitting(true)
+
+    const normalizedMobile = signupData.mobileNumber.trim()
+    const newAccount = {
+      id: Date.now().toString(),
+      fullName: signupData.fullName.trim(),
+      password: signupData.password,
+      mobileNumber: normalizedMobile,
+      address: signupData.address.trim(),
+      verifiedAt: new Date().toISOString(),
+    }
+
+    const nextAccounts = [...accounts, newAccount]
+    setAccounts(nextAccounts)
+    saveAccounts(nextAccounts)
+    setLoggedInUser(newAccount)
+    saveLoggedInUser(newAccount)
+    setSignupData(initialSignupData)
+    setMessage(`Account created successfully for ${newAccount.fullName}.`)
+    setIsSubmitting(false)
+  }
+
+  const handleLogin = () => {
+    setMessage('')
+
+    if (!loginData.fullName.trim() || !loginData.password || !loginData.mobileNumber.trim() || !loginData.address.trim()) {
+      setMessage('Please enter your name, password, mobile number, and address to login.')
+      return
+    }
+
+    if (!isValidIndianMobile(loginData.mobileNumber.trim())) {
+      setMessage('Please provide a valid 10-digit Indian mobile number to login.')
+      return
+    }
+
+    const matchedAccount = accounts.find(
+      (account) =>
+        account.fullName.toLowerCase() === loginData.fullName.trim().toLowerCase() &&
+        account.password === loginData.password &&
+        account.mobileNumber === loginData.mobileNumber.trim() &&
+        account.address.toLowerCase() === loginData.address.trim().toLowerCase(),
+    )
+
+    if (!matchedAccount) {
+      setMessage('No matching account found. Please check your details or sign up first.')
+      return
+    }
+
+    setLoggedInUser(matchedAccount)
+    saveLoggedInUser(matchedAccount)
+    setMessage(`Welcome back, ${matchedAccount.fullName}!`)
+  }
+
+  if (!loggedInUser) {
+    return (
+      <section className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
+        <div className="mb-8 rounded-[2rem] bg-white p-8 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)]">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Mobisphere account</p>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">Create your account</h1>
+              <p className="mt-3 max-w-2xl text-sm text-slate-600 sm:text-base">
+                Sign up with name, password, mobile number, and address to continue to the home page.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6 rounded-[2rem] bg-white p-8 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)]">
+          {message && (
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              {message}
+            </div>
+          )}
+
+          {tab === 'signup' ? (
+            <div className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span>Name</span>
+                  <input
+                    value={signupData.fullName}
+                    onChange={(e) => handleSignupChange('fullName', e.target.value)}
+                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                    placeholder="Full Name"
+                  />
+                </label>
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span>Password</span>
+                  <input
+                    value={signupData.password}
+                    onChange={(e) => handleSignupChange('password', e.target.value)}
+                    type="password"
+                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                    placeholder="Create a password"
+                  />
+                </label>
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span>Mobile Number</span>
+                  <input
+                    value={signupData.mobileNumber}
+                    onChange={(e) => handleSignupChange('mobileNumber', e.target.value)}
+                    type="tel"
+                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                    placeholder="10-digit Indian mobile"
+                  />
+                </label>
+                <label className="sm:col-span-2 space-y-2 text-sm text-slate-700">
+                  <span>Address</span>
+                  <textarea
+                    value={signupData.address}
+                    onChange={(e) => handleSignupChange('address', e.target.value)}
+                    className="h-28 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                    placeholder="Street, city, state, pincode"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleSignup}
+                  disabled={isSubmitting}
+                  className="inline-flex items-center justify-center rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  Sign up
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span>Name</span>
+                  <input
+                    value={loginData.fullName}
+                    onChange={(e) => handleLoginChange('fullName', e.target.value)}
+                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                    placeholder="Full Name"
+                  />
+                </label>
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span>Password</span>
+                  <input
+                    value={loginData.password}
+                    onChange={(e) => handleLoginChange('password', e.target.value)}
+                    type="password"
+                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                    placeholder="Password"
+                  />
+                </label>
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span>Mobile Number</span>
+                  <input
+                    value={loginData.mobileNumber}
+                    onChange={(e) => handleLoginChange('mobileNumber', e.target.value)}
+                    type="tel"
+                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                    placeholder="10-digit Indian mobile"
+                  />
+                </label>
+                <label className="sm:col-span-2 space-y-2 text-sm text-slate-700">
+                  <span>Address</span>
+                  <textarea
+                    value={loginData.address}
+                    onChange={(e) => handleLoginChange('address', e.target.value)}
+                    className="h-28 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                    placeholder="Street, city, state, pincode"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleLogin}
+                  disabled={isSubmitting}
+                  className="inline-flex items-center justify-center rounded-full bg-slate-950 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  Log in
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-8 text-center text-sm text-slate-600">
+            <p>Already have an account?</p>
+            <button
+              type="button"
+              onClick={() => setTab('login')}
+              className="mt-3 inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+            >
+              Login
+            </button>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <>
       <BackgroundHomeImage />
       <BannerSection />
-      
-      <EnquiryForm />
       <LatestProduct />
       <PricingSection />
       <OtherFacilities />
     </>
-  );
+  )
 }
 
 

@@ -125,8 +125,9 @@ export default function MenuPage() {
     setLoggedInUser(newAccount)
     saveLoggedInUser(newAccount)
     setSignupData(initialSignupData)
-    setMessage(`Account created successfully for ${newAccount.fullName}. Your profile is now visible on the admin page.`)
+    setMessage(`Account created successfully for ${newAccount.fullName}.`) 
     setIsSubmitting(false)
+    router.push('/')
   }
 
   const handleLogin = () => {

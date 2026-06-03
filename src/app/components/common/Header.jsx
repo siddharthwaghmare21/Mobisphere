@@ -89,13 +89,13 @@ export default function Header() {
                 <div className={`${menuOpen ? 'block' : 'hidden'} w-full md:block md:w-auto`} id="navbar-default">
                     <ul className="space-y-3 rounded-3xl border border-slate-200/80 bg-white/95 p-4 text-center text-base font-medium text-slate-700 shadow-sm md:flex md:space-y-0 md:space-x-4 md:border md:border-slate-200/50 md:bg-white/90 md:p-3 lg:px-4 lg:py-3">
                         <li>
-                            <Link href="/" className="block rounded-full py-2 px-3 text-slate-700 transition hover:bg-slate-100 md:hover:bg-slate-100 md:p-2">
-                                Home
+                            <Link href="/menu" className="block rounded-full py-2 px-3 text-slate-700 transition hover:bg-slate-100 md:hover:bg-slate-100 md:p-2">
+                                Account
                             </Link>
                         </li>
                         <li>
-                            <Link href="/about-us" className="block rounded-full py-2 px-3 text-slate-700 transition hover:bg-slate-100 md:hover:bg-slate-100 md:p-2">
-                                About
+                            <Link href="/" className="block rounded-full py-2 px-3 text-slate-700 transition hover:bg-slate-100 md:hover:bg-slate-100 md:p-2">
+                                Home
                             </Link>
                         </li>
                         <li>
@@ -104,27 +104,20 @@ export default function Header() {
                             </Link>
                         </li>
                         <li>
+                            <Link href="/enquiry" className="block rounded-full py-2 px-3 text-slate-700 transition hover:bg-slate-100 md:hover:bg-slate-100 md:p-2">
+                                Enquiry
+                            </Link>
+                        </li>
+                        <li>
                             <Link href="/pricing" className="block rounded-full py-2 px-3 text-slate-700 transition hover:bg-slate-100 md:hover:bg-slate-100 md:p-2">
                                 Pricing
                             </Link>
                         </li>
                         <li>
-                            <Link href="/menu" className="block rounded-full py-2 px-3 text-slate-700 transition hover:bg-slate-100 md:hover:bg-slate-100 md:p-2">
-                                Account
+                            <Link href="/about-us" className="block rounded-full py-2 px-3 text-slate-700 transition hover:bg-slate-100 md:hover:bg-slate-100 md:p-2">
+                                About
                             </Link>
                         </li>
-                        <li>
-                            <Link href="/enquiry" className="block rounded-full py-2 px-3 text-slate-700 transition hover:bg-slate-100 md:hover:bg-slate-100 md:p-2">
-                                Enquiry
-                            </Link>
-                        </li>
-                        {isAdmin && (
-                            <li>
-                                <Link href="/admin-panel" className="block rounded-full py-2 px-3 text-slate-700 transition hover:bg-slate-100 md:hover:bg-slate-100 md:p-2">
-                                    Admin
-                                </Link>
-                            </li>
-                        )}
                     </ul>
                 </div>
             </nav>
