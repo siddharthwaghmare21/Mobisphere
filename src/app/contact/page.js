@@ -28,7 +28,7 @@ export default function ContactPage() {
                             </div>
                             <div>
                                 <p className="font-semibold text-slate-900">Email</p>
-                                <p>support@adhirajmobile.com</p>
+                                <p>support@mobisphere.com</p>
                             </div>
                             <div>
                                 <p className="font-semibold text-slate-900">Hours</p>
@@ -43,7 +43,7 @@ export default function ContactPage() {
                             <h2 className="mt-3 text-2xl font-semibold">Sangli store location</h2>
                         </div>
                         <iframe
-                            title="Adhiraj Mobile Sangli Location"
+                            title="Mobisphere Sangli Location"
                             src="https://www.google.com/maps/embed?pb=!1m16!1m12!1m3!1d61094.935553644216!2d74.58410011673539!3d16.854438372008616!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!2m1!1ssangli%20municipal%20corporation!5e0!3m2!1sen!2sin!4v1780394066872!5m2!1sen!2sin"
                             width="600"
                             height="450"

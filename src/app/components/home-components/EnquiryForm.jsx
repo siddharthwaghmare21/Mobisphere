@@ -33,7 +33,7 @@ export default function EnquiryForm() {
                             </div>
                             <div className="rounded-3xl bg-slate-800/70 p-5">
                                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-100">Email</p>
-                                <p className="mt-3 text-sm leading-6 text-slate-300">support@adhirajmobile.com</p>
+                                <p className="mt-3 text-sm leading-6 text-slate-300">support@mobisphere.com</p>
                             </div>
                             <div className="rounded-3xl bg-slate-800/70 p-5">
                                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-100">Hours</p>

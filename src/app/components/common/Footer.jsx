@@ -8,14 +8,14 @@ export default function Footer() {
                     <div className="max-w-md">
                         <a href="/" className="inline-flex items-center gap-3">
                             <img
-                                src="/images/AdhirajLogo2.jpeg"
-                                alt="Adhiraj Mobile logo"
+                                src="/images/MobisphereLogo.jpeg"
+                                alt="Mobisphere Logo"
                                 width={40}
                                 height={40}
                                 className="h-10 w-10 rounded-2xl object-cover"
                             />
                             <span className="text-2xl font-semibold tracking-tight text-slate-950">
-                                Adhiraj Mobile Shop
+                                Mobisphere Mobile Shop
                             </span>
                         </a>
                         <p className="mt-4 text-sm leading-6 text-slate-950/85">
@@ -48,7 +48,7 @@ export default function Footer() {
                                     </a>
                                 </li>
                                 <li>
-                                    <a href="mailto:support@adhirajmobile.com" className="transition hover:text-slate-950 hover:underline">
+                                    <a href="mailto:support@mobisphere.com" className="transition hover:text-slate-950 hover:underline">
                                         Email support
                                     </a>
                                 </li>
@@ -76,7 +76,7 @@ export default function Footer() {
 
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <span className="text-sm text-slate-950/80 sm:text-center">
-                        © 2026 <a href="/" className="font-semibold text-slate-950 hover:underline">Adhiraj Mobile Shop</a>. All Rights Reserved.
+                        © 2026 <a href="/" className="font-semibold text-slate-950 hover:underline">Mobisphere Mobile Shop</a>. All Rights Reserved.
                     </span>
                     <div className="flex flex-wrap items-center gap-4 justify-center sm:justify-start">
                         <a href="#" className="text-slate-950/80 transition hover:text-slate-950">

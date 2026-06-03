@@ -6,8 +6,8 @@ import Footer from "@/app/components/common/Footer";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata = {
-  title: "Adhiraj Mobile Shop",
-  description: "Shop the latest mobile phones, accessories, and get fast local support in Sangli.",
+  title: "Mobisphere Mobile Shop",
+  description: "Shop the latest mobile phones, accessories, and get fast local support in Sangli with Mobisphere.",
 };
 
 export const viewport = {

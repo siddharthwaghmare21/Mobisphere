@@ -28,7 +28,7 @@ export default function BannerSection() {
                             Your reliable source for mobiles, accessories, and local service.
                         </h2>
                         <p className="mt-6 text-base leading-7 text-slate-200/80 sm:text-lg">
-                            Adhiraj Mobile Shop brings a premium shopping experience to Sangli with professional product advice, verified stock, and easy support.
+                            Mobisphere Mobile Shop brings a premium shopping experience to Sangli with professional product advice, verified stock, and easy support.
                         </p>
                         <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
                             <a

@@ -2,6 +2,6 @@
 
 export default function BackgroundHomeImage() {
     return (
-        <section className="h-[200px] bg-[url('/images/AdhirajHomeImage.jpeg')] bg-cover bg-center bg-no-repeat" />
+        <section className="w-full max-w-full min-h-[180px] sm:min-h-[220px] md:min-h-[280px] bg-[url('/images/MobisphereHomeImage.jpeg')] bg-cover bg-center bg-no-repeat" />
     )
 }

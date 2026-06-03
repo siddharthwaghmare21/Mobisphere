@@ -17,16 +17,16 @@ export default function Header() {
                 <Link href="/" className="flex items-center gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-3xl bg-slate-950 shadow-lg overflow-hidden">
                         <Image
-                            src="/images/AdhirajLogo2.jpeg"
-                            alt="Adhiraj Mobile logo"
+                            src="/images/MobisphereLogo.jpeg"
+                            alt="Mobisphere Logo"
                             width={40}
                             height={40}
                             className="h-9 w-9 object-cover"
                         />
                     </div>
                     <div>
-                        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Adhiraj Mobile</p>
-                        <span className="text-lg font-semibold text-slate-950">Shop</span>
+                        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Mobisphere</p>
+                        <span className="text-lg font-semibold text-slate-950">Mobile Shop</span>
                     </div>
                 </Link>
 
