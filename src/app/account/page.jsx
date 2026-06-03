@@ -37,10 +37,6 @@ export default function AccountPage() {
               <p className="mt-2 text-sm text-slate-600">Your verified account information is shown below.</p>
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <div className="rounded-3xl bg-white p-4 shadow-sm">
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Email</p>
-                  <p className="mt-2 text-sm text-slate-900">{user.email}</p>
-                </div>
-                <div className="rounded-3xl bg-white p-4 shadow-sm">
                   <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Mobile</p>
                   <p className="mt-2 text-sm text-slate-900">{user.mobileNumber}</p>
                 </div>
@@ -67,13 +63,13 @@ export default function AccountPage() {
           </div>
         ) : (
           <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 text-slate-900">
-            <h2 className="text-xl font-semibold">Not logged in yet</h2>
-            <p className="mt-2 text-sm text-slate-600">You need to log in or sign up first to view account details.</p>
+            <h2 className="text-xl font-semibold">Use the combined Menu page</h2>
+            <p className="mt-2 text-sm text-slate-600">Account management is now available directly on the Menu page.</p>
             <Link
               href="/menu"
               className="mt-5 inline-flex rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
             >
-              Go to Login / Sign Up
+              Go to Menu
             </Link>
           </div>
         )}
