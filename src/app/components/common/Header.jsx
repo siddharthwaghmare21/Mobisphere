@@ -127,11 +127,7 @@ export default function Header() {
                                 About
                             </Link>
                         </li>
-                        <li>
-                            <Link href="/contact" onClick={closeMenu} className="block rounded-full py-2 px-3 text-slate-700 transition hover:bg-slate-100 md:hover:bg-slate-100 md:p-2">
-                                Contact
-                            </Link>
-                        </li>
+
                     </ul>
                 </div>
             </nav>
