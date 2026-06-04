@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from 'react'
 import BackgroundHomeImage from './components/home-components/BackgroundHomeImage'
 import BannerSection from './components/home-components/BannerSection'
+import OfferBannerHomePage from './components/home-components/OfferBannerHomePage'
 import PricingSection from './components/home-components/PricingSection'
 import LatestProduct from './components/home-components/LatestProduct'
 import OtherFacilities from './components/home-components/OtherFacilities'
@@ -303,15 +304,10 @@ export default function Home() {
     <>
       <BackgroundHomeImage />
       <BannerSection />
+      <OfferBannerHomePage />
       <LatestProduct />
       <PricingSection />
       <OtherFacilities />
     </>
   )
 }
-
-
-
-
-
-
