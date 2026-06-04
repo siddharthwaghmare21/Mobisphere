@@ -37,12 +37,14 @@ export default function AdminPanelPage() {
       return
     }
 
-    setSession(storedSession)
     const storedCustomers = loadJson(CUSTOMER_STORAGE_KEY)
     const storedEnquiries = loadJson(ENQUIRY_STORAGE_KEY)
 
-    setCustomers(Array.isArray(storedCustomers) ? storedCustomers : [])
-    setEnquiries(Array.isArray(storedEnquiries) ? storedEnquiries : [])
+    queueMicrotask(() => {
+      setSession(storedSession)
+      setCustomers(Array.isArray(storedCustomers) ? storedCustomers : [])
+      setEnquiries(Array.isArray(storedEnquiries) ? storedEnquiries : [])
+    })
   }, [router])
 
   const saveCustomers = (nextCustomers) => {

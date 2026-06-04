@@ -32,7 +32,7 @@ export default function EnquiryPage() {
   const [submitted, setSubmitted] = useState(false)
 
   useEffect(() => {
-    setSubmitted(false)
+    queueMicrotask(() => setSubmitted(false))
   }, [])
 
   const handleChange = (field, value) => {

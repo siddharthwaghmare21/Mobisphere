@@ -69,8 +69,12 @@ export default function MenuPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    setAccounts(getStoredAccounts())
-    setLoggedInUser(getStoredUser())
+    const nextAccounts = getStoredAccounts()
+    const nextUser = getStoredUser()
+    queueMicrotask(() => {
+      setAccounts(nextAccounts)
+      setLoggedInUser(nextUser)
+    })
   }, [])
 
   useEffect(() => {

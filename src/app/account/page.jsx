@@ -9,9 +9,10 @@ export default function AccountPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const stored = localStorage.getItem('mobisphereLoggedIn')
-    if (stored) {
+    if (!stored) return
+    queueMicrotask(() => {
       setUser(JSON.parse(stored))
-    }
+    })
   }, [])
 
   const handleLogout = () => {

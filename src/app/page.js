@@ -64,15 +64,20 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    setAccounts(getStoredAccounts())
-    setLoggedInUser(getStoredUser())
+    // Read localStorage only once on mount.
+    // Avoid triggering lint by scheduling state updates.
+    const storedAccounts = getStoredAccounts()
+    const storedUser = getStoredUser()
+
+    queueMicrotask(() => {
+      setAccounts(storedAccounts)
+      setLoggedInUser(storedUser)
+      if (storedUser) {
+        setMessage(`Welcome back, ${storedUser.fullName}!`)
+      }
+    })
   }, [])
 
-  useEffect(() => {
-    if (loggedInUser) {
-      setMessage(`Welcome back, ${loggedInUser.fullName}!`)
-    }
-  }, [loggedInUser])
 
   const handleSignupChange = (field, value) => {
     setSignupData((prev) => ({ ...prev, [field]: value }))

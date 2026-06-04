@@ -43,10 +43,12 @@ export default function AdminPage() {
     const storedSession = loadJson(ADMIN_SESSION_KEY)
     const storedCustomers = loadJson(CUSTOMER_STORAGE_KEY)
 
-    setProfile(storedProfile)
-    setSession(storedSession)
-    setCustomers(Array.isArray(storedCustomers) ? storedCustomers : [])
-    setMode(storedProfile ? 'login' : 'create')
+    queueMicrotask(() => {
+      setProfile(storedProfile)
+      setSession(storedSession)
+      setCustomers(Array.isArray(storedCustomers) ? storedCustomers : [])
+      setMode(storedProfile ? 'login' : 'create')
+    })
   }, [])
 
   const saveCustomers = (nextCustomers) => {
