@@ -59,7 +59,7 @@ export default function Product() {
                     <p className="mt-2 text-sm text-red-700">No matching items were found in the shop.</p>
                 </div>
             ) : (
-                <section className="mt-10 grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                <section className="mt-8 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-6 lg:grid-cols-3">
                     {filteredProducts.map(([productId, product]) => (
                         <ProductCard key={productId} productId={Number(productId)} />
                     ))}
