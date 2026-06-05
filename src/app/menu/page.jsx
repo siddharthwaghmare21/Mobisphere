@@ -188,7 +188,7 @@ export default function MenuPage() {
             onClick={() => setTab('login')}
             className={`rounded-full px-5 py-3 text-sm font-medium transition ${tab === 'login' ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
           >
-            Login
+            My Profile
           </button>
           <button
             type="button"

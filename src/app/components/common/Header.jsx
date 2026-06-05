@@ -94,7 +94,7 @@ export default function Header() {
                     <ul className="space-y-3 rounded-3xl border border-slate-200/80 bg-white/95 p-4 text-center text-base font-medium text-slate-700 shadow-sm md:flex md:space-y-0 md:space-x-4 md:border md:border-slate-200/50 md:bg-white/90 md:p-3 lg:px-4 lg:py-3">
                         <li>
                             <Link href="/menu" onClick={closeMenu} className="block rounded-full py-2 px-3 text-slate-700 transition hover:bg-slate-100 md:hover:bg-slate-100 md:p-2">
-                                Account / Login
+                                My Profile
                             </Link>
                         </li>
                         <li>
