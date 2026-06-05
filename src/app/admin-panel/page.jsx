@@ -132,6 +132,44 @@ export default function AdminPanelPage() {
       <div className="grid gap-10 lg:grid-cols-[1.25fr_0.75fr]">
         <div className="space-y-10">
           <section className="rounded-[2rem] bg-white p-8 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)]">
+            <h2 className="mb-4 text-2xl font-semibold text-slate-900">Admin Menu (Owner)</h2>
+            <div className="mb-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+                <p className="font-semibold text-slate-900">1) Dashboard / Analytics Overview</p>
+                <p className="mt-1">Graphs and key business figures.</p>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+                <p className="font-semibold text-slate-900">2) Product Management (Inventory)</p>
+                <p className="mt-1">Add / edit / delete products and stock alerts.</p>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+                <p className="font-semibold text-slate-900">3) Order Management</p>
+                <p className="mt-1">Order list + status updates.</p>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+                <p className="font-semibold text-slate-900">4) User Management</p>
+                <p className="mt-1">User list + role assignment (admin/block).</p>
+              </div>
+
+              <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-900">
+                <Link href="/discount-coupons" onClick={() => router.replace('/discount-coupons')} className="block font-semibold">
+                  Discount and Coupon Management
+                </Link>
+                <p className="mt-1 text-emerald-900/80">Coupons &amp; Discounts • Create FESTIVAL20-style codes • Set expiration date</p>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+                <Link href="/advanced-reports" className="block font-semibold">
+                  User Behavior and Sales Reports
+                </Link>
+                <p className="mt-1">Advanced Reports / Big Data • Top-selling products • Most viewed categories • Export CSV/Excel</p>
+              </div>
+            </div>
+
+
             <div className="mb-6 flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-semibold text-slate-900">Registered customers</h2>
@@ -227,12 +265,15 @@ export default function AdminPanelPage() {
           <div className="space-y-5">
             <div>
               <p className="text-sm uppercase tracking-[0.3em] text-slate-400">Admin quick actions</p>
-              <h2 className="mt-2 text-2xl font-semibold">Admin-only controls</h2>
+              <h2 className="mt-2 text-2xl font-semibold">Admin Dashboard (Contact Us)</h2>
+              <p className="mt-2 text-sm text-slate-300">
+                This panel can be hidden from the public navigation using <span className="font-semibold">Alt + Shift + A</span>.
+              </p>
             </div>
             <div className="space-y-4 text-sm leading-7 text-slate-300">
-              <p>View all customer records and enquiry submissions in one place.</p>
-              <p>Edit enquiry status and notes to keep track of follow-up actions.</p>
-              <p>Use the header or Alt+Shift+A shortcut to return here quickly.</p>
+              <p>• Control panel for adding new mobiles, removing old ones, and changing prices.</p>
+              <p>• Place to check incoming inquiries and orders.</p>
+              <p>• Use Alt+Shift+A shortcut to return here quickly.</p>
             </div>
           </div>
         </aside>

@@ -35,18 +35,21 @@ export default function Product() {
             </div>
 
             <div className="mx-auto mt-10 max-w-3xl">
-                <label htmlFor="product-search" className="sr-only">Search products</label>
-                <div className="flex rounded-full border border-slate-300 bg-white px-4 shadow-sm focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20">
-                    <input
-                        id="product-search"
-                        type="search"
-                        value={searchTerm}
-                        onChange={(event) => setSearchTerm(event.target.value)}
-                        placeholder="Search products by name..."
-                        className="w-full rounded-full border-0 py-4 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
-                    />
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <label htmlFor="product-search" className="sr-only">Search products</label>
+                    <div className="flex rounded-full border border-slate-300 bg-white px-4 shadow-sm focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20 sm:col-span-2">
+                        <input
+                            id="product-search"
+                            type="search"
+                            value={searchTerm}
+                            onChange={(event) => setSearchTerm(event.target.value)}
+                            placeholder="Search products by name..."
+                            className="w-full rounded-full border-0 py-4 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+                        />
+                    </div>
                 </div>
             </div>
+
 
             {showInvalidSearch ? (
                 <div className="mt-10 rounded-[2rem] border border-orange-200 bg-orange-50 p-8 text-center text-orange-800 shadow-sm">
@@ -60,8 +63,15 @@ export default function Product() {
                 </div>
             ) : (
                 <section className="mt-8 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-6 lg:grid-cols-3">
-                    {filteredProducts.map(([productId, product]) => (
-                        <ProductCard key={productId} productId={Number(productId)} />
+                    {filteredProducts.map(([productId]) => (
+                        <ProductCard
+                            key={productId}
+                            productId={Number(productId)}
+                            onBuyNow={() => {
+                                // navigate via card's internal handler is not available here; detail page handles Buy now
+                                window.location.href = `/product/${productId}`
+                            }}
+                        />
                     ))}
                 </section>
             )}

@@ -1,4 +1,5 @@
 import React from 'react'
+import Link from 'next/link'
 
 const features = [
     {
@@ -31,18 +32,18 @@ export default function BannerSection() {
                             Mobisphere Mobile Shop brings a premium shopping experience to Sangli with professional product advice, verified stock, and easy support.
                         </p>
                         <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
-                            <a
+                            <Link
                                 href="/product"
                                 className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
                             >
                                 Shop now
-                            </a>
-                            <a
+                            </Link>
+                            <Link
                                 href="/contact"
                                 className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/20"
                             >
                                 Contact support
-                            </a>
+                            </Link>
                         </div>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">

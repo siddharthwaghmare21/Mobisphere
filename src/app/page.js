@@ -2,14 +2,47 @@
 "use client"
 
 import React, { useEffect, useState } from 'react'
+import Link from 'next/link'
 import BackgroundHomeImage from './components/home-components/BackgroundHomeImage'
+
 import BannerSection from './components/home-components/BannerSection'
 import OfferBannerHomePage from './components/home-components/OfferBannerHomePage'
 import PricingSection from './components/home-components/PricingSection'
 import LatestProduct from './components/home-components/LatestProduct'
 import OtherFacilities from './components/home-components/OtherFacilities'
 
-const initialSignupData = {
+function LightDarkToggle() {
+  const [mode, setMode] = React.useState('light')
+
+  useEffect(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('mobisphereTheme') : null
+    const prefersDark = typeof window !== 'undefined' ? window.matchMedia?.('(prefers-color-scheme: dark)')?.matches : false
+    const next = stored || (prefersDark ? 'dark' : 'light')
+    setMode(next)
+    document.documentElement.classList.toggle('dark', next === 'dark')
+  }, [])
+
+  const toggle = () => {
+    const next = mode === 'dark' ? 'light' : 'dark'
+    setMode(next)
+    localStorage.setItem('mobisphereTheme', next)
+    document.documentElement.classList.toggle('dark', next === 'dark')
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      className="fixed right-4 top-24 z-50 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-semibold text-slate-900 shadow-lg shadow-slate-900/5 backdrop-blur supports-[backdrop-filter]:bg-white/60 hover:bg-white dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-50"
+      aria-label="Toggle light/dark mode"
+    >
+      <span>{mode === 'dark' ? 'Dark' : 'Light'}</span>
+      <span aria-hidden="true" className="text-base leading-none">{mode === 'dark' ? '🌙' : '☀️'}</span>
+    </button>
+  )
+}
+
+const initialSignupData = { 
   fullName: '',
   password: '',
   mobileNumber: '',
@@ -158,7 +191,217 @@ export default function Home() {
     setMessage(`Welcome back, ${matchedAccount.fullName}!`)
   }
 
-  if (!loggedInUser) {
+  const TopTrendingProducts = () => {
+    // 3 iPhone Pro Max variants (you already have images). Add-to-cart uses ProductCard's handler.
+    const trending = [
+      { id: 6, label: 'Top pick', title: 'iPhone 16 Pro Max' },
+      { id: 5, label: 'Hot', title: 'iPhone 15 Pro Max' },
+      { id: 4, label: 'New offer', title: 'iPhone 14 Pro Max' },
+    ]
+
+    return (
+      <section className="bg-slate-100 py-10 sm:py-14">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm uppercase tracking-[0.3em] text-emerald-600">Top & Trending</p>
+              <h2 className="mt-3 text-2xl font-bold text-slate-950 sm:text-3xl">
+                Best deals on flagship phones
+              </h2>
+            </div>
+            <p className="max-w-xl text-sm leading-6 text-slate-600 sm:text-base">
+              Quick picks that are selling fast—perfect for gifting and daily performance.
+            </p>
+          </div>
+
+          <div className="mt-8 grid grid-cols-2 gap-4 sm:mt-10 sm:gap-6 lg:grid-cols-3">
+            {trending.map((t) => (
+              <div key={t.id} className="group rounded-[1.75rem] border border-slate-200 bg-white p-3 shadow-xl transition hover:-translate-y-1 hover:shadow-2xl">
+                <LatestProductCard productId={t.id} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  const LatestProductCard = ({ productId }) => {
+    // Local mini-card using existing ProductCard styles would be better, but this keeps it self-contained.
+    // Use the same images from /public/images.
+    const phones = {
+      6: {
+        image: '/images/IPhone 16 Pro Max.png',
+        title: 'iPhone 16 Pro Max',
+        desc: 'Latest flagship speed with premium display & camera.',
+        price: 95000,
+      },
+      5: {
+        image: '/images/IPhone 15 Pro Max.jpg',
+        title: 'iPhone 15 Pro Max',
+        desc: 'Ultra-smooth performance with modern photography upgrades.',
+        price: 85000,
+      },
+      4: {
+        image: '/images/IPhone 14 Pro Max.jpg',
+        title: 'iPhone 14 Pro Max',
+        desc: 'Pro-level chipset with advanced camera & safety features.',
+        price: 75000,
+      },
+    }
+
+    const p = phones[productId]
+
+    const handleAddToCart = () => {
+      const currentCart = JSON.parse(localStorage.getItem('mobisphereCart') || '[]')
+      currentCart.push({
+        cartItemId: Date.now().toString() + Math.random().toString(36).substring(2, 9),
+        productId,
+        title: p.title,
+        image: p.image,
+        description: p.desc,
+        price: p.price,
+      })
+      localStorage.setItem('mobisphereCart', JSON.stringify(currentCart))
+      alert(`${p.title} has been added to your cart!`)
+    }
+
+    return (
+      <div className="flex h-full flex-col justify-between">
+        <div className="overflow-hidden rounded-[1.5rem] bg-slate-100">
+          <img src={p.image} alt={p.title} className="h-40 w-full object-cover sm:h-52" />
+        </div>
+        <div className="mt-3">
+          <p className="text-sm font-semibold text-slate-950 line-clamp-1">{p.title}</p>
+          <p className="mt-2 text-xs leading-5 text-slate-600 line-clamp-2">{p.desc}</p>
+          <p className="mt-3 text-sm font-bold text-slate-900">₹{p.price.toLocaleString()}</p>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={handleAddToCart}
+            className="inline-flex flex-1 items-center justify-center rounded-full bg-slate-950 py-2 text-[11px] font-semibold text-white transition hover:bg-slate-800"
+          >
+            Add
+          </button>
+          <Link
+            href="/product"
+            className="inline-flex flex-1 items-center justify-center rounded-full border border-emerald-600 bg-emerald-600 py-2 text-[11px] font-semibold text-slate-950 transition hover:bg-emerald-500"
+          >
+            View
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  const ShopByCategory = () => {
+    const brandCards = [
+      { key: 'apple', title: 'Apple', desc: 'iPhones & flagship accessories' },
+      { key: 'samsung', title: 'Samsung', desc: 'Galaxy performance & cameras' },
+      { key: 'oneplus', title: 'OnePlus', desc: 'Fast, smooth, and powerful' },
+    ]
+
+    const categoryCards = [
+      { key: 'mobiles', title: 'Mobiles', desc: 'Latest smartphones & deals' },
+      { key: 'accessories', title: 'Accessories', desc: 'Covers, chargers & essentials' },
+      { key: 'smartwatches', title: 'Smartwatches', desc: 'Fitness & daily alerts' },
+    ]
+
+    return (
+      <section className="bg-white py-10 sm:py-14">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <p className="text-sm uppercase tracking-[0.3em] text-emerald-600">Shop by Category</p>
+            <h2 className="mt-3 text-2xl font-bold text-slate-950 sm:text-3xl">Find what you need</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+              Tap a brand or category to browse the latest options.
+            </p>
+          </div>
+
+          <div className="mt-8 grid grid-cols-1 gap-4 sm:mt-10 sm:grid-cols-3">
+            {brandCards.map((b) => (
+              <a
+                key={b.key}
+                href={`/product?brand=${encodeURIComponent(b.key)}`}
+                className="group rounded-[2rem] border border-slate-200 bg-slate-50 p-6 shadow-xl transition hover:-translate-y-1 hover:shadow-2xl"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950">{b.title}</p>
+                    <p className="mt-2 text-xs leading-5 text-slate-600">{b.desc}</p>
+                  </div>
+                  <div className="h-10 w-10 rounded-2xl bg-slate-950/5 p-2">
+                    <span className="block h-full w-full rounded-xl bg-emerald-500/20" />
+                  </div>
+                </div>
+                <div className="mt-5 inline-flex items-center text-sm font-semibold text-emerald-700">
+                  Browse <span className="ml-2 text-lg">→</span>
+                </div>
+              </a>
+            ))}
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:grid-cols-3">
+            {categoryCards.map((c) => (
+              <a
+                key={c.key}
+                href={`/product?category=${encodeURIComponent(c.key)}`}
+                className="group rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl transition hover:-translate-y-1 hover:shadow-2xl"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-slate-950">{c.title}</p>
+                  <p className="mt-2 text-xs leading-5 text-slate-600">{c.desc}</p>
+                </div>
+                <div className="mt-5 inline-flex items-center text-sm font-semibold text-emerald-700">
+                  Explore <span className="ml-2 text-lg">→</span>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  const WhyChooseUs = () => {
+    const points = [
+      { title: 'Best Prices', detail: 'Transparent offers and value-focused deals.' },
+      { title: 'Genuine Products', detail: 'Verified quality—phones & accessories you can trust.' },
+      { title: 'Quick Repair', detail: 'Fast local support to keep your phone running.' },
+      { title: 'Quick Support', detail: 'Advice and service whenever you need it.' },
+    ]
+
+    return (
+      <section className="bg-slate-100 py-10 sm:py-14">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-sm uppercase tracking-[0.3em] text-emerald-600">Why Choose Mobisphere</p>
+              <h2 className="mt-3 text-2xl font-bold text-slate-950 sm:text-3xl">Your phone partner in Sangli</h2>
+            </div>
+            <p className="max-w-xl text-sm leading-6 text-slate-600 sm:text-base">
+              Mobile shopping should be simple: best offers, genuine products, and quick local repair.
+            </p>
+          </div>
+
+          <div className="mt-8 grid grid-cols-1 gap-4 sm:mt-10 sm:grid-cols-2">
+            {points.map((p) => (
+              <div
+                key={p.title}
+                className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl transition hover:-translate-y-1 hover:shadow-2xl"
+              >
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-emerald-700">{p.title}</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{p.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  const Gateway = () => {
     return (
       <section className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
         <div className="mb-8 rounded-[2rem] bg-white p-8 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)]">
@@ -307,12 +550,37 @@ export default function Home() {
 
   return (
     <>
+      {/* HERO / GATEWAY */}
       <BackgroundHomeImage />
       <BannerSection />
+
+      {loggedInUser ? (
+        <section className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
+          <div className="mb-6 rounded-[2rem] bg-white p-8 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)] sm:p-10">
+            <p className="text-sm uppercase tracking-[0.3em] text-emerald-700">Welcome back</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+              Mobisphere, {loggedInUser.fullName}
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm text-slate-600 sm:text-base">
+              Explore trending phones and accessories—cart & enquiry data are stored locally for this demo.
+            </p>
+          </div>
+        </section>
+      ) : (
+        <Gateway />
+      )}
+
+      {/* New gateway-friendly storefront sections */}
       <OfferBannerHomePage />
+      <TopTrendingProducts />
+      <ShopByCategory />
+      <WhyChooseUs />
+
+      {/* Existing sections */}
       <LatestProduct />
       <PricingSection />
       <OtherFacilities />
     </>
   )
 }
+

@@ -75,12 +75,35 @@ export default function EnquiryPage() {
     <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-2xl sm:p-10">
         <div className="text-center">
-          <p className="text-sm uppercase tracking-[0.3em] text-emerald-600">Enquiry</p>
-          <h1 className="mt-4 text-3xl font-bold text-slate-950 sm:text-4xl">Send us your enquiry</h1>
+          <p className="text-sm uppercase tracking-[0.3em] text-emerald-600">Service & Enquiry</p>
+          <h1 className="mt-4 text-3xl font-bold text-slate-950 sm:text-4xl">Repairs along with mobile sales</h1>
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-            Share your questions or requests and our admin team will review them. Only admins can view and manage submitted enquiries.
+            Screens, batteries, software issues, and accessories—book a repair slot or send a quick enquiry. Our team will follow up and update you.
           </p>
         </div>
+
+        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-6">
+            <h2 className="text-lg font-semibold text-slate-950">List of Services</h2>
+            <ul className="mt-4 space-y-2 text-sm text-slate-700">
+              <li>• Screen replacement (LCD/Glass)</li>
+              <li>• Battery change</li>
+              <li>• Software updates & troubleshooting</li>
+              <li>• Charging & power button issues</li>
+              <li>• Diagnostics & preventive checks</li>
+            </ul>
+          </div>
+          <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-6">
+            <h2 className="text-lg font-semibold text-slate-950">Book an Appointment</h2>
+            <p className="mt-3 text-sm text-slate-700">
+              Use the form below to request a preferred time slot. We’ll confirm via your enquiry details.
+            </p>
+            <p className="mt-3 text-xs text-slate-500">
+              Tip: Mention your device model and issue in the Subject/Message.
+            </p>
+          </div>
+        </div>
+
 
         <div className="mt-10 grid gap-6 sm:grid-cols-2">
           <label className="space-y-2 text-sm text-slate-700">

@@ -9,6 +9,15 @@ export const productData = {
         title: "iPhone 11 Pro Max",
         description:
             "Premium performance with a triple-camera system, long-lasting battery life, and a durable glass-and-stainless-steel design.",
+        brand: 'Apple',
+        specs: {
+            RAM: '4GB',
+            Storage: '64GB',
+            Camera: '12MP Triple',
+            Display: '6.5-inch OLED',
+            Battery: '3969mAh',
+            Processor: 'A13 Bionic',
+        },
         price: 45000,
     },
     2: {
@@ -17,6 +26,15 @@ export const productData = {
         title: "iPhone 12 Pro Max",
         description:
             "A beautifully balanced flagship with OLED display, 5G connectivity, and industry-leading camera stabilization.",
+        brand: 'Apple',
+        specs: {
+            RAM: '6GB',
+            Storage: '128GB',
+            Camera: '12MP Triple',
+            Display: '6.7-inch OLED',
+            Battery: '3687mAh',
+            Processor: 'A14 Bionic',
+        },
         price: 55000,
     },
     3: {
@@ -25,6 +43,15 @@ export const productData = {
         title: "iPhone 13 Pro Max",
         description:
             "Fast A15 Bionic power, brighter Super Retina XDR display, and Pro camera tools for stunning photos and video.",
+        brand: 'Apple',
+        specs: {
+            RAM: '6GB',
+            Storage: '128GB',
+            Camera: '12MP Triple',
+            Display: '6.7-inch OLED',
+            Battery: '4352mAh',
+            Processor: 'A15 Bionic',
+        },
         price: 65000,
     },
     4: {
@@ -33,6 +60,15 @@ export const productData = {
         title: "iPhone 14 Pro Max",
         description:
             "Pro-level performance with the latest chipset, crash detection, and advanced camera systems for next-level mobile creativity.",
+        brand: 'Apple',
+        specs: {
+            RAM: '6GB',
+            Storage: '128GB',
+            Camera: '48MP Triple',
+            Display: '6.7-inch OLED',
+            Battery: '4323mAh',
+            Processor: 'A16 Bionic',
+        },
         price: 75000,
     },
     5: {
@@ -41,6 +77,15 @@ export const productData = {
         title: "iPhone 15 Pro Max",
         description:
             "Ultra-smooth usage with a powerful processor, premium display, and enhanced photography features for modern everyday use.",
+        brand: 'Apple',
+        specs: {
+            RAM: '8GB',
+            Storage: '256GB',
+            Camera: '48MP Triple',
+            Display: '6.7-inch OLED',
+            Battery: '4422mAh',
+            Processor: 'A17 Pro',
+        },
         price: 85000,
     },
     6: {
@@ -49,12 +94,32 @@ export const productData = {
         title: "iPhone 16 Pro Max",
         description:
             "The latest flagship experience with cutting-edge speed, polished design, and intelligent features for productivity and entertainment.",
+        brand: 'Apple',
+        specs: {
+            RAM: '8GB',
+            Storage: '256GB',
+            Camera: '50MP Triple',
+            Display: '6.9-inch OLED',
+            Battery: '4700mAh',
+            Processor: 'A18 Bionic',
+        },
         price: 95000,
     },
 }
 
-export default function ProductCard({ productId, image, alt, title, description, price }) {
+
+import Link from 'next/link'
+
+export default function ProductCard({ productId, image, alt, title, description, price, onBuyNow, onAdded }) {
     const product = productId ? productData[productId] : null
+
+    // Skeleton state to avoid blank/late-loading UI on slow connections
+    const [showSkeleton, setShowSkeleton] = React.useState(true)
+
+    React.useEffect(() => {
+        const t = window.setTimeout(() => setShowSkeleton(false), 350)
+        return () => window.clearTimeout(t)
+    }, [])
     const cardImage = image || product?.image || "/images/IPhone 16 Pro Max.png"
     const cardAlt = alt || product?.alt || "Product image"
     const cardTitle = title || product?.title || "Featured product"
@@ -76,9 +141,23 @@ export default function ProductCard({ productId, image, alt, title, description,
         alert(`${cardTitle} has been added to your cart!`)
     }
 
+    const handleNavigateToDetail = () => {
+        if (!productId) return
+        window.location.href = `/product/${productId}`
+    }
+
     return (
-        <figure className="flex h-full flex-col justify-between rounded-xl bg-white p-3 shadow-lg transition hover:-translate-y-1 hover:shadow-2xl sm:rounded-[1.75rem] sm:p-5">
+        <figure
+            onClick={handleNavigateToDetail}
+            role="link"
+            tabIndex={0}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') handleNavigateToDetail()
+            }}
+            className="cursor-pointer flex h-full flex-col justify-between rounded-xl bg-white p-3 shadow-lg transition hover:-translate-y-1 hover:shadow-2xl sm:rounded-[1.75rem] sm:p-5"
+        >
             <div className="mb-2 overflow-hidden rounded-xl bg-slate-100 sm:mb-4 sm:rounded-3xl">
+
                 <img
                     src={cardImage}
                     alt={cardAlt}
@@ -89,12 +168,29 @@ export default function ProductCard({ productId, image, alt, title, description,
                 <h3 className="mb-1 text-sm font-semibold text-slate-950 line-clamp-1 sm:mb-2 sm:text-xl sm:line-clamp-none">{cardTitle}</h3>
                 <p className="mb-2 text-[10px] leading-4 text-slate-600 line-clamp-2 sm:mb-4 sm:text-sm sm:leading-6 sm:line-clamp-none">{cardDescription}</p>
                 <p className="mb-2 text-sm font-bold text-slate-900 sm:text-lg">₹{cardPrice.toLocaleString()}</p>
+                <p className="text-xs text-slate-500">Tap for details</p>
             </div>
             <div className="mt-2 flex flex-col gap-1.5 sm:mt-4 sm:flex-row sm:justify-between sm:gap-3">
-                <button onClick={handleAddToCart} className="inline-flex w-full items-center justify-center rounded-full bg-slate-950 px-2 py-1.5 text-[10px] font-semibold text-white transition hover:bg-slate-800 sm:w-auto sm:px-4 sm:py-2 sm:text-sm">
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        handleAddToCart()
+                        onAdded?.()
+                    }}
+
+                    className="inline-flex w-full items-center justify-center rounded-full bg-slate-950 px-2 py-1.5 text-[10px] font-semibold text-white transition hover:bg-slate-800 sm:w-auto sm:px-4 sm:py-2 sm:text-sm"
+                >
                     Add to cart
                 </button>
-                <button className="inline-flex w-full items-center justify-center rounded-full border border-emerald-600 bg-emerald-600 px-2 py-1.5 text-[10px] font-semibold text-slate-950 transition hover:bg-emerald-500 sm:w-auto sm:px-4 sm:py-2 sm:text-sm">
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        onBuyNow?.()
+                    }}
+                    className="inline-flex w-full items-center justify-center rounded-full border border-emerald-600 bg-emerald-600 px-2 py-1.5 text-[10px] font-semibold text-slate-950 transition hover:bg-emerald-500 sm:w-auto sm:px-4 sm:py-2 sm:text-sm"
+                >
                     Buy product
                 </button>
             </div>
