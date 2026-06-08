@@ -51,11 +51,9 @@ export default function BuyPage() {
 
   useEffect(() => {
     // Gate access: only allow opening if user clicked "Buy Product" recently.
-    // (We set a flag in localStorage on the cart page when they click the button.)
-    // Important: do NOT clear the flag until after the page is mounted,
-    // otherwise React strict-mode / fast remount can redirect immediately.
     const entry = safeParseJSON(localStorage.getItem(BUY_ENTRY_KEY), null)
 
+    // If not allowed, redirect.
     if (!entry?.allowed) {
       router.replace('/cart')
       return
@@ -63,13 +61,14 @@ export default function BuyPage() {
 
     setMessage('')
 
+    // Clear the flag on the next tick to avoid the page closing instantly.
     const t = window.setTimeout(() => {
       try {
         localStorage.removeItem(BUY_ENTRY_KEY)
       } catch {
         // ignore
       }
-    }, 150)
+    }, 1000)
 
     return () => window.clearTimeout(t)
   }, [router])

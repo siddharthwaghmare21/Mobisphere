@@ -142,6 +142,7 @@ export default function ProductCard({ productId, image, alt, title, description,
     }
 
     const handleNavigateToDetail = () => {
+        
         if (!productId) return
         window.location.href = `/product/${productId}`
     }
@@ -187,8 +188,10 @@ export default function ProductCard({ productId, image, alt, title, description,
                     type="button"
                     onClick={(e) => {
                         e.stopPropagation()
+                        e.preventDefault()
                         onBuyNow?.()
                     }}
+                    
                     className="inline-flex w-full items-center justify-center rounded-full border border-emerald-600 bg-emerald-600 px-2 py-1.5 text-[10px] font-semibold text-slate-950 transition hover:bg-emerald-500 sm:w-auto sm:px-4 sm:py-2 sm:text-sm"
                 >
                     Buy product

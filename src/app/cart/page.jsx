@@ -143,7 +143,8 @@ export default function CartPage() {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation()
-                      router.push('/buy')
+                      e.preventDefault()
+                      router.push('/Payment')
                     }}
                     className="w-full rounded-full bg-emerald-600 px-4 py-2 text-[12px] font-semibold text-white transition hover:bg-emerald-700"
                   >
