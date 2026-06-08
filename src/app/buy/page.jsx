@@ -52,16 +52,26 @@ export default function BuyPage() {
   useEffect(() => {
     // Gate access: only allow opening if user clicked "Buy Product" recently.
     // (We set a flag in localStorage on the cart page when they click the button.)
+    // Important: do NOT clear the flag until after the page is mounted,
+    // otherwise React strict-mode / fast remount can redirect immediately.
     const entry = safeParseJSON(localStorage.getItem(BUY_ENTRY_KEY), null)
+
     if (!entry?.allowed) {
-      router.replace("/cart")
+      router.replace('/cart')
       return
     }
 
-    // Clear flag after first render so refresh/back can't open without clicking again.
-    localStorage.removeItem(BUY_ENTRY_KEY)
+    setMessage('')
 
-    setMessage("")
+    const t = window.setTimeout(() => {
+      try {
+        localStorage.removeItem(BUY_ENTRY_KEY)
+      } catch {
+        // ignore
+      }
+    }, 150)
+
+    return () => window.clearTimeout(t)
   }, [router])
 
   const handleChange = (field, value) => {
@@ -146,8 +156,8 @@ export default function BuyPage() {
     <main className="mx-auto max-w-5xl px-4 py-10 pt-28 sm:px-6 lg:px-8">
       <div className="mb-8 rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm sm:p-10">
         <div className="text-center">
-          <p className="text-sm uppercase tracking-[0.3em] text-emerald-600">Buy Product</p>
-          <h1 className="mt-4 text-3xl font-bold text-slate-950 sm:text-4xl">Checkout</h1>
+          <p className="text-sm uppercase tracking-[0.3em] text-emerald-600">Payment</p>
+          <h1 className="mt-4 text-3xl font-bold text-slate-950 sm:text-4xl">Complete Payment</h1>
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
             Enter delivery details and choose a payment method.
           </p>
