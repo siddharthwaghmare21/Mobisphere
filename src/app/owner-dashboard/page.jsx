@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { productData } from '@/app/components/common/ProductCard'
+import { productData } from '@/app/components/common/ProductCart'
 
 
 // Load chart lib only on client

@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import React, { useMemo, useState } from 'react'
-import ProductCard, { productData } from '../components/common/ProductCard'
+import ProductCard, { productData } from '../components/common/ProductCart'
 
 export default function Product() {
     const [searchTerm, setSearchTerm] = useState('')

@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import ProductCard, { productData } from '@/app/components/common/ProductCard'
+import ProductCart, { productData } from '@/app/components/common/ProductCart'
 
 function formatINR(value) {
   const n = Number(value)
