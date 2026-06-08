@@ -2,8 +2,11 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
+import link from 'next/link'
+import { productData } from '@/app/components/common/ProductCart'
 
-export default function CartPage() {
+export default function Cart() {
   const router = useRouter()
   const [cartItems, setCartItems] = useState([])
   const [isRemoveMode, setIsRemoveMode] = useState(false)
@@ -135,7 +138,7 @@ export default function CartPage() {
                   {item.description}
                 </p>
                 {item.price ? (
-                  <p className="text-xs font-bold text-slate-900 sm:text-base">₹{Number(item.price).toLocaleString()}</p>
+                  <div className="text-xs font-bold text-slate-900 sm:text-base">₹{Number(item.price).toLocaleString()}</div>
                 ) : null}
 
                 <div className="mt-3">
@@ -144,7 +147,8 @@ export default function CartPage() {
                     onClick={(e) => {
                       e.stopPropagation()
                       e.preventDefault()
-                      router.push('/Payment')
+                      window.location.href="/payment"
+                      
                     }}
                     className="w-full rounded-full bg-emerald-600 px-4 py-2 text-[12px] font-semibold text-white transition hover:bg-emerald-700"
                   >
