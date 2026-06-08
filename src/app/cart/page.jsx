@@ -137,6 +137,19 @@ export default function CartPage() {
                 {item.price ? (
                   <p className="text-xs font-bold text-slate-900 sm:text-base">₹{Number(item.price).toLocaleString()}</p>
                 ) : null}
+
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      router.push('/buy')
+                    }}
+                    className="w-full rounded-full bg-emerald-600 px-4 py-2 text-[12px] font-semibold text-white transition hover:bg-emerald-700"
+                  >
+                    Buy Product
+                  </button>
+                </div>
               </div>
             </div>
           ))}

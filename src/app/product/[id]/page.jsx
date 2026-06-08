@@ -142,12 +142,12 @@ export default function ProductDetailPage() {
           Customers who bought this also viewed
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3, 4, 5, 6]
+              {[1, 2, 3, 4, 5, 6]
             .filter((x) => x !== productId)
             .slice(0, 3)
             .map((pid) => (
               <div key={pid} className="text-left">
-                <ProductCard
+                <ProductCart
                   productId={pid}
                   onBuyNow={() => router.push(`/product/${pid}`)}
                 />
