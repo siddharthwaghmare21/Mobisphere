@@ -40,39 +40,22 @@ export default function BuyPage() {
   const [selectedPayment, setSelectedPayment] = useState("upi")
   const [message, setMessage] = useState("")
 
-  const cartItems = useMemo(() => {
-    if (typeof window === "undefined") return []
-    const storedCart = safeParseJSON(localStorage.getItem("mobisphereCart"), [])
-    return Array.isArray(storedCart) ? storedCart : []
+  const [cartItems, setCartItems] = useState([])
+
+  useEffect(() => {
+    try {
+      const storedCart = safeParseJSON(localStorage.getItem("mobisphereCart"), [])
+      setCartItems(Array.isArray(storedCart) ? storedCart : [])
+    } catch {
+      setCartItems([])
+    }
   }, [])
 
   const total = useMemo(() => {
     return cartItems.reduce((acc, item) => acc + (Number(item.price) || 0), 0)
   }, [cartItems])
 
-  useEffect(() => {
-    // Gate access: only allow opening if user clicked "Buy Product" recently.
-    const entry = safeParseJSON(localStorage.getItem(BUY_ENTRY_KEY), null)
-
-    // If not allowed, redirect.
-    if (!entry?.allowed) {
-      router.replace('/cart')
-      return
-    }
-
-    setMessage('')
-
-    // Clear the flag on the next tick to avoid the page closing instantly.
-    const t = window.setTimeout(() => {
-      try {
-        localStorage.removeItem(BUY_ENTRY_KEY)
-      } catch {
-        // ignore
-      }
-    }, 1000)
-
-    return () => window.clearTimeout(t)
-  }, [router])
+  
 
   const handleChange = (field, value) => {
     setBuyer((prev) => ({ ...prev, [field]: value }))

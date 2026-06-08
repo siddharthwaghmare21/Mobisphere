@@ -11,22 +11,27 @@ export default function Cart() {
   const [cartItems, setCartItems] = useState([])
   const [isRemoveMode, setIsRemoveMode] = useState(false)
   const [selectedToRemove, setSelectedToRemove] = useState(new Set())
+  const [isMounted, setIsMounted] = useState(false)
 
   useEffect(() => {
+    setIsMounted(true)
     try {
       const storedCart = JSON.parse(localStorage.getItem('mobisphereCart') || '[]')
       const next = Array.isArray(storedCart) ? storedCart : []
-      queueMicrotask(() => setCartItems(next))
+      setCartItems(next)
     } catch {
       queueMicrotask(() => setCartItems([]))
     }
   }, [])
 
+  
   const totalPrice = useMemo(
     () => cartItems.reduce((acc, item) => acc + (Number(item.price) || 0), 0),
     [cartItems],
   )
-
+  if(!isMounted) {
+    return null
+  }
   const toggleRemoveMode = () => {
     setIsRemoveMode((prev) => !prev)
     setSelectedToRemove(new Set())
@@ -147,7 +152,8 @@ export default function Cart() {
                     onClick={(e) => {
                       e.stopPropagation()
                       e.preventDefault()
-                      window.location.href="/payment"
+                      localStorage.setItem('mobisphereBuyEntry', JSON.stringify({allowed:true}))
+                      router.push('/payment')
                       
                     }}
                     className="w-full rounded-full bg-emerald-600 px-4 py-2 text-[12px] font-semibold text-white transition hover:bg-emerald-700"
