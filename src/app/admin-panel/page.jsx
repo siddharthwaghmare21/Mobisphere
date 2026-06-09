@@ -156,14 +156,14 @@ export default function AdminPanelPage() {
 
               <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-900">
                 <Link href="/discount-coupons" onClick={() => router.replace('/discount-coupons')} className="block font-semibold">
-                  Discount and Coupon Management
+                  5) Discount and Coupon Management
                 </Link>
                 <p className="mt-1 text-emerald-900/80">Coupons &amp; Discounts • Create FESTIVAL20-style codes • Set expiration date</p>
               </div>
 
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
                 <Link href="/advanced-reports" className="block font-semibold">
-                  User Behavior and Sales Reports
+                  6) User Behavior and Sales Reports
                 </Link>
                 <p className="mt-1">Advanced Reports / Big Data • Top-selling products • Most viewed categories • Export CSV/Excel</p>
               </div>
