@@ -61,7 +61,7 @@ export default function EnquiryPage() {
 
     try {
       const { error } = await supabase.from('enquiries').insert({
-        //id: Date.now().toString(),
+        id: Date.now().toString(),
         full_name: enquiry.fullName.trim(),
         email: enquiry.email.trim(),
         mobile_number: enquiry.mobileNumber.trim(),
