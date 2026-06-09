@@ -61,7 +61,7 @@ export default function EnquiryPage() {
 
     try {
       const { error } = await supabase.from('enquiries').insert({
-        id: Date.now().toString(),
+        //id: Date.now().toString(),
         full_name: enquiry.fullName.trim(),
         email: enquiry.email.trim(),
         mobile_number: enquiry.mobileNumber.trim(),
@@ -82,7 +82,7 @@ export default function EnquiryPage() {
     } catch {
       // If Supabase fails (or not configured), fall back to localStorage for the demo
       const nextEnquiry = {
-        id: Date.now().toString(),
+        
         fullName: enquiry.fullName.trim(),
         email: enquiry.email.trim(),
         mobileNumber: enquiry.mobileNumber.trim(),
