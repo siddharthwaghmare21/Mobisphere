@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 
 const initialEnquiry = {
   fullName: '',
@@ -39,37 +40,69 @@ export default function EnquiryPage() {
     setEnquiry((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setMessage('')
-    if (!enquiry.fullName.trim() || !enquiry.email.trim() || !enquiry.mobileNumber.trim() || !enquiry.subject.trim() || !enquiry.message.trim()) {
+
+    if (
+      !enquiry.fullName.trim() ||
+      !enquiry.email.trim() ||
+      !enquiry.mobileNumber.trim() ||
+      !enquiry.subject.trim() ||
+      !enquiry.message.trim()
+    ) {
       setMessage('Please fill in all enquiry fields before submitting.')
       return
     }
+
     if (!isValidIndianMobile(enquiry.mobileNumber.trim())) {
       setMessage('Mobile number must be a valid 10-digit Indian number.')
       return
     }
 
-    const nextEnquiry = {
-      id: Date.now().toString(),
-      fullName: enquiry.fullName.trim(),
-      email: enquiry.email.trim(),
-      mobileNumber: enquiry.mobileNumber.trim(),
-      subject: enquiry.subject.trim(),
-      message: enquiry.message.trim(),
-      status: 'New',
-      adminNote: '',
-      createdAt: new Date().toISOString(),
+    try {
+      const { error } = await supabase.from('enquiries').insert({
+        id: Date.now().toString(),
+        full_name: enquiry.fullName.trim(),
+        email: enquiry.email.trim(),
+        mobile_number: enquiry.mobileNumber.trim(),
+        subject: enquiry.subject.trim(),
+        message: enquiry.message.trim(),
+        status: 'New',
+        admin_note: '',
+      })
+
+      if (error) {
+        setMessage('Something went wrong. Please try again.')
+        return
+      }
+
+      setSubmitted(true)
+      setMessage('Your enquiry has been submitted successfully!')
+      setEnquiry(initialEnquiry)
+    } catch {
+      // If Supabase fails (or not configured), fall back to localStorage for the demo
+      const nextEnquiry = {
+        id: Date.now().toString(),
+        fullName: enquiry.fullName.trim(),
+        email: enquiry.email.trim(),
+        mobileNumber: enquiry.mobileNumber.trim(),
+        subject: enquiry.subject.trim(),
+        message: enquiry.message.trim(),
+        status: 'New',
+        adminNote: '',
+        createdAt: new Date().toISOString(),
+      }
+
+      const stored = loadJson('mobisphereEnquiries')
+      const nextList = Array.isArray(stored) ? [...stored, nextEnquiry] : [nextEnquiry]
+      saveJson('mobisphereEnquiries', nextList)
+
+      setSubmitted(true)
+      setMessage('Your enquiry has been submitted. The admin can review and manage it from the admin panel.')
+      setEnquiry(initialEnquiry)
     }
-
-    const stored = loadJson('mobisphereEnquiries')
-    const nextList = Array.isArray(stored) ? [...stored, nextEnquiry] : [nextEnquiry]
-    saveJson('mobisphereEnquiries', nextList)
-
-    setSubmitted(true)
-    setMessage('Your enquiry has been submitted. The admin can review and manage it from the admin panel.')
-    setEnquiry(initialEnquiry)
   }
+
 
   return (
     <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
