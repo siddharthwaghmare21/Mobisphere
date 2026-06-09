@@ -68,9 +68,10 @@ export default function AdminPanelPage() {
     saveJson(ENQUIRY_STORAGE_KEY, nextEnquiries)
   }
 
-  const handleCustomerDelete = (customerId) => {
+  const handleCustomerDelete = async (customerId) => {
+    await supabase.from('customers').delete().eq('id', customerId)
     const next = customers.filter((customer) => customer.id !== customerId)
-    saveCustomers(next)
+    setCustomers(next)
     setMessage('Customer removed successfully.')
   }
 
@@ -195,10 +196,10 @@ export default function AdminPanelPage() {
                   <div key={customer.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-slate-700">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="font-semibold text-slate-900">{customer.fullName}</p>
-                        <p className="text-sm">Mobile: {customer.mobileNumber}</p>
+                        <p className="font-semibold text-slate-900">{customer.full_name}</p>
+                        <p className="text-sm">Mobile: {customer.mobile_number}</p>
                         <p className="text-sm">Address: {customer.address}</p>
-                        <p className="text-xs text-slate-500">Joined on {new Date(customer.verifiedAt).toLocaleString()}</p>
+                        <p className="text-xs text-slate-500">Joined on {customer.created_at ? new Date(customer.created_at).toLocaleString() : '—'}</p>
                       </div>
                       <button
                         type="button"
