@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 const ADMIN_SESSION_KEY = 'mobisphereAdminSession'
 const CUSTOMER_STORAGE_KEY = 'mobisphereCustomers'
@@ -37,14 +38,24 @@ export default function AdminPanelPage() {
       return
     }
 
-    const storedCustomers = loadJson(CUSTOMER_STORAGE_KEY)
-    const storedEnquiries = loadJson(ENQUIRY_STORAGE_KEY)
-
-    queueMicrotask(() => {
+    const fetchData = async () => {
       setSession(storedSession)
-      setCustomers(Array.isArray(storedCustomers) ? storedCustomers : [])
-      setEnquiries(Array.isArray(storedEnquiries) ? storedEnquiries : [])
-    })
+
+      const { data: customersData } = await supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      const { data: enquiriesData } = await supabase
+        .from('enquiries')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      setCustomers(customersData || [])
+      setEnquiries(enquiriesData || [])
+    }
+
+    fetchData()
   }, [router])
 
   const saveCustomers = (nextCustomers) => {
