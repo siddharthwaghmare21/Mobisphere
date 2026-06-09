@@ -13,11 +13,18 @@ export default function OtherFacilities() {
     return (
         <section className="bg-slate-100 py-12">
             <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {/* मोबाईल रिस्पॉन्सिव्हिटीसाठी grid-cols-1 आणि sm:grid-cols-2 केले */}
                     {cards.map((card) => (
-                        <div key={card.title} className="flex h-full items-center rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-xl transition hover:-translate-y-1 hover:shadow-2xl">
-                            <p className="text-sm sm:text-base md:text-lg font-semibold uppercase tracking-[0.28em] text-slate-950">
+                        <div key={card.title} className="flex h-full flex-col justify-center rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-xl transition hover:-translate-y-1 hover:shadow-2xl">
+                            {/* १. सेवेचे शीर्षक */}
+                            <p className="text-sm sm:text-base md:text-lg font-semibold uppercase tracking-[0.2em] text-slate-950">
                                 {card.title}
+                            </p>
+
+                            {/* २. सेवेचा तपशील (हा नवीन पॅराग्राफ आपण ॲड केला आहे) */}
+                            <p className="mt-2 text-xs text-slate-600 sm:text-sm">
+                                {card.detail}
                             </p>
                         </div>
                     ))}
