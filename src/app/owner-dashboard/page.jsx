@@ -9,7 +9,7 @@ import { productData } from '@/app/components/common/ProductCart'
 
 // Load chart lib only on client
 const Chart = dynamic(() => import('react-chartjs-2').then((m) => m.Line), { ssr: false })
-const ChartJS = dynamic(() => import('chart.js/auto'), { ssr: false })
+
 
 const ADMIN_SESSION_KEY = 'mobisphereAdminSession'
 const CUSTOMER_STORAGE_KEY = 'mobisphereCustomers'
@@ -205,7 +205,7 @@ export default function OwnerDashboardPage() {
 
         <div className="mt-6">
           {/* Ensure chart.js is loaded */}
-          <ChartJS />
+          
           <Chart data={chartData} options={chartOptions} />
         </div>
       </div>
