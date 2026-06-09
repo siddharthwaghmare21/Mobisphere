@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from "react"
-
+import { supabase } from '@/lib/supabase'
 import { useRouter } from "next/navigation"
 
 const initialBuyer = {
@@ -61,7 +61,7 @@ export default function BuyPage() {
     setBuyer((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async() => {
     setMessage("")
 
     if (!buyer.fullName.trim()) {
@@ -106,14 +106,34 @@ export default function BuyPage() {
       status: "Placed",
     }
 
-    try {
-      const key = "mobisphereOrders"
-      const stored = safeParseJSON(localStorage.getItem(key), [])
-      const next = Array.isArray(stored) ? [...stored, order] : [order]
-      localStorage.setItem(key, JSON.stringify(next))
-    } catch {
-      // demo persistence only
-    }
+    const { error } = await supabase.from('orders').insert({
+  id: order.id,
+  buyer_name: order.buyer.fullName,
+  buyer_email: order.buyer.email,
+  buyer_mobile: order.buyer.mobileNumber,
+  buyer_address: order.buyer.address,
+  payment_method: order.payment.method,
+  total_price: order.totalPrice,
+  status: 'Placed',
+})
+
+if (error) {
+  setMessage('Something went wrong. Please try again.')
+  return
+}
+
+// Order items save करा
+if (order.items.length > 0) {
+  await supabase.from('order_items').insert(
+    order.items.map((item) => ({
+      order_id: order.id,
+      product_id: item.productId,
+      title: item.title,
+      price: item.price,
+      image: item.image,
+    }))
+  )
+}
 
     // Clear cart after placing order (demo)
     try {
