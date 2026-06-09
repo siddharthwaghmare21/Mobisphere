@@ -122,7 +122,7 @@ if (error) {
   return
 }
 
-// Order items save करा
+// To save the Order items.
 if (order.items.length > 0) {
   await supabase.from('order_items').insert(
     order.items.map((item) => ({

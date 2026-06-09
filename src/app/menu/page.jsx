@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 const initialSignupData = {
   fullName: '',
@@ -89,7 +90,7 @@ export default function MenuPage() {
     setLoginData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     setMessage('')
 
     if (!signupData.fullName.trim() || !signupData.password || !signupData.mobileNumber.trim() || !signupData.address.trim()) {
@@ -131,6 +132,15 @@ export default function MenuPage() {
     setSignupData(initialSignupData)
     setMessage(`Account created successfully for ${newAccount.fullName}.`) 
     setIsSubmitting(false)
+    await supabase.from('customers').insert({
+  id: newAccount.id,
+  full_name: newAccount.fullName,
+  mobile_number: newAccount.mobileNumber,
+  address: newAccount.address,
+  password: newAccount.password,
+  is_admin: newAccount.isAdmin || false,
+  verified_at: newAccount.verifiedAt,
+})
     router.push('/')
   }
 
