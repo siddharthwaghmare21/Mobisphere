@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 
 const ADMIN_SESSION_KEY = 'mobisphereAdminSession'
@@ -30,6 +30,9 @@ export default function AdminDashboardPage() {
   const [error, setError] = useState('')
   const [hydrated, setHydrated] = useState(false)
 
+  // Active Navigation Tab State (Default: 1 - Dashboard Overview)
+  const [activeTab, setActiveTab] = useState(1)
+
   // Coupons State
   const [coupons, setCoupons] = useState([])
   const [newCouponCode, setNewCouponCode] = useState('')
@@ -50,6 +53,16 @@ export default function AdminDashboardPage() {
       setHydrated(true)
     })
   }, [])
+
+  // Mock Sales Data for CSS Bar Charts (Analytics)
+  const salesData = useMemo(() => [
+    { month: 'Jan', sales: 450000, height: '45%' },
+    { month: 'Feb', sales: 550000, height: '55%' },
+    { month: 'Mar', sales: 650000, height: '65%' },
+    { month: 'Apr', sales: 850000, height: '85%' },
+    { month: 'May', sales: 700000, height: '70%' },
+    { month: 'Jun', sales: 950000, height: '95%' },
+  ], [])
 
   const handleLogin = (e) => {
     e.preventDefault()
@@ -97,7 +110,6 @@ export default function AdminDashboardPage() {
     saveJson(CUSTOMER_STORAGE_KEY, next)
   }
 
-  // Handle Create Coupon
   const handleCreateCoupon = (e) => {
     e.preventDefault()
     setCouponAlert('')
@@ -115,7 +127,6 @@ export default function AdminDashboardPage() {
       return
     }
 
-    // Check if coupon already exists
     if (coupons.some(c => c.code === code)) {
       setCouponAlert('This coupon code already exists.')
       return
@@ -131,13 +142,11 @@ export default function AdminDashboardPage() {
     setCoupons(updatedCoupons)
     saveJson(COUPON_STORAGE_KEY, updatedCoupons)
 
-    // Reset Form Fields
     setNewCouponCode('')
     setNewDiscountPercent('')
     alert(`Coupon "${code}" created successfully!`)
   }
 
-  // Handle Delete Coupon
   const handleDeleteCoupon = (id) => {
     const updatedCoupons = coupons.filter(c => c.id !== id)
     setCoupons(updatedCoupons)
@@ -169,7 +178,7 @@ export default function AdminDashboardPage() {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none"
                 placeholder="Username or 10-digit number"
               />
             </label>
@@ -180,7 +189,7 @@ export default function AdminDashboardPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none"
                 placeholder="••••••••"
               />
             </label>
@@ -198,113 +207,178 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10 pt-28 sm:px-6 space-y-10">
-      {/* Top Banner Header */}
-      <div className="rounded-[2rem] bg-white p-8 shadow-sm border border-slate-200">
+    <main className="mx-auto max-w-6xl px-4 py-10 pt-28 sm:px-6 space-y-6">
+      
+      {/* Top Controller Panel Header */}
+      <div className="rounded-[2rem] bg-white p-6 shadow-sm border border-slate-200 sm:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Management control</p>
-            <h1 className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">Admin Dashboard</h1>
-            <p className="mt-2 text-sm text-slate-600">Review all store accounts and manage promotional coupon discount metrics.</p>
+            <p className="text-sm uppercase tracking-[0.3em] text-slate-500">System Dashboard</p>
+            <h1 className="mt-1 text-3xl font-bold text-slate-950 sm:text-4xl">MobiSphere Panel</h1>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => router.push('/owner-dashboard')}
-              className="rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              className="rounded-full bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
             >
-              View Analytics Chart
+              Owner Analytics Chart
             </button>
             <button
               type="button"
               onClick={handleLogout}
-              className="rounded-full border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              className="rounded-full border border-slate-200 bg-slate-50 px-5 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
             >
               Log out
             </button>
           </div>
         </div>
+
+        {/* Global Hub Navigation Tabs */}
+        <div className="mt-8 flex flex-wrap gap-2 border-t border-slate-100 pt-4 font-medium">
+          {[
+            { id: 1, name: '1) Dashboard Overview' },
+            { id: 2, name: '2) Product Inventory' },
+            { id: 3, name: '3) Order Management' },
+            { id: 4, name: '4) User Accounts' },
+            { id: 5, name: '5) Coupons & Offers' },
+            { id: 6, name: '6) Big Data Reports' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`rounded-full px-4 py-2 text-xs transition ${
+                activeTab === tab.id
+                  ? 'bg-slate-950 text-white shadow-sm'
+                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {tab.name}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Coupon Management Section */}
-      <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-        {/* Create Coupon Form */}
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <h2 className="text-xl font-bold text-slate-950">Create Store Coupon</h2>
-          <p className="mt-1 text-xs text-slate-500">Generate fresh custom promotional codes for client checkout sessions.</p>
-
-          {couponAlert && (
-            <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-xs font-medium text-orange-800">
-              {couponAlert}
+      {/* --- TAB 1: DASHBOARD / ANALYTICS OVERVIEW --- */}
+      {activeTab === 1 && (
+        <div className="space-y-6">
+          {/* Top Analytical Counter Figures */}
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <p className="text-xs uppercase font-semibold tracking-wider text-slate-500">Gross Revenue</p>
+              <p className="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">₹41,50,000</p>
+              <span className="text-[10px] text-emerald-600 font-semibold">↑ 12.5% This Month</span>
             </div>
-          )}
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <p className="text-xs uppercase font-semibold tracking-wider text-slate-500">Products Sold</p>
+              <p className="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">84 Units</p>
+              <span className="text-[10px] text-emerald-600 font-semibold">↑ 4.2% Fresh Stock</span>
+            </div>
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <p className="text-xs uppercase font-semibold tracking-wider text-slate-500">Total Store Clients</p>
+              <p className="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">{customers.length} Accounts</p>
+              <span className="text-[10px] text-slate-500 font-semibold">Live System Logs</span>
+            </div>
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <p className="text-xs uppercase font-semibold tracking-wider text-slate-500">Active Coupons</p>
+              <p className="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">{coupons.length} Vouchers</p>
+              <span className="text-[10px] text-purple-600 font-semibold">Ready for Checkout</span>
+            </div>
+          </div>
 
-          <form onSubmit={handleCreateCoupon} className="mt-6 space-y-4">
-            <label className="block space-y-2 text-sm text-slate-700">
-              <span>Coupon Code</span>
-              <input
-                type="text"
-                value={newCouponCode}
-                onChange={(e) => setNewCouponCode(e.target.value)}
-                placeholder="E.g., PROMO20, WELCOME50"
-                className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 uppercase font-semibold tracking-wider outline-none transition focus:border-slate-400"
-              />
-            </label>
+          {/* Core Custom CSS Bar Chart Graphics Component */}
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <div className="mb-6 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+              <div>
+                <h2 className="text-xl font-bold text-slate-950">Sales Performance Overview</h2>
+                <p className="text-xs text-slate-500">Pure responsive CSS graphical data visualization matrices.</p>
+              </div>
+              <div className="flex items-center gap-4 text-xs font-semibold text-slate-600">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded-sm bg-slate-950"></span>
+                  <span>Monthly Sales (₹)</span>
+                </div>
+              </div>
+            </div>
 
-            <label className="block space-y-2 text-sm text-slate-700">
-              <span>Discount Percentage (%)</span>
-              <input
-                type="number"
-                value={newDiscountPercent}
-                onChange={(e) => setNewDiscountPercent(e.target.value)}
-                placeholder="E.g., 20, 50"
-                className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
-              />
-            </label>
-
-            <button
-              type="submit"
-              className="w-full rounded-full bg-slate-950 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-            >
-              Generate Coupon
-            </button>
-          </form>
+            {/* CSS Bar Chart Container */}
+            <div className="flex h-64 items-end justify-between gap-2 border-b border-l border-slate-200 pb-2 pl-2 pt-4 sm:gap-6">
+              {salesData.map((data, index) => (
+                <div key={index} className="group flex h-full flex-col justify-end items-center flex-1">
+                  {/* Hover Floating Numeric Indicator tooltip */}
+                  <div className="mb-2 opacity-0 transform translate-y-1 transition group-hover:opacity-100 group-hover:translate-y-0 text-[10px] font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded-md font-mono">
+                    ₹{data.sales.toLocaleString()}
+                  </div>
+                  {/* Dynamic CSS Bar Element */}
+                  <div 
+                    style={{ height: data.height }} 
+                    className="w-full rounded-t-lg bg-slate-950 transition-all duration-500 hover:bg-emerald-600 shadow-md cursor-pointer"
+                  ></div>
+                  {/* Month Label Text */}
+                  <span className="mt-2 text-xs font-semibold text-slate-600">{data.month}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
+      )}
 
-        {/* Coupon Listing Table */}
+      {/* --- TAB 2: PRODUCT MANAGEMENT (INVENTORY Placeholder) --- */}
+      {activeTab === 2 && (
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+          <p className="text-lg font-semibold text-slate-900">2) Product Management (Inventory)</p>
+          <p className="mt-2">Next setup task block. Add, edit, delete products and stock alerts module arriving shortly.</p>
+        </div>
+      )}
+
+      {/* --- TAB 3: ORDER MANAGEMENT Placeholder --- */}
+      {activeTab === 3 && (
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+          <p className="text-lg font-semibold text-slate-900">3) Order Management System</p>
+          <p className="mt-2">Live transaction pipeline tracking coming up next in the integration series.</p>
+        </div>
+      )}
+
+      {/* --- TAB 4: USER MANAGEMENT --- */}
+      {activeTab === 4 && (
         <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <h2 className="text-xl font-bold text-slate-950 mb-6">Active Store Coupons ({coupons.length})</h2>
-          
-          {coupons.length === 0 ? (
+          <h2 className="text-xl font-bold text-slate-950 mb-6">Registered Store Accounts ({customers.length})</h2>
+          {customers.length === 0 ? (
             <div className="rounded-3xl border border-slate-100 bg-slate-50 p-8 text-center text-sm text-slate-500">
-              No active promo coupons found. Use the configuration generator panel to establish live store code offers.
+              No system profiles have been created yet. New signs ups on the account page will be logged here.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-xs">
-                    <th className="py-4 font-semibold">Coupon Code</th>
-                    <th className="py-4 font-semibold">Value Discount</th>
+                    <th className="py-4 font-semibold">Customer Metadata</th>
+                    <th className="py-4 font-semibold">Security Pass</th>
+                    <th className="py-4 font-semibold">Role</th>
                     <th className="py-4 font-semibold text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-900">
-                  {coupons.map((coupon) => (
-                    <tr key={coupon.id} className="hover:bg-slate-50/70 transition">
+                  {customers.map((c) => (
+                    <tr key={c.id} className="hover:bg-slate-50/70 transition">
                       <td className="py-4 pr-4">
-                        <span className="rounded-lg bg-slate-100 px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-wider text-slate-900 border border-slate-200">
-                          {coupon.code}
+                        <div className="font-semibold text-slate-950">{c.fullName}</div>
+                        <div className="mt-1 text-xs text-slate-500 font-mono">{c.mobileNumber}</div>
+                        <div className="mt-1 max-w-xs truncate text-xs text-slate-400 font-normal">{c.address}</div>
+                      </td>
+                      <td className="py-4 font-mono text-xs text-slate-600">{c.password}</td>
+                      <td className="py-4">
+                        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${c.isAdmin ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-800'}`}>
+                          {c.isAdmin ? 'Admin' : 'Customer'}
                         </span>
                       </td>
-                      <td className="py-4 text-emerald-600 font-bold">{coupon.discountPercent}% OFF</td>
                       <td className="py-4 text-right">
                         <button
                           type="button"
-                          onClick={() => handleDeleteCoupon(coupon.id)}
+                          onClick={() => handleDeleteCustomer(c.id)}
                           className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100"
                         >
-                          Remove
+                          Delete
                         </button>
                       </td>
                     </tr>
@@ -314,57 +388,105 @@ export default function AdminDashboardPage() {
             </div>
           )}
         </div>
-      </div>
+      )}
 
-      {/* Registered Store Accounts Table Section */}
-      <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <h2 className="text-xl font-bold text-slate-950 mb-6">Registered Store Accounts ({customers.length})</h2>
-        
-        {customers.length === 0 ? (
-          <div className="rounded-3xl border border-slate-100 bg-slate-50 p-8 text-center text-sm text-slate-500">
-            No system profiles have been created yet. New signs ups on the account page will be logged here.
+      {/* --- TAB 5: DISCOUNT AND COUPON MANAGEMENT --- */}
+      {activeTab === 5 && (
+        <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <h2 className="text-xl font-bold text-slate-950">Create Store Coupon</h2>
+            <p className="mt-1 text-xs text-slate-500">Generate fresh custom promotional codes for client checkout sessions.</p>
+
+            {couponAlert && (
+              <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-xs font-medium text-orange-800">
+                {couponAlert}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateCoupon} className="mt-6 space-y-4">
+              <label className="block space-y-2 text-sm text-slate-700">
+                <span>Coupon Code</span>
+                <input
+                  type="text"
+                  value={newCouponCode}
+                  onChange={(e) => setNewCouponCode(e.target.value)}
+                  placeholder="E.g., FESTIVAL20, PROMO50"
+                  className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 uppercase font-semibold tracking-wider outline-none"
+                />
+              </label>
+
+              <label className="block space-y-2 text-sm text-slate-700">
+                <span>Discount Percentage (%)</span>
+                <input
+                  type="number"
+                  value={newDiscountPercent}
+                  onChange={(e) => setNewDiscountPercent(e.target.value)}
+                  placeholder="E.g., 20, 50"
+                  className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none"
+                />
+              </label>
+
+              <button
+                type="submit"
+                className="w-full rounded-full bg-slate-950 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Generate Coupon
+              </button>
+            </form>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-xs">
-                  <th className="py-4 font-semibold">Customer Metadata</th>
-                  <th className="py-4 font-semibold">Security Pass</th>
-                  <th className="py-4 font-semibold">Role</th>
-                  <th className="py-4 font-semibold text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-900">
-                {customers.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-50/70 transition">
-                    <td className="py-4 pr-4">
-                      <div className="font-semibold text-slate-950">{c.fullName}</div>
-                      <div className="mt-1 text-xs text-slate-500 font-mono">{c.mobileNumber}</div>
-                      <div className="mt-1 max-w-xs truncate text-xs text-slate-400 font-normal">{c.address}</div>
-                    </td>
-                    <td className="py-4 font-mono text-xs text-slate-600">{c.password}</td>
-                    <td className="py-4">
-                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${c.isAdmin ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-800'}`}>
-                        {c.isAdmin ? 'Admin' : 'Customer'}
-                      </span>
-                    </td>
-                    <td className="py-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteCustomer(c.id)}
-                        className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <h2 className="text-xl font-bold text-slate-950 mb-6">Active Store Coupons ({coupons.length})</h2>
+            {coupons.length === 0 ? (
+              <div className="rounded-3xl border border-slate-100 bg-slate-50 p-8 text-center text-sm text-slate-500">
+                No active promo coupons found. Use the configuration generator panel to establish live store code offers.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-xs">
+                      <th className="py-4 font-semibold">Coupon Code</th>
+                      <th className="py-4 font-semibold">Value Discount</th>
+                      <th className="py-4 font-semibold text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-900">
+                    {coupons.map((coupon) => (
+                      <tr key={coupon.id} className="hover:bg-slate-50/70 transition">
+                        <td className="py-4 pr-4">
+                          <span className="rounded-lg bg-slate-100 px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-wider text-slate-900 border border-slate-200">
+                            {coupon.code}
+                          </span>
+                        </td>
+                        <td className="py-4 text-emerald-600 font-bold">{coupon.discountPercent}% OFF</td>
+                        <td className="py-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCoupon(coupon.id)}
+                            className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100"
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* --- TAB 6: USER BEHAVIOR AND SALES REPORTS Placeholder --- */}
+      {activeTab === 6 && (
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+          <p className="text-lg font-semibold text-slate-900">6) User Behavior and Sales Reports</p>
+          <p className="mt-2">Advanced Analytics / Big Data logging portal configuration dashboard coming soon.</p>
+        </div>
+      )}
+
     </main>
   )
 }
