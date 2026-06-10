@@ -130,283 +130,283 @@ export default function MenuPage() {
     setLoggedInUser(newAccount)
     saveLoggedInUser(newAccount)
     setSignupData(initialSignupData)
-    setMessage(`Account created successfully for ${newAccount.fullName}.`) 
+    setMessage(`Account created successfully for ${newAccount.fullName}.`)
     setIsSubmitting(false)
     await supabase.from('customers').insert({
-  id: newAccount.id,
-  full_name: newAccount.fullName,
-  mobile_number: newAccount.mobileNumber,
-  address: newAccount.address,
-  password: newAccount.password,
-  is_admin: newAccount.isAdmin || false,
-  verified_at: newAccount.verifiedAt,
-})
+      id: newAccount.id,
+      full_name: newAccount.fullName,
+      mobile_number: newAccount.mobileNumber,
+      address: newAccount.address,
+      password: newAccount.password,
+      is_admin: newAccount.isAdmin || false,
+      verified_at: newAccount.verifiedAt,
+    })
     router.push('/')
   }
 
   const handleLogin = () => {
-  setMessage('')
+    setMessage('')
 
-  // १. लॉगिनसाठी फक्त नाव, पासवर्ड आणि मोबाईल नंबर आवश्यक ठेवा (address ची अट काढली)
-  if (!loginData.fullName.trim() || !loginData.password || !loginData.mobileNumber.trim()) {
-    setMessage('Please enter your name, password, and mobile number to login.')
-    return
+    // १. लॉगिनसाठी फक्त नाव, पासवर्ड आणि मोबाईल नंबर आवश्यक ठेवा (address ची अट काढली)
+    if (!loginData.fullName.trim() || !loginData.password || !loginData.mobileNumber.trim()) {
+      setMessage('Please enter your name, password, and mobile number to login.')
+      return
+    }
+
+    if (!isValidIndianMobile(loginData.mobileNumber.trim())) {
+      setMessage('Please provide a valid 10-digit Indian mobile number to login.')
+      return
+    }
+
+    // २. मॅचिंग करताना सुद्धा पत्त्याची अट (address.toLowerCase()...) काढून टाकली
+    const matchedAccount = accounts.find(
+      (account) =>
+        account.fullName.toLowerCase() === loginData.fullName.trim().toLowerCase() &&
+        account.password === loginData.password &&
+        account.mobileNumber === loginData.mobileNumber.trim()
+    )
+
+    if (!matchedAccount) {
+      setMessage('No matching account found. Please check your details or sign up first.')
+      return
+    }
+
+    setLoggedInUser(matchedAccount)
+    saveLoggedInUser(matchedAccount)
+    setMessage(`Welcome back, ${matchedAccount.fullName}!`)
   }
-
-  if (!isValidIndianMobile(loginData.mobileNumber.trim())) {
-    setMessage('Please provide a valid 10-digit Indian mobile number to login.')
-    return
-  }
-
-  // २. मॅचिंग करताना सुद्धा पत्त्याची अट (address.toLowerCase()...) काढून टाकली
-  const matchedAccount = accounts.find(
-    (account) =>
-      account.fullName.toLowerCase() === loginData.fullName.trim().toLowerCase() &&
-      account.password === loginData.password &&
-      account.mobileNumber === loginData.mobileNumber.trim()
-  )
-
-  if (!matchedAccount) {
-    setMessage('No matching account found. Please check your details or sign up first.')
-    return
-  }
-
-  setLoggedInUser(matchedAccount)
-  saveLoggedInUser(matchedAccount)
-  setMessage(`Welcome back, ${matchedAccount.fullName}!`)
+  router.push('/')
 }
-    router.push('/')
-  }
 
-  const handleLogout = () => {
-    setLoggedInUser(null)
-    removeLoggedInUser()
-    setMessage('You have been logged out.')
-  }
+const handleLogout = () => {
+  setLoggedInUser(null)
+  removeLoggedInUser()
+  setMessage('You have been logged out.')
+}
 
-  return (
-    <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <div className="mb-8 flex flex-col gap-4 rounded-[2rem] bg-white p-8 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)] sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Mobisphere account</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">Login & Sign Up</h1>
-          <p className="mt-3 max-w-2xl text-sm text-slate-600 sm:text-base">
-            Create your account with name, password, mobile number, and address. The new account will appear on the admin page.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setTab('login')}
-            className={`rounded-full px-5 py-3 text-sm font-medium transition ${tab === 'login' ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-          >
-            My Profile
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('signup')}
-            className={`rounded-full px-5 py-3 text-sm font-medium transition ${tab === 'signup' ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-          >
-            Sign Up
-          </button>
-        </div>
+return (
+  <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+    <div className="mb-8 flex flex-col gap-4 rounded-[2rem] bg-white p-8 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)] sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Mobisphere account</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">Login & Sign Up</h1>
+        <p className="mt-3 max-w-2xl text-sm text-slate-600 sm:text-base">
+          Create your account with name, password, mobile number, and address. The new account will appear on the admin page.
+        </p>
       </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setTab('login')}
+          className={`rounded-full px-5 py-3 text-sm font-medium transition ${tab === 'login' ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+        >
+          My Profile
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('signup')}
+          className={`rounded-full px-5 py-3 text-sm font-medium transition ${tab === 'signup' ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+        >
+          Sign Up
+        </button>
+      </div>
+    </div>
 
-      <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="space-y-6 rounded-[2rem] bg-white p-8 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)]">
-          {message && (
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              {message}
-            </div>
-          )}
-
-          {tab === 'signup' ? (
-            <div className="space-y-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="space-y-2 text-sm text-slate-700">
-                  <span>Name</span>
-                  <input
-                    value={signupData.fullName}
-                    onChange={(e) => handleSignupChange('fullName', e.target.value)}
-                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
-                    placeholder="Full Name"
-                  />
-                </label>
-                <label className="space-y-2 text-sm text-slate-700">
-                  <span>Password</span>
-                  <input
-                    value={signupData.password}
-                    onChange={(e) => handleSignupChange('password', e.target.value)}
-                    type="password"
-                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
-                    placeholder="Create a password"
-                  />
-                </label>
-                <label className="space-y-2 text-sm text-slate-700">
-                  <span>Mobile Number</span>
-                  <input
-                    value={signupData.mobileNumber}
-                    onChange={(e) => handleSignupChange('mobileNumber', e.target.value)}
-                    type="tel"
-                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
-                    placeholder="10-digit Indian mobile"
-                  />
-                </label>
-                <label className="sm:col-span-2 space-y-2 text-sm text-slate-700">
-                  <span>Address</span>
-                  <textarea
-                    value={signupData.address}
-                    onChange={(e) => handleSignupChange('address', e.target.value)}
-                    className="h-28 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
-                    placeholder="Street, city, state, pincode"
-                  />
-                </label>
-              </div>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={handleSignup}
-                  disabled={isSubmitting}
-                  className="inline-flex items-center justify-center rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                >
-                  Sign up
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="space-y-2 text-sm text-slate-700">
-                  <span>Name</span>
-                  <input
-                    value={loginData.fullName}
-                    onChange={(e) => handleLoginChange('fullName', e.target.value)}
-                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
-                    placeholder="Full Name"
-                  />
-                </label>
-                <label className="space-y-2 text-sm text-slate-700">
-                  <span>Password</span>
-                  <input
-                    value={loginData.password}
-                    onChange={(e) => handleLoginChange('password', e.target.value)}
-                    type="password"
-                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
-                    placeholder="Password"
-                  />
-                </label>
-                <label className="space-y-2 text-sm text-slate-700">
-                  <span>Mobile Number</span>
-                  <input
-                    value={loginData.mobileNumber}
-                    onChange={(e) => handleLoginChange('mobileNumber', e.target.value)}
-                    type="tel"
-                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
-                    placeholder="10-digit Indian mobile"
-                  />
-                </label>
-                <label className="sm:col-span-2 space-y-2 text-sm text-slate-700">
-                  <span>Address</span>
-                  <textarea
-                    value={loginData.address}
-                    onChange={(e) => handleLoginChange('address', e.target.value)}
-                    className="h-28 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
-                    placeholder="Street, city, state, pincode"
-                  />
-                </label>
-              </div>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={handleLogin}
-                  disabled={isSubmitting}
-                  className="inline-flex items-center justify-center rounded-full bg-slate-950 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                >
-                  Log in
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <aside className="space-y-6">
-          <div className="rounded-[2rem] bg-slate-950 p-8 text-white shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)]">
-            <div className="space-y-5">
-              <div>
-                <p className="text-sm uppercase tracking-[0.3em] text-slate-400">Registered customers</p>
-                <p className="mt-3 text-5xl font-semibold">{accounts.length}</p>
-                <p className="mt-2 text-sm text-slate-400">people already registered on Mobisphere</p>
-              </div>
-              <div>
-                <p className="text-sm uppercase tracking-[0.3em] text-slate-400">Why create an account?</p>
-                <h2 className="mt-2 text-2xl font-semibold">Secure account access</h2>
-              </div>
-            </div>
-            <ul className="space-y-3 text-sm leading-7 text-slate-300">
-              <li>? Save your details locally for this demo</li>
-              <li>? Login with name, password, mobile number, and address</li>
-              <li>? Accounts appear on the admin page automatically</li>
-              <li>? No email verification is required for new customers</li>
-            </ul>
+    <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
+      <div className="space-y-6 rounded-[2rem] bg-white p-8 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)]">
+        {message && (
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+            {message}
           </div>
-        </aside>
-      </div>
+        )}
 
-      <div className="mt-10 rounded-[2rem] bg-white p-8 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)]">
-        <div className="mb-8 rounded-3xl border border-slate-200 bg-slate-50 p-6">
-          <p className="text-sm uppercase tracking-[0.3em] text-slate-500">My Account</p>
-          <h2 className="mt-3 text-2xl font-semibold text-slate-900">Account details on this page</h2>
-          <p className="mt-2 text-sm text-slate-600">After signing up or logging in, your profile details appear below.</p>
-        </div>
-
-        {loggedInUser ? (
+        {tab === 'signup' ? (
           <div className="space-y-6">
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 text-slate-900">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Name</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{loggedInUser.fullName}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Mobile</p>
-                  <p className="mt-2 text-sm text-slate-900">{loggedInUser.mobileNumber}</p>
-                </div>
-                <div className="sm:col-span-2 rounded-3xl bg-white p-4 shadow-sm">
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Address</p>
-                  <p className="mt-2 text-sm text-slate-900 whitespace-pre-line">{loggedInUser.address}</p>
-                </div>
-              </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="space-y-2 text-sm text-slate-700">
+                <span>Name</span>
+                <input
+                  value={signupData.fullName}
+                  onChange={(e) => handleSignupChange('fullName', e.target.value)}
+                  className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                  placeholder="Full Name"
+                />
+              </label>
+              <label className="space-y-2 text-sm text-slate-700">
+                <span>Password</span>
+                <input
+                  value={signupData.password}
+                  onChange={(e) => handleSignupChange('password', e.target.value)}
+                  type="password"
+                  className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                  placeholder="Create a password"
+                />
+              </label>
+              <label className="space-y-2 text-sm text-slate-700">
+                <span>Mobile Number</span>
+                <input
+                  value={signupData.mobileNumber}
+                  onChange={(e) => handleSignupChange('mobileNumber', e.target.value)}
+                  type="tel"
+                  className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                  placeholder="10-digit Indian mobile"
+                />
+              </label>
+              <label className="sm:col-span-2 space-y-2 text-sm text-slate-700">
+                <span>Address</span>
+                <textarea
+                  value={signupData.address}
+                  onChange={(e) => handleSignupChange('address', e.target.value)}
+                  className="h-28 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                  placeholder="Street, city, state, pincode"
+                />
+              </label>
             </div>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="inline-flex rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
-            >
-              Logout
-            </button>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleSignup}
+                disabled={isSubmitting}
+                className="inline-flex items-center justify-center rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                Sign up
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 text-slate-900">
-            <p className="text-sm text-slate-600">Sign up or log in above to access your profile details directly on this page.</p>
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="space-y-2 text-sm text-slate-700">
+                <span>Name</span>
+                <input
+                  value={loginData.fullName}
+                  onChange={(e) => handleLoginChange('fullName', e.target.value)}
+                  className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                  placeholder="Full Name"
+                />
+              </label>
+              <label className="space-y-2 text-sm text-slate-700">
+                <span>Password</span>
+                <input
+                  value={loginData.password}
+                  onChange={(e) => handleLoginChange('password', e.target.value)}
+                  type="password"
+                  className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                  placeholder="Password"
+                />
+              </label>
+              <label className="space-y-2 text-sm text-slate-700">
+                <span>Mobile Number</span>
+                <input
+                  value={loginData.mobileNumber}
+                  onChange={(e) => handleLoginChange('mobileNumber', e.target.value)}
+                  type="tel"
+                  className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                  placeholder="10-digit Indian mobile"
+                />
+              </label>
+              <label className="sm:col-span-2 space-y-2 text-sm text-slate-700">
+                <span>Address</span>
+                <textarea
+                  value={loginData.address}
+                  onChange={(e) => handleLoginChange('address', e.target.value)}
+                  className="h-28 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                  placeholder="Street, city, state, pincode"
+                />
+              </label>
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleLogin}
+                disabled={isSubmitting}
+                className="inline-flex items-center justify-center rounded-full bg-slate-950 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                Log in
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      <div className="mt-10 rounded-[2rem] bg-white p-8 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)]">
-        <h2 className="text-lg font-semibold text-slate-900">Account guide</h2>
-        <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
-          <div>
-            <p className="font-semibold text-slate-900">Sign up</p>
-            <p>Enter full name, password, mobile number, and address, then click Sign up to create your account.</p>
+      <aside className="space-y-6">
+        <div className="rounded-[2rem] bg-slate-950 p-8 text-white shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)]">
+          <div className="space-y-5">
+            <div>
+              <p className="text-sm uppercase tracking-[0.3em] text-slate-400">Registered customers</p>
+              <p className="mt-3 text-5xl font-semibold">{accounts.length}</p>
+              <p className="mt-2 text-sm text-slate-400">people already registered on Mobisphere</p>
+            </div>
+            <div>
+              <p className="text-sm uppercase tracking-[0.3em] text-slate-400">Why create an account?</p>
+              <h2 className="mt-2 text-2xl font-semibold">Secure account access</h2>
+            </div>
           </div>
-          <div>
-            <p className="font-semibold text-slate-900">Login</p>
-            <p>Use the same name, password, mobile number, and address to access your account.</p>
+          <ul className="space-y-3 text-sm leading-7 text-slate-300">
+            <li>? Save your details locally for this demo</li>
+            <li>? Login with name, password, mobile number, and address</li>
+            <li>? Accounts appear on the admin page automatically</li>
+            <li>? No email verification is required for new customers</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+
+    <div className="mt-10 rounded-[2rem] bg-white p-8 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)]">
+      <div className="mb-8 rounded-3xl border border-slate-200 bg-slate-50 p-6">
+        <p className="text-sm uppercase tracking-[0.3em] text-slate-500">My Account</p>
+        <h2 className="mt-3 text-2xl font-semibold text-slate-900">Account details on this page</h2>
+        <p className="mt-2 text-sm text-slate-600">After signing up or logging in, your profile details appear below.</p>
+      </div>
+
+      {loggedInUser ? (
+        <div className="space-y-6">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 text-slate-900">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Name</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">{loggedInUser.fullName}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Mobile</p>
+                <p className="mt-2 text-sm text-slate-900">{loggedInUser.mobileNumber}</p>
+              </div>
+              <div className="sm:col-span-2 rounded-3xl bg-white p-4 shadow-sm">
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Address</p>
+                <p className="mt-2 text-sm text-slate-900 whitespace-pre-line">{loggedInUser.address}</p>
+              </div>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="inline-flex rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+          >
+            Logout
+          </button>
+        </div>
+      ) : (
+        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 text-slate-900">
+          <p className="text-sm text-slate-600">Sign up or log in above to access your profile details directly on this page.</p>
+        </div>
+      )}
+    </div>
+
+    <div className="mt-10 rounded-[2rem] bg-white p-8 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.35)]">
+      <h2 className="text-lg font-semibold text-slate-900">Account guide</h2>
+      <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
+        <div>
+          <p className="font-semibold text-slate-900">Sign up</p>
+          <p>Enter full name, password, mobile number, and address, then click Sign up to create your account.</p>
+        </div>
+        <div>
+          <p className="font-semibold text-slate-900">Login</p>
+          <p>Use the same name, password, mobile number, and address to access your account.</p>
         </div>
       </div>
-    </section>
-  )
+    </div>
+  </section>
+)
 }
