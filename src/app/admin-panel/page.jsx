@@ -83,7 +83,15 @@ export default function AdminPanelPage() {
   }
 
   const handleEnquiryChange = async (enquiryId, field, value) => {
-    await supabase.from('enquiries').update({ [field]: value }).eq('id', enquiryId)
+    // field name mapping - JS camelCase → Supabase snake_case
+    const fieldMap = {
+      adminNote: 'admin_note',
+      status: 'status',
+    }
+
+    const dbField = fieldMap[field] || field
+
+    await supabase.from('enquiries').update({ [dbField]: value }).eq('id', enquiryId)
     const next = enquiries.map((entry) =>
       entry.id === enquiryId ? { ...entry, [field]: value } : entry,
     )
@@ -91,20 +99,20 @@ export default function AdminPanelPage() {
   }
 
   const handleRefresh = async () => {
-  const { data: customersData } = await supabase
-    .from('customers')
-    .select('*')
-    .order('created_at', { ascending: false })
+    const { data: customersData } = await supabase
+      .from('customers')
+      .select('*')
+      .order('created_at', { ascending: false })
 
-  const { data: enquiriesData } = await supabase
-    .from('enquiries')
-    .select('*')
-    .order('created_at', { ascending: false })
+    const { data: enquiriesData } = await supabase
+      .from('enquiries')
+      .select('*')
+      .order('created_at', { ascending: false })
 
-  setCustomers(customersData || [])
-  setEnquiries(enquiriesData || [])
-  setMessage('Dashboard refreshed.')
-}
+    setCustomers(customersData || [])
+    setEnquiries(enquiriesData || [])
+    setMessage('Dashboard refreshed.')
+  }
 
   const adminName = session?.displayName || session?.userId || 'Admin'
 
