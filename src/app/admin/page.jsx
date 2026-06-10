@@ -74,26 +74,28 @@ export default function UnifiedAdminDashboard() {
       }
 
       setCustomers(storedCustomers.length ? storedCustomers : [
-        { id: 'u1', fullName: 'Siddharth Waghmare', mobileNumber: '9850123456', password: 'user123', email: 'sid@gmail.com', address: 'Sangli, Maharashtra', isAdmin: false },
-        { id: 'u2', fullName: 'Shubham Dabade', mobileNumber: '7770011223', password: 'pass777', email: 'shubham@gmail.com', address: 'Kolhapur, India', isAdmin: true }
+        { id: 'u1', fullName: 'Siddharth Waghmare', mobileNumber: '7249738821', email: 'siddharthwaghmare2145@gmail.com', address: '285, Dr. BR Ambedkar Nagar, Sangli', password: 'user123', isAdmin: false },
+        { id: 'u2', fullName: 'Shubham Dabade', mobileNumber: '7770011223', email: 'shubham.dabade@gmail.com', address: 'Kolhapur, India', password: 'pass777', isAdmin: true }
       ])
 
       setCoupons(Array.isArray(EastonCoupons) ? EastonCoupons : [])
       
       setEnquiries(storedEnquiries.length ? storedEnquiries.map(e => ({
         ...e,
-        status: e.status || 'Pending',
-        date: e.date || '2026-06-10'
+        productName: e.productName || 'iPhone 16 Pro Max',
+        status: e.status || 'Completed',
+        adminNote: e.adminNote || 'Progress completed',
+        date: e.date || '2026-06-10',
+        email: e.email || 'siddharthwaghmare2145@gmail.com'
       })) : [
-        { id: 'e1', name: 'Rahul Patil', mobile: '9876543210', email: 'rahul@gmail.com', message: 'Is that Mobile available in your shop?', date: '2026-06-10', status: 'Pending' },
-        { id: 'e2', name: 'Amit Shinde', mobile: '8888888888', email: 'amit@shinde.com', message: 'Do you provide EMI on Credit Cards?', date: '2026-06-10', status: 'Resolved' }
+        { id: 'e1', date: '2026-06-10', productName: 'iPhone 16 Pro Max', name: 'Siddharth Waghmare', mobile: '7249738821', email: 'siddharthwaghmare2145@gmail.com', message: 'Is that Mobile available in your shop?', status: 'Completed', adminNote: 'Progress completed' }
       ])
       
       setHydrated(true)
     })
   }, [])
 
-  // Chart Logic
+  // Chart Analytics
   const chartAnalytics = useMemo(() => {
     if (!hydrated) return { totalRevenue: 0, topProducts: [] }
     const cartData = loadJson(CART_STORAGE_KEY) || loadJson('cart') || []
@@ -141,10 +143,6 @@ export default function UnifiedAdminDashboard() {
   const handleLogin = (e) => {
     e.preventDefault()
     setError('')
-    if (!username.trim() || !password) {
-      setError('Please enter both credentials.')
-      return
-    }
     if (username.trim().toLowerCase() === 'admin' && password === 'admin') {
       saveJson(ADMIN_SESSION_KEY, { username: 'System Admin' })
       setIsLoggedIn(true)
@@ -165,16 +163,15 @@ export default function UnifiedAdminDashboard() {
     keysToSync.forEach(k => { if(localStorage.getItem(k)) saveJson(k, next) })
   }
 
-  const toggleEnquiryStatus = (id) => {
-    const next = enquiries.map((e) => {
-      if (e.id === id) {
-        return { ...e, status: e.status === 'Pending' ? 'Resolved' : 'Pending' }
-      }
-      return e
-    })
+  const handleEnquiryFieldChange = (id, field, value) => {
+    const next = enquiries.map((e) => (e.id === id ? { ...e, [field]: value } : e))
     setEnquiries(next)
-    saveJson(ENQUIRY_STORAGE_KEY, next)
-    saveJson('enquiries', next)
+  }
+
+  const handleSaveEnquiry = (id) => {
+    saveJson(ENQUIRY_STORAGE_KEY, enquiries)
+    saveJson('enquiries', enquiries)
+    alert('Enquiry records updated successfully!')
   }
 
   const handleDeleteEnquiry = (id) => {
@@ -213,8 +210,8 @@ export default function UnifiedAdminDashboard() {
           <h1 className="text-center text-xl font-bold text-slate-900">MobiSphere Admin Login</h1>
           {error && <div className="mt-4 text-xs text-red-600 bg-red-50 p-2 rounded-xl">{error}</div>}
           <form onSubmit={handleLogin} className="mt-6 space-y-4">
-            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full rounded-2xl border-slate-300 border p-3 text-sm text-slate-900 outline-none" placeholder="admin" />
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-2xl border-slate-300 border p-3 text-sm text-slate-900 outline-none" placeholder="admin" />
+            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full rounded-2xl border border-slate-300 p-3 text-sm text-slate-900 outline-none" placeholder="admin" />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-2xl border border-slate-300 p-3 text-sm text-slate-900 outline-none" placeholder="admin" />
             <button type="submit" className="w-full rounded-full bg-slate-900 py-3 text-sm font-semibold text-white">Login</button>
           </form>
         </div>
@@ -226,19 +223,19 @@ export default function UnifiedAdminDashboard() {
     <main className="mx-auto max-w-6xl px-4 py-10 pt-28 sm:px-6 space-y-6 text-slate-900">
       
       {/* Top Banner Header */}
-      <div className="rounded-[2rem] bg-slate-900 p-6 shadow-md text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="rounded-[2rem] bg-slate-900 p-6 shadow-sm text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <p className="text-xs uppercase text-emerald-400 font-bold">● Live Portal Active</p>
-          <h1 className="text-2xl font-bold mt-1">Welcome back, Admin! 👋</h1>
+          <p className="text-xs uppercase text-emerald-400 font-bold">● System Dashboard</p>
+          <h1 className="text-xl font-bold mt-1">MobiSphere Unified Control Center</h1>
         </div>
-        <button onClick={handleLogout} className="rounded-full bg-slate-800 border border-slate-700 px-4 py-2 text-xs font-bold text-white hover:bg-slate-700">Log out</button>
+        <button onClick={handleLogout} className="rounded-full bg-slate-800 px-4 py-2 text-xs font-bold text-white border border-slate-700 hover:bg-slate-700">Log out</button>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[290px_1fr]">
         
         {/* Navigation Sidebar Menu */}
         <div className="rounded-[2rem] border border-slate-300 bg-white p-4 h-fit shadow-sm space-y-1">
-          <p className="text-[11px] uppercase font-black text-slate-900 px-3 mb-3 tracking-wider">Navigation Menu</p>
+          <p className="text-[11px] uppercase font-bold text-slate-400 px-3 mb-2 tracking-wider">Navigation Menu</p>
           {[
             { id: 1, name: '1) Dashboard & Analytics' },
             { id: 2, name: '2) Product Inventory' },
@@ -248,7 +245,7 @@ export default function UnifiedAdminDashboard() {
             { id: 6, name: '6) Behavior Reports' },
             { id: 7, name: '7) Enquiries 📩' },
           ].map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`w-full text-left rounded-2xl px-4 py-3 text-xs font-black transition ${activeTab === tab.id ? 'bg-slate-900 text-white' : 'text-slate-800 hover:bg-slate-100'}`}>
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`w-full text-left rounded-2xl px-4 py-3 text-xs font-black transition ${activeTab === tab.id ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-800 hover:bg-slate-100'}`}>
               {tab.name}
             </button>
           ))}
@@ -261,9 +258,9 @@ export default function UnifiedAdminDashboard() {
           {activeTab === 1 && (
             <div className="space-y-6">
               <div className="grid gap-4 grid-cols-3">
-                <div className="rounded-2xl border border-slate-300 p-4 bg-white shadow-sm"><p className="text-[10px] text-slate-900 uppercase font-black">Gross Revenue</p><p className="text-xl font-black text-slate-950">₹{chartAnalytics.totalRevenue.toLocaleString()}</p></div>
-                <div className="rounded-2xl border border-slate-300 p-4 bg-white shadow-sm"><p className="text-[10px] text-slate-900 uppercase font-black">Users</p><p className="text-xl font-black text-slate-950">{customers.length}</p></div>
-                <div className="rounded-2xl border border-slate-300 p-4 bg-white shadow-sm"><p className="text-[10px] text-slate-900 uppercase font-black">Enquiries</p><p className="text-xl font-black text-orange-600">{enquiries.length}</p></div>
+                <div className="rounded-2xl border border-slate-300 p-4 bg-white shadow-sm"><p className="text-[10px] text-slate-500 uppercase font-bold">Gross Revenue</p><p className="text-xl font-bold text-slate-900">₹{chartAnalytics.totalRevenue.toLocaleString()}</p></div>
+                <div className="rounded-2xl border border-slate-300 p-4 bg-white shadow-sm"><p className="text-[10px] text-slate-500 uppercase font-bold">Users</p><p className="text-xl font-bold text-slate-900">{customers.length}</p></div>
+                <div className="rounded-2xl border border-slate-300 p-4 bg-white shadow-sm"><p className="text-[10px] text-slate-500 uppercase font-bold">Enquiries</p><p className="text-xl font-bold text-slate-900">{enquiries.length}</p></div>
               </div>
               <div className="rounded-[2rem] border border-slate-300 bg-white p-6 shadow-sm">
                 <h2 className="text-sm font-bold text-slate-900 mb-4">Device Sales Metrics Graph</h2>
@@ -271,7 +268,7 @@ export default function UnifiedAdminDashboard() {
                   {chartAnalytics.topProducts.map((data, index) => (
                     <div key={index} className="flex h-full flex-col justify-end items-center flex-1">
                       <div style={{ height: data.heightStr }} className="w-full rounded-t bg-slate-900 hover:bg-emerald-600 transition-all cursor-pointer"></div>
-                      <span className="mt-2 text-[10px] text-slate-900 font-bold truncate max-w-[40px] sm:max-w-none">{data.title}</span>
+                      <span className="mt-2 text-[10px] text-slate-700 font-bold truncate max-w-[40px] sm:max-w-none">{data.title}</span>
                     </div>
                   ))}
                 </div>
@@ -281,10 +278,10 @@ export default function UnifiedAdminDashboard() {
 
           {/* TAB 2, 3, 6 Placeholders */}
           {(activeTab === 2 || activeTab === 3 || activeTab === 6) && (
-            <div className="rounded-[2rem] border border-slate-300 bg-white p-8 text-center text-xs font-bold text-slate-900">Module deployed in core sync queue.</div>
+            <div className="rounded-[2rem] border border-slate-300 bg-white p-8 text-center text-xs font-bold text-slate-800">Module deployed in core sync queue.</div>
           )}
 
-          {/* 👥 TAB 4: USER ACCOUNTS - हायपर विजिबल टेक्स्ट रंगांसह */}
+          {/* 👥 TAB 4: USER ACCOUNTS - कडक आडवा टेबल लेआउट विथ फुल इन्फॉर्मेशन */}
           {activeTab === 4 && (
             <div className="rounded-[2rem] border border-slate-300 bg-white p-6 shadow-sm">
               <h2 className="text-base font-black text-slate-950 mb-4">Registered System Users ({customers.length})</h2>
@@ -293,8 +290,9 @@ export default function UnifiedAdminDashboard() {
                   <thead>
                     <tr className="border-b border-slate-300 text-slate-900 uppercase font-black tracking-wider text-[11px]">
                       <th className="py-3 pr-2">Full Name</th>
-                      <th className="py-3 pr-2">Contact Matrix</th>
-                      <th className="py-3 pr-2">Address</th>
+                      <th className="py-3 pr-2">Mobile Number</th>
+                      <th className="py-3 pr-2">Email Address</th>
+                      <th className="py-3 pr-2">Address Location</th>
                       <th className="py-3 pr-2">Password</th>
                       <th className="py-3 pr-2">Role</th>
                       <th className="py-3 text-right">Action</th>
@@ -304,19 +302,17 @@ export default function UnifiedAdminDashboard() {
                     {customers.map((c, index) => (
                       <tr key={c.id || index} className="hover:bg-slate-50">
                         <td className="py-3 pr-2 font-black text-slate-950 text-sm">{c.fullName || c.name || c.username}</td>
-                        <td className="py-3 pr-2 text-slate-900">
-                          <div className="font-mono">{c.mobileNumber || c.mobile || c.phone}</div>
-                          <div className="text-[10px] text-slate-700 font-semibold">{c.email || 'No Email Registered'}</div>
-                        </td>
-                        <td className="py-3 pr-2 text-slate-900 font-semibold max-w-[140px] truncate">{c.address || 'Sangli / Outstation'}</td>
-                        <td className="py-3 pr-2 font-mono text-slate-900 font-bold">{c.password || '••••••'}</td>
+                        <td className="py-3 pr-2 text-slate-900 font-mono text-sm">{c.mobileNumber || c.mobile || c.phone}</td>
+                        <td className="py-3 pr-2 text-slate-800 font-medium">{c.email || 'No Email'}</td>
+                        <td className="py-3 pr-2 text-slate-800 font-medium max-w-[150px] truncate">{c.address || 'Not Provided'}</td>
+                        <td className="py-3 pr-2 font-mono text-slate-700 font-bold">{c.password || '••••••'}</td>
                         <td className="py-3 pr-2">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${c.isAdmin ? 'bg-purple-100 text-purple-900 border-purple-300' : 'bg-slate-100 text-slate-900 border-slate-300'}`}>
                             {c.isAdmin ? 'Admin' : 'Customer'}
                           </span>
                         </td>
                         <td className="py-3 text-right">
-                          <button onClick={() => handleDeleteCustomer(c.id)} className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700 hover:bg-red-200 transition">Delete</button>
+                          <button onClick={() => handleDeleteCustomer(c.id)} className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700 hover:bg-red-200 transition">Remove</button>
                         </td>
                       </tr>
                     ))}
@@ -350,45 +346,62 @@ export default function UnifiedAdminDashboard() {
             </div>
           )}
 
-          {/* 📩 TAB 7: ENQUIRIES - डार्क कलर्स आणि फुल विजिबिलिटी */}
+          {/* 📩 TAB 7: ENQUIRIES - कडक आडवा टेबल लेआउट विथ ड्रॉपडाउन, नोट इनपुट, सेव्ह आणि डिलीट बट्स */}
           {activeTab === 7 && (
             <div className="rounded-[2rem] border border-slate-300 bg-white p-6 shadow-sm">
               <h2 className="text-base font-black text-slate-950 mb-4">Customer Enquiries Logs ({enquiries.length})</h2>
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+                <table className="w-full text-left text-xs border-collapse min-w-[800px]">
                   <thead>
                     <tr className="border-b border-slate-300 text-slate-900 uppercase font-black tracking-wider text-[11px]">
                       <th className="py-3 pr-2">Date Logs</th>
-                      <th className="py-3 pr-2">Sender Information</th>
+                      <th className="py-3 pr-2">Product Name</th>
+                      <th className="py-3 pr-2">Sender & Mobile</th>
+                      <th className="py-3 pr-2">Email</th>
                       <th className="py-3 pr-2">Message Body</th>
-                      <th className="py-3 pr-2">Status Action</th>
-                      <th className="py-3 text-right">System</th>
+                      <th className="py-3 pr-2">Status</th>
+                      <th className="py-3 pr-2">Admin Note</th>
+                      <th className="py-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 font-bold text-slate-900">
                     {enquiries.map((enq, index) => (
                       <tr key={enq.id || index} className="hover:bg-slate-50">
-                        <td className="py-3 pr-2 font-mono text-[11px] text-slate-900 font-black">{enq.date}</td>
-                        <td className="py-3 pr-3 text-slate-900">
-                          <div className="font-black text-slate-950 text-sm">{enq.name || enq.fullName}</div>
-                          <div className="text-[11px] text-slate-800 font-mono font-bold mt-0.5">{enq.mobile || enq.mobileNumber}</div>
-                          <div className="text-[10px] text-slate-700 font-semibold">{enq.email || 'No email left'}</div>
-                        </td>
-                        <td className="py-3 pr-2 font-black text-slate-950 text-sm italic max-w-xs break-words">"{enq.message || enq.enquiryMessage}"</td>
+                        <td className="py-3 pr-2 font-mono text-[11px] text-slate-800">{enq.date}</td>
+                        <td className="py-3 pr-2 font-black text-slate-950 text-sm">{enq.productName || 'iPhone 16 Pro Max'}</td>
                         <td className="py-3 pr-2">
-                          <button 
-                            onClick={() => toggleEnquiryStatus(enq.id)}
-                            className={`px-3 py-1 rounded-full text-[10px] font-black border transition shadow-sm ${
-                              enq.status === 'Resolved' 
-                                ? 'bg-emerald-100 text-emerald-900 border-emerald-400 hover:bg-emerald-200' 
-                                : 'bg-amber-100 text-amber-900 border-amber-400 hover:bg-amber-200'
-                            }`}
+                          <div className="font-black text-slate-900">{enq.name}</div>
+                          <div className="font-mono text-[11px] text-slate-600">{enq.mobile}</div>
+                        </td>
+                        <td className="py-3 pr-2 text-slate-700 font-normal">{enq.email}</td>
+                        <td className="py-3 pr-2 italic text-slate-950 font-medium max-w-[180px] break-words">"{enq.message || enq.enquiryMessage}"</td>
+                        <td className="py-3 pr-2">
+                          {/* 🔄 स्टेटस निवडण्यासाठी ड्रॉपडाउन */}
+                          <select 
+                            value={enq.status} 
+                            onChange={(e) => handleEnquiryFieldChange(enq.id, 'status', e.target.value)}
+                            className="border border-slate-300 rounded-lg p-1 text-xs bg-white text-slate-800 font-bold outline-none"
                           >
-                            {enq.status} 🔄
-                          </button>
+                            <option value="Pending">Pending</option>
+                            <option value="Completed">Completed</option>
+                            <option value="In Progress">In Progress</option>
+                          </select>
+                        </td>
+                        <td className="py-3 pr-2">
+                          {/* 📝 ॲडमीन नोट लिहिण्यासाठी इनपुट बॉक्स */}
+                          <input 
+                            type="text" 
+                            value={enq.adminNote || ''}
+                            onChange={(e) => handleEnquiryFieldChange(enq.id, 'adminNote', e.target.value)}
+                            className="border border-slate-300 rounded-lg p-1 text-xs text-slate-800 font-medium outline-none w-full min-w-[120px]"
+                            placeholder="Add progress note..."
+                          />
                         </td>
                         <td className="py-3 text-right">
-                          <button onClick={() => handleDeleteEnquiry(enq.id)} className="rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-700 hover:bg-orange-200 transition">Dismiss</button>
+                          <div className="flex gap-1.5 justify-end">
+                            <button onClick={() => handleSaveEnquiry(enq.id)} className="rounded-lg bg-[#59B29B] text-white px-2.5 py-1.5 text-xs font-bold shadow-sm hover:bg-[#499c87]">Save</button>
+                            <button onClick={() => handleDeleteEnquiry(enq.id)} className="rounded-lg bg-[#D2618A] text-white px-2.5 py-1.5 text-xs font-bold shadow-sm hover:bg-[#b84e73]">Delete</button>
+                          </div>
                         </td>
                       </tr>
                     ))}
