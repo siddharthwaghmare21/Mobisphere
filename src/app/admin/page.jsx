@@ -30,7 +30,7 @@ export default function AdminDashboardPage() {
   const [error, setError] = useState('')
   const [hydrated, setHydrated] = useState(false)
 
-  // Active Navigation Tab State (Default: 1 - Dashboard Overview)
+  // Default Active Tab: 1 (Dashboard Overview)
   const [activeTab, setActiveTab] = useState(1)
 
   // Coupons State
@@ -54,7 +54,6 @@ export default function AdminDashboardPage() {
     })
   }, [])
 
-  // Mock Sales Data for CSS Bar Charts (Analytics)
   const salesData = useMemo(() => [
     { month: 'Jan', sales: 450000, height: '45%' },
     { month: 'Feb', sales: 550000, height: '55%' },
@@ -155,6 +154,7 @@ export default function AdminDashboardPage() {
 
   if (!hydrated) return null
 
+  // LOGIN SCREEN
   if (!isLoggedIn) {
     return (
       <main className="mx-auto max-w-md px-4 py-20 pt-32">
@@ -206,10 +206,11 @@ export default function AdminDashboardPage() {
     )
   }
 
+  // LOGGED IN DASHBOARD
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 pt-28 sm:px-6 space-y-6">
       
-      {/* Top Controller Panel Header */}
+      {/* GLOBAL HEADER - हे बटण आता नेहमी समोर दिसेल! */}
       <div className="rounded-[2rem] bg-white p-6 shadow-sm border border-slate-200 sm:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -217,12 +218,13 @@ export default function AdminDashboardPage() {
             <h1 className="mt-1 text-3xl font-bold text-slate-950 sm:text-4xl">MobiSphere Panel</h1>
           </div>
           <div className="flex flex-wrap gap-2">
+            {/* हेच ते मुख्य बटण जे ओनर डॅशबोर्ड उघडेल */}
             <button
               type="button"
               onClick={() => router.push('/owner-dashboard')}
-              className="rounded-full bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
+              className="rounded-full bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-700 shadow-sm"
             >
-              Owner Analytics Chart
+              View Analytics Chart 📊
             </button>
             <button
               type="button"
@@ -234,7 +236,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* Global Hub Navigation Tabs */}
+        {/* Global Tabs Navigation */}
         <div className="mt-8 flex flex-wrap gap-2 border-t border-slate-100 pt-4 font-medium">
           {[
             { id: 1, name: '1) Dashboard Overview' },
@@ -259,63 +261,36 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* --- TAB 1: DASHBOARD / ANALYTICS OVERVIEW --- */}
+      {/* --- TAB 1: OVERVIEW --- */}
       {activeTab === 1 && (
         <div className="space-y-6">
-          {/* Top Analytical Counter Figures */}
           <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <p className="text-xs uppercase font-semibold tracking-wider text-slate-500">Gross Revenue</p>
               <p className="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">₹41,50,000</p>
-              <span className="text-[10px] text-emerald-600 font-semibold">↑ 12.5% This Month</span>
             </div>
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <p className="text-xs uppercase font-semibold tracking-wider text-slate-500">Products Sold</p>
               <p className="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">84 Units</p>
-              <span className="text-[10px] text-emerald-600 font-semibold">↑ 4.2% Fresh Stock</span>
             </div>
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <p className="text-xs uppercase font-semibold tracking-wider text-slate-500">Total Store Clients</p>
               <p className="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">{customers.length} Accounts</p>
-              <span className="text-[10px] text-slate-500 font-semibold">Live System Logs</span>
             </div>
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <p className="text-xs uppercase font-semibold tracking-wider text-slate-500">Active Coupons</p>
               <p className="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">{coupons.length} Vouchers</p>
-              <span className="text-[10px] text-purple-600 font-semibold">Ready for Checkout</span>
             </div>
           </div>
 
-          {/* Core Custom CSS Bar Chart Graphics Component */}
+          {/* Mini CSS Chart */}
           <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-            <div className="mb-6 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-              <div>
-                <h2 className="text-xl font-bold text-slate-950">Sales Performance Overview</h2>
-                <p className="text-xs text-slate-500">Pure responsive CSS graphical data visualization matrices.</p>
-              </div>
-              <div className="flex items-center gap-4 text-xs font-semibold text-slate-600">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-3 w-3 rounded-sm bg-slate-950"></span>
-                  <span>Monthly Sales (₹)</span>
-                </div>
-              </div>
-            </div>
-
-            {/* CSS Bar Chart Container */}
-            <div className="flex h-64 items-end justify-between gap-2 border-b border-l border-slate-200 pb-2 pl-2 pt-4 sm:gap-6">
+            <h2 className="text-xl font-bold text-slate-950 mb-4">Sales Chart Preview</h2>
+            <div className="flex h-48 items-end justify-between gap-2 border-b border-l border-slate-200 pb-2 pl-2">
               {salesData.map((data, index) => (
-                <div key={index} className="group flex h-full flex-col justify-end items-center flex-1">
-                  {/* Hover Floating Numeric Indicator tooltip */}
-                  <div className="mb-2 opacity-0 transform translate-y-1 transition group-hover:opacity-100 group-hover:translate-y-0 text-[10px] font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded-md font-mono">
-                    ₹{data.sales.toLocaleString()}
-                  </div>
-                  {/* Dynamic CSS Bar Element */}
-                  <div 
-                    style={{ height: data.height }} 
-                    className="w-full rounded-t-lg bg-slate-950 transition-all duration-500 hover:bg-emerald-600 shadow-md cursor-pointer"
-                  ></div>
-                  {/* Month Label Text */}
-                  <span className="mt-2 text-xs font-semibold text-slate-600">{data.month}</span>
+                <div key={index} className="flex h-full flex-col justify-end items-center flex-1">
+                  <div style={{ height: data.height }} className="w-full rounded-t-sm bg-slate-950 hover:bg-emerald-600 transition-all"></div>
+                  <span className="mt-2 text-[10px] font-semibold text-slate-500">{data.month}</span>
                 </div>
               ))}
             </div>
@@ -323,170 +298,106 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* --- TAB 2: PRODUCT MANAGEMENT (INVENTORY Placeholder) --- */}
+      {/* --- TAB 2: INVENTORY --- */}
       {activeTab === 2 && (
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
           <p className="text-lg font-semibold text-slate-900">2) Product Management (Inventory)</p>
-          <p className="mt-2">Next setup task block. Add, edit, delete products and stock alerts module arriving shortly.</p>
+          <p className="mt-2">Inventory configuration block module arriving shortly.</p>
         </div>
       )}
 
-      {/* --- TAB 3: ORDER MANAGEMENT Placeholder --- */}
+      {/* --- TAB 3: ORDER --- */}
       {activeTab === 3 && (
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
           <p className="text-lg font-semibold text-slate-900">3) Order Management System</p>
-          <p className="mt-2">Live transaction pipeline tracking coming up next in the integration series.</p>
+          <p className="mt-2">Live transaction pipeline tracking coming up next.</p>
         </div>
       )}
 
-      {/* --- TAB 4: USER MANAGEMENT --- */}
+      {/* --- TAB 4: USERS --- */}
       {activeTab === 4 && (
         <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <h2 className="text-xl font-bold text-slate-950 mb-6">Registered Store Accounts ({customers.length})</h2>
-          {customers.length === 0 ? (
-            <div className="rounded-3xl border border-slate-100 bg-slate-50 p-8 text-center text-sm text-slate-500">
-              No system profiles have been created yet. New signs ups on the account page will be logged here.
-            </div>
-          ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-400 text-xs">
+                  <th className="py-4 font-semibold">Customer Metadata</th>
+                  <th className="py-4 font-semibold">Security Pass</th>
+                  <th className="py-4 font-semibold text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-900">
+                {customers.map((c) => (
+                  <tr key={c.id}>
+                    <td className="py-4">
+                      <div className="font-semibold">{c.fullName}</div>
+                      <div className="text-xs text-slate-500 font-mono">{c.mobileNumber}</div>
+                    </td>
+                    <td className="py-4 font-mono text-xs">{c.password}</td>
+                    <td className="py-4 text-right">
+                      <button onClick={() => handleDeleteCustomer(c.id)} className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-600">Delete</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* --- TAB 5: COUPONS --- */}
+      {activeTab === 5 && (
+        <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <h2 className="text-xl font-bold text-slate-950">Create Store Coupon</h2>
+            <form onSubmit={handleCreateCoupon} className="mt-6 space-y-4">
+              <input
+                type="text"
+                value={newCouponCode}
+                onChange={(e) => setNewCouponCode(e.target.value)}
+                placeholder="E.g., FESTIVAL20"
+                className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm uppercase font-semibold"
+              />
+              <input
+                type="number"
+                value={newDiscountPercent}
+                onChange={(e) => setNewDiscountPercent(e.target.value)}
+                placeholder="Discount Percentage (%)"
+                className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+              />
+              <button type="submit" className="w-full rounded-full bg-slate-950 py-3.5 text-sm font-semibold text-white">Generate Coupon</button>
+            </form>
+          </div>
+
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <h2 className="text-xl font-bold text-slate-950 mb-6">Active Store Coupons ({coupons.length})</h2>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-xs">
-                    <th className="py-4 font-semibold">Customer Metadata</th>
-                    <th className="py-4 font-semibold">Security Pass</th>
-                    <th className="py-4 font-semibold">Role</th>
-                    <th className="py-4 font-semibold text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium text-slate-900">
-                  {customers.map((c) => (
-                    <tr key={c.id} className="hover:bg-slate-50/70 transition">
-                      <td className="py-4 pr-4">
-                        <div className="font-semibold text-slate-950">{c.fullName}</div>
-                        <div className="mt-1 text-xs text-slate-500 font-mono">{c.mobileNumber}</div>
-                        <div className="mt-1 max-w-xs truncate text-xs text-slate-400 font-normal">{c.address}</div>
-                      </td>
-                      <td className="py-4 font-mono text-xs text-slate-600">{c.password}</td>
-                      <td className="py-4">
-                        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${c.isAdmin ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-800'}`}>
-                          {c.isAdmin ? 'Admin' : 'Customer'}
-                        </span>
-                      </td>
+                <tbody>
+                  {coupons.map((coupon) => (
+                    <tr key={coupon.id}>
+                      <td className="py-4 font-mono font-bold uppercase">{coupon.code}</td>
+                      <td className="py-4 text-emerald-600 font-bold">{coupon.discountPercent}% OFF</td>
                       <td className="py-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteCustomer(c.id)}
-                          className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100"
-                        >
-                          Delete
-                        </button>
+                        <button onClick={() => handleDeleteCoupon(coupon.id)} className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-600">Remove</button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* --- TAB 5: DISCOUNT AND COUPON MANAGEMENT --- */}
-      {activeTab === 5 && (
-        <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-            <h2 className="text-xl font-bold text-slate-950">Create Store Coupon</h2>
-            <p className="mt-1 text-xs text-slate-500">Generate fresh custom promotional codes for client checkout sessions.</p>
-
-            {couponAlert && (
-              <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-xs font-medium text-orange-800">
-                {couponAlert}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateCoupon} className="mt-6 space-y-4">
-              <label className="block space-y-2 text-sm text-slate-700">
-                <span>Coupon Code</span>
-                <input
-                  type="text"
-                  value={newCouponCode}
-                  onChange={(e) => setNewCouponCode(e.target.value)}
-                  placeholder="E.g., FESTIVAL20, PROMO50"
-                  className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 uppercase font-semibold tracking-wider outline-none"
-                />
-              </label>
-
-              <label className="block space-y-2 text-sm text-slate-700">
-                <span>Discount Percentage (%)</span>
-                <input
-                  type="number"
-                  value={newDiscountPercent}
-                  onChange={(e) => setNewDiscountPercent(e.target.value)}
-                  placeholder="E.g., 20, 50"
-                  className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none"
-                />
-              </label>
-
-              <button
-                type="submit"
-                className="w-full rounded-full bg-slate-950 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-              >
-                Generate Coupon
-              </button>
-            </form>
-          </div>
-
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-            <h2 className="text-xl font-bold text-slate-950 mb-6">Active Store Coupons ({coupons.length})</h2>
-            {coupons.length === 0 ? (
-              <div className="rounded-3xl border border-slate-100 bg-slate-50 p-8 text-center text-sm text-slate-500">
-                No active promo coupons found. Use the configuration generator panel to establish live store code offers.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-xs">
-                      <th className="py-4 font-semibold">Coupon Code</th>
-                      <th className="py-4 font-semibold">Value Discount</th>
-                      <th className="py-4 font-semibold text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium text-slate-900">
-                    {coupons.map((coupon) => (
-                      <tr key={coupon.id} className="hover:bg-slate-50/70 transition">
-                        <td className="py-4 pr-4">
-                          <span className="rounded-lg bg-slate-100 px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-wider text-slate-900 border border-slate-200">
-                            {coupon.code}
-                          </span>
-                        </td>
-                        <td className="py-4 text-emerald-600 font-bold">{coupon.discountPercent}% OFF</td>
-                        <td className="py-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteCoupon(coupon.id)}
-                            className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100"
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         </div>
       )}
 
-      {/* --- TAB 6: USER BEHAVIOR AND SALES REPORTS Placeholder --- */}
+      {/* --- TAB 6: REPORTS --- */}
       {activeTab === 6 && (
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
           <p className="text-lg font-semibold text-slate-900">6) User Behavior and Sales Reports</p>
-          <p className="mt-2">Advanced Analytics / Big Data logging portal configuration dashboard coming soon.</p>
+          <p className="mt-2">Advanced Analytics portal coming soon.</p>
         </div>
       )}
-
     </main>
   )
 }
