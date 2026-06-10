@@ -25,10 +25,18 @@ export default function BuyPage() {
     if (typeof window === 'undefined') return
 
     const queryParams = new URLSearchParams(window.location.search)
-    const pid = Number(queryParams.get('productId'))
-    if (pid && productData[pid]) {
-      setProductId(pid)
-      setProduct(productData[pid])
+    const rawPid = queryParams.get('productId')
+    
+    if (rawPid) {
+      const pidNum = Number(rawPid)
+      
+      if (productData[pidNum]) {
+        setProductId(pidNum)
+        setProduct(productData[pidNum])
+      } else if (productData[rawPid]) {
+        setProductId(rawPid)
+        setProduct(productData[rawPid])
+      }
     }
 
     const loggedInUser = JSON.parse(localStorage.getItem('mobisphereLoggedIn') || 'null')
@@ -104,28 +112,6 @@ export default function BuyPage() {
   const basePrice = Number(product.price) || 0
   const discountAmount = (basePrice * discount) / 100
   const finalPrice = basePrice - discountAmount
-
-  if (orderPlaced) {
-    return (
-      <main className="mx-auto max-w-md px-4 py-20 pt-32 text-center">
-        <div className="rounded-[2rem] border border-emerald-200 bg-emerald-50 p-8 shadow-sm text-emerald-900">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-xl font-bold">
-            ✓
-          </div>
-          <h1 className="mt-4 text-2xl font-bold">Order Placed!</h1>
-          <p className="mt-2 text-sm text-emerald-700">
-            Thank you, {formData.fullName}. Your order for {product.title} has been received and is being processed.
-          </p>
-          <button
-            onClick={() => router.push('/')}
-            className="mt-6 rounded-full bg-slate-950 px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800"
-          >
-            Return Home
-          </button>
-        </div>
-      </main>
-    )
-  }
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10 pt-28 sm:px-6 lg:px-8">
