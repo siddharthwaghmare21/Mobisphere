@@ -15,7 +15,6 @@ const initialLoginData = {
   fullName: '',
   password: '',
   mobileNumber: '',
-  address: '',
 }
 
 const isValidIndianMobile = (value) => /^[6-9]\d{9}$/.test(value)
@@ -92,6 +91,11 @@ export default function MenuPage() {
 
   const handleSignup = async () => {
     setMessage('')
+
+    if (loggedInUser) {
+      setMessage("You are already logged in to an active account.")
+      return
+    }
 
     if (!signupData.fullName.trim() || !signupData.password || !signupData.mobileNumber.trim() || !signupData.address.trim()) {
       setMessage('Please complete all fields before signing up.')
@@ -220,59 +224,80 @@ export default function MenuPage() {
           )}
 
           {tab === 'signup' ? (
-            <div className="space-y-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="space-y-2 text-sm text-slate-700">
-                  <span>Name</span>
-                  <input
-                    value={signupData.fullName}
-                    onChange={(e) => handleSignupChange('fullName', e.target.value)}
-                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
-                    placeholder="Full Name"
-                  />
-                </label>
-                <label className="space-y-2 text-sm text-slate-700">
-                  <span>Password</span>
-                  <input
-                    value={signupData.password}
-                    onChange={(e) => handleSignupChange('password', e.target.value)}
-                    type="password"
-                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
-                    placeholder="Create a password"
-                  />
-                </label>
-                <label className="space-y-2 text-sm text-slate-700">
-                  <span>Mobile Number</span>
-                  <input
-                    value={signupData.mobileNumber}
-                    onChange={(e) => handleSignupChange('mobileNumber', e.target.value)}
-                    type="tel"
-                    className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
-                    placeholder="10-digit Indian mobile"
-                  />
-                </label>
-                <label className="sm:col-span-2 space-y-2 text-sm text-slate-700">
-                  <span>Address</span>
-                  <textarea
-                    value={signupData.address}
-                    onChange={(e) => handleSignupChange('address', e.target.value)}
-                    className="h-28 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
-                    placeholder="Street, city, state, pincode"
-                  />
-                </label>
-              </div>
-
-              <div className="mt-6 flex flex-wrap gap-3">
+            loggedInUser ? (
+              <div className="space-y-4 text-center py-6">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-xl">
+                  ✓
+                </div>
+                <p className="text-base font-semibold text-slate-900">
+                  You are already logged in to your account.
+                </p>
+                <p className="text-sm text-slate-500">
+                  There is no need to create a new profile. You can continue shopping directly.
+                </p>
                 <button
                   type="button"
-                  onClick={handleSignup}
-                  disabled={isSubmitting}
-                  className="inline-flex items-center justify-center rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  onClick={() => router.push('/')}
+                  className="mt-2 inline-flex items-center justify-center rounded-full bg-slate-950 px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800"
                 >
-                  Sign up
+                  Go to Home Page
                 </button>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="space-y-2 text-sm text-slate-700">
+                    <span>Name</span>
+                    <input
+                      value={signupData.fullName}
+                      onChange={(e) => handleSignupChange('fullName', e.target.value)}
+                      className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                      placeholder="Full Name"
+                    />
+                  </label>
+                  <label className="space-y-2 text-sm text-slate-700">
+                    <span>Password</span>
+                    <input
+                      value={signupData.password}
+                      onChange={(e) => handleSignupChange('password', e.target.value)}
+                      type="password"
+                      className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                      placeholder="Create a password"
+                    />
+                  </label>
+                  <label className="space-y-2 text-sm text-slate-700">
+                    <span>Mobile Number</span>
+                    <input
+                      value={signupData.mobileNumber}
+                      onChange={(e) => handleSignupChange('mobileNumber', e.target.value)}
+                      type="tel"
+                      className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                      placeholder="10-digit Indian mobile"
+                    />
+                  </label>
+                  <label className="sm:col-span-2 space-y-2 text-sm text-slate-700">
+                    <span>Address</span>
+                    <textarea
+                      value={signupData.address}
+                      onChange={(e) => handleSignupChange('address', e.target.value)}
+                      className="h-28 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
+                      placeholder="Street, city, state, pincode"
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleSignup}
+                    disabled={isSubmitting}
+                    className="inline-flex items-center justify-center rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  >
+                    Sign up
+                  </button>
+                </div>
+              </div>
+            )
           ) : (
             <div className="space-y-6">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -305,7 +330,6 @@ export default function MenuPage() {
                     placeholder="10-digit Indian mobile"
                   />
                 </label>
-
               </div>
 
               <div className="mt-6 flex flex-wrap gap-3">
