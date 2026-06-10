@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import ProductCart, { productData } from '@/app/components/common/ProductCart'
+import { supabase } from '@/lib/supabase'
 
 function formatINR(value) {
   const n = Number(value)
@@ -18,6 +19,8 @@ export default function ProductDetailPage() {
   const product = productId ? productData[productId] : null
 
   const [cartMessage, setCartMessage] = useState('')
+  const [products, setProducts] = useState([])
+  const [loading, setLoading] = useState(true)
 
   const specs = useMemo(() => {
     const s = product?.specs || {}
@@ -142,7 +145,7 @@ export default function ProductDetailPage() {
           Customers who bought this also viewed
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3, 4, 5, 6]
+          {[1, 2, 3, 4, 5, 6]
             .filter((x) => x !== productId)
             .slice(0, 3)
             .map((pid) => (
