@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import * as ProductModule from '@/app/components/common/ProductCart'
+import ProductCart, { productData } from '@/app/components/common/ProductCart'
 
 const initialForm = {
   fullName: '',
@@ -11,7 +11,7 @@ const initialForm = {
   couponCode: '',
 }
 
-export default function PaymentPage() {
+export default function BuyPage() {
   const router = useRouter()
   const [formData, setFormData] = useState(initialForm)
   const [product, setProduct] = useState(null)
@@ -26,7 +26,7 @@ export default function PaymentPage() {
     const queryParams = new URLSearchParams(window.location.search)
     const rawPid = queryParams.get('productId')
     
-    let dataSource = ProductModule.productData || ProductModule.default || []
+    let dataSource = productData || []
     let foundProduct = null
 
     if (dataSource) {
