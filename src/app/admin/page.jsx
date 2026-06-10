@@ -73,23 +73,19 @@ export default function UnifiedAdminDashboard() {
         setUsername(session.username || 'Admin')
       }
 
-      setCustomers(storedCustomers.length ? storedCustomers : [
-        { id: 'u1', fullName: 'Siddharth Waghmare', mobileNumber: '7249738821', email: 'siddharthwaghmare2145@gmail.com', address: '285, Dr. BR Ambedkar Nagar, Sangli', password: 'user123', isAdmin: false },
-        { id: 'u2', fullName: 'Shubham Dabade', mobileNumber: '7770011223', email: 'shubham.dabade@gmail.com', address: 'Kolhapur, India', password: 'pass777', isAdmin: true }
-      ])
+      // 🔔 डमी डेटा पूर्णपणे साफ केला - आता फक्त आणि फक्त ओरिजनल युझर डेटा दिसेल
+      setCustomers(Array.isArray(storedCustomers) ? storedCustomers : [])
 
       setCoupons(Array.isArray(EastonCoupons) ? EastonCoupons : [])
       
-      setEnquiries(storedEnquiries.length ? storedEnquiries.map(e => ({
+      // इन्क्वायरी मधील ओरिजनल डेटा जसा आहे तसाच मॅप करणे
+      setEnquiries(Array.isArray(storedEnquiries) ? storedEnquiries.map(e => ({
         ...e,
         productName: e.productName || 'iPhone 16 Pro Max',
-        status: e.status || 'Completed',
-        adminNote: e.adminNote || 'Progress completed',
-        date: e.date || '2026-06-10',
-        email: e.email || 'siddharthwaghmare2145@gmail.com'
-      })) : [
-        { id: 'e1', date: '2026-06-10', productName: 'iPhone 16 Pro Max', name: 'Siddharth Waghmare', mobile: '7249738821', email: 'siddharthwaghmare2145@gmail.com', message: 'Is that Mobile available in your shop?', status: 'Completed', adminNote: 'Progress completed' }
-      ])
+        status: e.status || 'Pending',
+        adminNote: e.adminNote || '',
+        date: e.date || new Date().toLocaleDateString()
+      })) : [])
       
       setHydrated(true)
     })
@@ -211,7 +207,7 @@ export default function UnifiedAdminDashboard() {
           {error && <div className="mt-4 text-xs text-red-600 bg-red-50 p-2 rounded-xl">{error}</div>}
           <form onSubmit={handleLogin} className="mt-6 space-y-4">
             <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full rounded-2xl border border-slate-300 p-3 text-sm text-slate-900 outline-none" placeholder="admin" />
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-2xl border border-slate-300 p-3 text-sm text-slate-900 outline-none" placeholder="admin" />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-2xl border p-3 text-sm text-slate-900 outline-none" placeholder="admin" />
             <button type="submit" className="w-full rounded-full bg-slate-900 py-3 text-sm font-semibold text-white">Login</button>
           </form>
         </div>
@@ -281,44 +277,48 @@ export default function UnifiedAdminDashboard() {
             <div className="rounded-[2rem] border border-slate-300 bg-white p-8 text-center text-xs font-bold text-slate-800">Module deployed in core sync queue.</div>
           )}
 
-          {/* 👥 TAB 4: USER ACCOUNTS - कडक आडवा टेबल लेआउट विथ फुल इन्फॉर्मेशन */}
+          {/* 👥 TAB 4: USER ACCOUNTS - फक्त रिअल डेटा */}
           {activeTab === 4 && (
             <div className="rounded-[2rem] border border-slate-300 bg-white p-6 shadow-sm">
               <h2 className="text-base font-black text-slate-950 mb-4">Registered System Users ({customers.length})</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-300 text-slate-900 uppercase font-black tracking-wider text-[11px]">
-                      <th className="py-3 pr-2">Full Name</th>
-                      <th className="py-3 pr-2">Mobile Number</th>
-                      <th className="py-3 pr-2">Email Address</th>
-                      <th className="py-3 pr-2">Address Location</th>
-                      <th className="py-3 pr-2">Password</th>
-                      <th className="py-3 pr-2">Role</th>
-                      <th className="py-3 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 font-bold text-slate-900">
-                    {customers.map((c, index) => (
-                      <tr key={c.id || index} className="hover:bg-slate-50">
-                        <td className="py-3 pr-2 font-black text-slate-950 text-sm">{c.fullName || c.name || c.username}</td>
-                        <td className="py-3 pr-2 text-slate-900 font-mono text-sm">{c.mobileNumber || c.mobile || c.phone}</td>
-                        <td className="py-3 pr-2 text-slate-800 font-medium">{c.email || 'No Email'}</td>
-                        <td className="py-3 pr-2 text-slate-800 font-medium max-w-[150px] truncate">{c.address || 'Not Provided'}</td>
-                        <td className="py-3 pr-2 font-mono text-slate-700 font-bold">{c.password || '••••••'}</td>
-                        <td className="py-3 pr-2">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${c.isAdmin ? 'bg-purple-100 text-purple-900 border-purple-300' : 'bg-slate-100 text-slate-900 border-slate-300'}`}>
-                            {c.isAdmin ? 'Admin' : 'Customer'}
-                          </span>
-                        </td>
-                        <td className="py-3 text-right">
-                          <button onClick={() => handleDeleteCustomer(c.id)} className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700 hover:bg-red-200 transition">Remove</button>
-                        </td>
+              {customers.length === 0 ? (
+                <div className="text-center py-10 text-slate-400 font-medium text-xs">No user accounts found in database pipeline.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-300 text-slate-900 uppercase font-black tracking-wider text-[11px]">
+                        <th className="py-3 pr-2">Full Name</th>
+                        <th className="py-3 pr-2">Mobile Number</th>
+                        <th className="py-3 pr-2">Email Address</th>
+                        <th className="py-3 pr-2">Address Location</th>
+                        <th className="py-3 pr-2">Password</th>
+                        <th className="py-3 pr-2">Role</th>
+                        <th className="py-3 text-right">Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 font-bold text-slate-900">
+                      {customers.map((c, index) => (
+                        <tr key={c.id || index} className="hover:bg-slate-50">
+                          <td className="py-3 pr-2 font-black text-slate-950 text-sm">{c.fullName || c.name || c.username}</td>
+                          <td className="py-3 pr-2 text-slate-900 font-mono text-sm">{c.mobileNumber || c.mobile || c.phone}</td>
+                          <td className="py-3 pr-2 text-slate-800 font-medium">{c.email || 'No Email'}</td>
+                          <td className="py-3 pr-2 text-slate-800 font-medium max-w-[150px] truncate">{c.address || 'Not Provided'}</td>
+                          <td className="py-3 pr-2 font-mono text-slate-700 font-bold">{c.password || '••••••'}</td>
+                          <td className="py-3 pr-2">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${c.isAdmin ? 'bg-purple-100 text-purple-900 border-purple-300' : 'bg-slate-100 text-slate-900 border-slate-300'}`}>
+                              {c.isAdmin ? 'Admin' : 'Customer'}
+                            </span>
+                          </td>
+                          <td className="py-3 text-right">
+                            <button onClick={() => handleDeleteCustomer(c.id)} className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700 hover:bg-red-200 transition">Remove</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
@@ -346,68 +346,70 @@ export default function UnifiedAdminDashboard() {
             </div>
           )}
 
-          {/* 📩 TAB 7: ENQUIRIES - कडक आडवा टेबल लेआउट विथ ड्रॉपडाउन, नोट इनपुट, सेव्ह आणि डिलीट बट्स */}
+          {/* 📩 TAB 7: ENQUIRIES - फक्त रिअल डेटा */}
           {activeTab === 7 && (
             <div className="rounded-[2rem] border border-slate-300 bg-white p-6 shadow-sm">
               <h2 className="text-base font-black text-slate-950 mb-4">Customer Enquiries Logs ({enquiries.length})</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse min-w-[800px]">
-                  <thead>
-                    <tr className="border-b border-slate-300 text-slate-900 uppercase font-black tracking-wider text-[11px]">
-                      <th className="py-3 pr-2">Date Logs</th>
-                      <th className="py-3 pr-2">Product Name</th>
-                      <th className="py-3 pr-2">Sender & Mobile</th>
-                      <th className="py-3 pr-2">Email</th>
-                      <th className="py-3 pr-2">Message Body</th>
-                      <th className="py-3 pr-2">Status</th>
-                      <th className="py-3 pr-2">Admin Note</th>
-                      <th className="py-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 font-bold text-slate-900">
-                    {enquiries.map((enq, index) => (
-                      <tr key={enq.id || index} className="hover:bg-slate-50">
-                        <td className="py-3 pr-2 font-mono text-[11px] text-slate-800">{enq.date}</td>
-                        <td className="py-3 pr-2 font-black text-slate-950 text-sm">{enq.productName || 'iPhone 16 Pro Max'}</td>
-                        <td className="py-3 pr-2">
-                          <div className="font-black text-slate-900">{enq.name}</div>
-                          <div className="font-mono text-[11px] text-slate-600">{enq.mobile}</div>
-                        </td>
-                        <td className="py-3 pr-2 text-slate-700 font-normal">{enq.email}</td>
-                        <td className="py-3 pr-2 italic text-slate-950 font-medium max-w-[180px] break-words">"{enq.message || enq.enquiryMessage}"</td>
-                        <td className="py-3 pr-2">
-                          {/* 🔄 स्टेटस निवडण्यासाठी ड्रॉपडाउन */}
-                          <select 
-                            value={enq.status} 
-                            onChange={(e) => handleEnquiryFieldChange(enq.id, 'status', e.target.value)}
-                            className="border border-slate-300 rounded-lg p-1 text-xs bg-white text-slate-800 font-bold outline-none"
-                          >
-                            <option value="Pending">Pending</option>
-                            <option value="Completed">Completed</option>
-                            <option value="In Progress">In Progress</option>
-                          </select>
-                        </td>
-                        <td className="py-3 pr-2">
-                          {/* 📝 ॲडमीन नोट लिहिण्यासाठी इनपुट बॉक्स */}
-                          <input 
-                            type="text" 
-                            value={enq.adminNote || ''}
-                            onChange={(e) => handleEnquiryFieldChange(enq.id, 'adminNote', e.target.value)}
-                            className="border border-slate-300 rounded-lg p-1 text-xs text-slate-800 font-medium outline-none w-full min-w-[120px]"
-                            placeholder="Add progress note..."
-                          />
-                        </td>
-                        <td className="py-3 text-right">
-                          <div className="flex gap-1.5 justify-end">
-                            <button onClick={() => handleSaveEnquiry(enq.id)} className="rounded-lg bg-[#59B29B] text-white px-2.5 py-1.5 text-xs font-bold shadow-sm hover:bg-[#499c87]">Save</button>
-                            <button onClick={() => handleDeleteEnquiry(enq.id)} className="rounded-lg bg-[#D2618A] text-white px-2.5 py-1.5 text-xs font-bold shadow-sm hover:bg-[#b84e73]">Delete</button>
-                          </div>
-                        </td>
+              {enquiries.length === 0 ? (
+                <div className="text-center py-10 text-slate-400 font-medium text-xs">No client enquiry entries found.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse min-w-[800px]">
+                    <thead>
+                      <tr className="border-b border-slate-300 text-slate-900 uppercase font-black tracking-wider text-[11px]">
+                        <th className="py-3 pr-2">Date Logs</th>
+                        <th className="py-3 pr-2">Product Name</th>
+                        <th className="py-3 pr-2">Sender & Mobile</th>
+                        <th className="py-3 pr-2">Email</th>
+                        <th className="py-3 pr-2">Message Body</th>
+                        <th className="py-3 pr-2">Status</th>
+                        <th className="py-3 pr-2">Admin Note</th>
+                        <th className="py-3 text-right">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 font-bold text-slate-900">
+                      {enquiries.map((enq, index) => (
+                        <tr key={enq.id || index} className="hover:bg-slate-50">
+                          <td className="py-3 pr-2 font-mono text-[11px] text-slate-800">{enq.date}</td>
+                          <td className="py-3 pr-2 font-black text-slate-950 text-sm">{enq.productName || 'iPhone 16 Pro Max'}</td>
+                          <td className="py-3 pr-2">
+                            <div className="font-black text-slate-900">{enq.name || enq.fullName}</div>
+                            <div className="font-mono text-[11px] text-slate-600">{enq.mobile || enq.mobileNumber}</div>
+                          </td>
+                          <td className="py-3 pr-2 text-slate-700 font-normal">{enq.email || '—'}</td>
+                          <td className="py-3 pr-2 italic text-slate-950 font-medium max-w-[180px] break-words">"{enq.message || enq.enquiryMessage}"</td>
+                          <td className="py-3 pr-2">
+                            <select 
+                              value={enq.status} 
+                              onChange={(e) => handleEnquiryFieldChange(enq.id, 'status', e.target.value)}
+                              className="border border-slate-300 rounded-lg p-1 text-xs bg-white text-slate-800 font-bold outline-none"
+                            >
+                              <option value="Pending">Pending</option>
+                              <option value="Completed">Completed</option>
+                              <option value="In Progress">In Progress</option>
+                            </select>
+                          </td>
+                          <td className="py-3 pr-2">
+                            <input 
+                              type="text" 
+                              value={enq.adminNote || ''}
+                              onChange={(e) => handleEnquiryFieldChange(enq.id, 'adminNote', e.target.value)}
+                              className="border border-slate-300 rounded-lg p-1 text-xs text-slate-800 font-medium outline-none w-full min-w-[120px]"
+                              placeholder="Add progress note..."
+                            />
+                          </td>
+                          <td className="py-3 text-right">
+                            <div className="flex gap-1.5 justify-end">
+                              <button onClick={() => handleSaveEnquiry(enq.id)} className="rounded-lg bg-[#59B29B] text-white px-2.5 py-1.5 text-xs font-bold shadow-sm hover:bg-[#499c87]">Save</button>
+                              <button onClick={() => handleDeleteEnquiry(enq.id)} className="rounded-lg bg-[#D2618A] text-white px-2.5 py-1.5 text-xs font-bold shadow-sm hover:bg-[#b84e73]">Delete</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
