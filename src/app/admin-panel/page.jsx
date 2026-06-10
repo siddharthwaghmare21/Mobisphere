@@ -258,7 +258,7 @@ export default function AdminPanelPage() {
                           onClick={async () => {
                             await supabase.from('enquiries').update({
                               status: enquiry.status,
-                              admin_note: enquiry.adminNote,
+                              admin_note: enquiry.admin_note,
                             }).eq('id', enquiry.id)
                             setMessage('Enquiry saved successfully.')
                           }}
@@ -292,8 +292,8 @@ export default function AdminPanelPage() {
                       <label className="space-y-2 text-sm text-slate-700">
                         <span>Admin note</span>
                         <textarea
-                          value={enquiry.adminNote}
-                          onChange={(e) => handleEnquiryChange(enquiry.id, 'adminNote', e.target.value)}
+                          value={enquiry.admin_note || ''}
+                          onChange={(e) => handleEnquiryChange(enquiry.id, 'admin_note', e.target.value)}
                           className="h-24 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
                           placeholder="Add an admin response or internal note"
                         />
