@@ -19,6 +19,14 @@ const initialLoginData = {
 
 const isValidIndianMobile = (value) => /^[6-9]\d{9}$/.test(value)
 
+const isValidPassword = (value) => {
+  const hasMinLength = value.length >= 8
+  const hasNumber = /\d/.test(value)
+  const hasSymbol = /[{}[\]:;.,.<>?~`|!"#$%&'()*+=\-/_^@]/.test(value)
+  const hasLetter = /[a-zA-Z]/.test(value)
+  return hasMinLength && hasNumber && hasSymbol && hasLetter
+}
+
 const getStoredAccounts = () => {
   if (typeof window === 'undefined') return []
   try {
@@ -102,8 +110,8 @@ export default function MenuPage() {
       return
     }
 
-    if (signupData.password.length < 6) {
-      setMessage('Password must be at least 6 characters long.')
+    if (!isValidPassword(signupData.password)) {
+      setMessage('Password must be at least 8 characters long and contain letters, numbers, and symbols.')
       return
     }
 
@@ -262,7 +270,7 @@ export default function MenuPage() {
                       onChange={(e) => handleSignupChange('password', e.target.value)}
                       type="password"
                       className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
-                      placeholder="Create a password"
+                      placeholder="At least 8 chars, letters, numbers & symbols"
                     />
                   </label>
                   <label className="space-y-2 text-sm text-slate-700">
@@ -414,7 +422,7 @@ export default function MenuPage() {
         <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
           <div>
             <p className="font-semibold text-slate-900">Sign up</p>
-            <p>Enter full name, password, mobile number, and address, then click Sign up to create your account.</p>
+            <p>Enter full name, password (min 8 chars, letters, numbers & symbols), mobile number, and address, then click Sign up to create your account.</p>
           </div>
           <div>
             <p className="font-semibold text-slate-900">Login</p>
