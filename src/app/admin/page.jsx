@@ -5,10 +5,30 @@ import { useRouter } from 'next/navigation'
 import { productData } from '@/app/components/common/ProductCart'
 
 const ADMIN_SESSION_KEY = 'mobisphereAdminSession'
-const CUSTOMER_STORAGE_KEY = 'mobisphereCustomers'
 const COUPON_STORAGE_KEY = 'mobisphereCoupons'
 const CART_STORAGE_KEY = 'mobisphereCart'
 const ENQUIRY_STORAGE_KEY = 'mobisphereEnquiries'
+
+// ⚡ सर्व संभाव्य युझर की (Keys) एकत्र तपासणारे जादुई फंक्शन
+function getAllPossibleUsers() {
+  if (typeof window === 'undefined') return []
+  try {
+    // तुझ्या साईन-अप पेजवर यापैकी जे काही नाव असेल, ते इथे मॅच होईल
+    const keysToTry = ['mobisphereCustomers', 'customers', 'users', 'registeredUsers', 'userData', 'allUsers']
+    for (const key of keysToTry) {
+      const data = localStorage.getItem(key)
+      if (data) {
+        const parsed = JSON.parse(data)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed
+        }
+      }
+    }
+    return []
+  } catch {
+    return []
+  }
+}
 
 function loadJson(key) {
   if (typeof window === 'undefined') return null
@@ -48,8 +68,10 @@ export default function UnifiedAdminDashboard() {
   useEffect(() => {
     const session = loadJson(ADMIN_SESSION_KEY)
     
-    const storedCustomers = loadJson(CUSTOMER_STORAGE_KEY) || loadJson('customers') || []
-    const storedCoupons = loadJson(COUPON_STORAGE_KEY) || loadJson('coupons') || []
+    // १. सर्व संभाव्य की वापरून युझर डेटा लोड करणे
+    const storedCustomers = getAllPossibleUsers()
+    
+    const EastonCoupons = loadJson(COUPON_STORAGE_KEY) || loadJson('coupons') || []
     const storedEnquiries = loadJson(ENQUIRY_STORAGE_KEY) || loadJson('enquiries') || loadJson('contactData') || loadJson('enquiry') || []
     
     queueMicrotask(() => {
@@ -58,18 +80,14 @@ export default function UnifiedAdminDashboard() {
         setUsername(session.username || 'Admin')
       }
 
+      // 🔔 जर सर्व की तपासूनही लोकल स्टोरेज पूर्ण रिकामं असेल, तरच हा डमी डेटा दिसेल
       setCustomers(storedCustomers.length ? storedCustomers : [
-        { id: 'u1', fullName: 'Siddharth Waghmare', mobileNumber: '9850123456', address: 'Sangli, Maharashtra', isAdmin: false },
-        { id: 'u2', fullName: 'Shubham Dabade', mobileNumber: '7770011223', address: 'Kolhapur, India', isAdmin: true }
+        { id: 'u1', fullName: 'Siddharth Waghmare', mobileNumber: '9850123456', password: 'user123', address: 'Sangli, Maharashtra' },
+        { id: 'u2', fullName: 'Shubham Dabade', mobileNumber: '7770011223', password: 'pass777', address: 'Kolhapur, India' }
       ])
 
-      setCoupons(Array.isArray(storedCoupons) ? storedCoupons : [])
-
-      setEnquiries(storedEnquiries.length ? storedEnquiries : [
-        { id: 'e1', name: 'Rahul Patil', mobile: '9876543210', email: 'rahul@gmail.com', message: 'I want to buy iPhone 15 Pro Max on EMI.', date: '2026-06-10' },
-        { id: 'e2', name: 'Amit Shinde', mobile: '8888888888', email: 'amit@shinde.com', message: 'Do you offer discount on cash payment?', date: '2026-06-10' }
-      ])
-
+      setCoupons(Array.isArray(EastonCoupons) ? EastonCoupons : [])
+      setEnquiries(storedEnquiries.length ? storedEnquiries : [])
       setHydrated(true)
     })
   }, [])
@@ -142,13 +160,18 @@ export default function UnifiedAdminDashboard() {
   const handleDeleteCustomer = (id) => {
     const next = customers.filter((c) => c.id !== id)
     setCustomers(next)
-    saveJson(CUSTOMER_STORAGE_KEY, next)
+    // ज्या ज्या की मध्ये डेटा असू शकतो त्या सर्व की अपडेट करणे
+    const keysToSync = ['mobisphereCustomers', 'customers', 'users', 'registeredUsers', 'userData', 'allUsers']
+    keysToSync.forEach(k => {
+      if(localStorage.getItem(k)) saveJson(k, next)
+    })
   }
 
   const handleDeleteEnquiry = (id) => {
     const next = enquiries.filter((e) => e.id !== id)
     setEnquiries(next)
     saveJson(ENQUIRY_STORAGE_KEY, next)
+    saveJson('enquiries', next)
   }
 
   const handleCreateCoupon = (e) => {
@@ -202,25 +225,19 @@ export default function UnifiedAdminDashboard() {
 
       <div className="grid gap-6 lg:grid-cols-[290px_1fr]">
         
-        {/* 🛠️ FIXED SIDEBAR MENU LIST: आता ७ नंबरचा पर्याय इथे गॅरंटीड दिसेल! */}
+        {/* Navigation Sidebar */}
         <div className="rounded-[2rem] border border-slate-200 bg-white p-4 h-fit shadow-sm space-y-1">
           <p className="text-[11px] uppercase font-bold text-slate-400 px-3 mb-3 tracking-wider">Navigation Menu</p>
           {[
             { id: 1, name: '1) Dashboard & Analytics' },
             { id: 2, name: '2) Product Inventory' },
             { id: 3, name: '3) Order Management' },
-            { id: 4, name: '4) User Accounts' },
+            { id: 4, name: '4) User Accounts 👥' },
             { id: 5, name: '5) Coupons & Offers' },
             { id: 6, name: '6) Behavior Reports' },
-            { id: 7, name: '7) Enquiries 📩' }, // हा पर्याय आता मेनू लिस्टमध्ये ऍड झालाय!
+            { id: 7, name: '7) Enquiries 📩' },
           ].map((tab) => (
-            <button 
-              key={tab.id} 
-              onClick={() => setActiveTab(tab.id)} 
-              className={`w-full text-left rounded-2xl px-4 py-3 text-xs font-bold transition ${
-                activeTab === tab.id ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`w-full text-left rounded-2xl px-4 py-3 text-xs font-bold transition ${activeTab === tab.id ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
               {tab.name}
             </button>
           ))}
@@ -256,17 +273,20 @@ export default function UnifiedAdminDashboard() {
             <div className="rounded-[2rem] border bg-white p-8 text-center text-xs text-slate-400">Module deployed in queue.</div>
           )}
 
-          {/* TAB 4: USER ACCOUNTS */}
+          {/* TAB 4: USER ACCOUNTS (आता इथे डेटा किंवा फॉलबॅक परफेक्ट दिसेल) */}
           {activeTab === 4 && (
             <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
-              <h2 className="text-md font-bold mb-4">Active System Users</h2>
+              <h2 className="text-md font-bold mb-4">Registered System Users ({customers.length})</h2>
               <table className="w-full text-left text-xs">
                 <thead><tr className="border-b text-slate-400"><th>User Details</th><th>Password</th><th className="text-right">Action</th></tr></thead>
                 <tbody className="divide-y">
-                  {customers.map((c) => (
-                    <tr key={c.id}>
-                      <td className="py-2"><div className="font-bold">{c.fullName}</div><div className="text-[10px] text-slate-400 font-mono">{c.mobileNumber}</div></td>
-                      <td className="py-2 font-mono">{c.password}</td>
+                  {customers.map((c, index) => (
+                    <tr key={c.id || index}>
+                      <td className="py-2">
+                        <div className="font-bold">{c.fullName || c.name || c.username}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">{c.mobileNumber || c.mobile || c.phone}</div>
+                      </td>
+                      <td className="py-2 font-mono text-slate-500">{c.password || '••••••'}</td>
                       <td className="py-2 text-right"><button onClick={() => handleDeleteCustomer(c.id)} className="text-red-600 font-bold">Remove</button></td>
                     </tr>
                   ))}
@@ -302,12 +322,12 @@ export default function UnifiedAdminDashboard() {
           {/* TAB 7: ENQUIRIES */}
           {activeTab === 7 && (
             <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
-              <h2 className="text-md font-bold mb-4">Customer Enquiries Logs</h2>
+              <h2 className="text-md font-bold mb-4">Customer Enquiries Logs ({enquiries.length})</h2>
               <table className="w-full text-left text-xs">
                 <thead><tr className="border-b text-slate-400"><th>Sender Info</th><th>Message Body</th><th className="text-right">Action</th></tr></thead>
                 <tbody className="divide-y">
-                  {enquiries.map((enq) => (
-                    <tr key={enq.id}>
+                  {enquiries.map((enq, index) => (
+                    <tr key={enq.id || index}>
                       <td className="py-2"><div className="font-bold">{enq.name}</div><div className="text-[10px] text-slate-400 font-mono">{enq.mobile}</div></td>
                       <td className="py-2 italic text-slate-600">"{enq.message}"</td>
                       <td className="py-2 text-right"><button onClick={() => handleDeleteEnquiry(enq.id)} className="text-orange-600 font-bold">Dismiss</button></td>
