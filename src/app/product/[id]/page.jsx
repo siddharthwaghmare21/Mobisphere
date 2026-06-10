@@ -1,9 +1,8 @@
 "use client"
 
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import ProductCart, { productData } from '@/app/components/common/ProductCart'
-import { supabase } from '@/lib/supabase'
 
 function formatINR(value) {
   const n = Number(value)
@@ -19,8 +18,6 @@ export default function ProductDetailPage() {
   const product = productId ? productData[productId] : null
 
   const [cartMessage, setCartMessage] = useState('')
-  const [products, setProducts] = useState([])
-  const [loading, setLoading] = useState(true)
 
   const specs = useMemo(() => {
     const s = product?.specs || {}
@@ -74,7 +71,6 @@ export default function ProductDetailPage() {
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
           <div className="w-full lg:w-1/2">
             <div className="overflow-hidden rounded-[2rem] bg-slate-100">
-              {/* using img keeps current project style; lint warnings exist elsewhere */}
               <img src={product.image} alt={product.title} className="h-[320px] w-full object-cover sm:h-[420px]" />
             </div>
           </div>
@@ -107,8 +103,8 @@ export default function ProductDetailPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    addToCart()
-                    router.push('/cart')
+                    // थेट कूपन बॉक्स आणि प्रॉडक्ट आयडीसह पेमेंट पेजवर पाठवणे
+                    router.push(`/buy?productId=${productId}`)
                   }}
                   className="inline-flex w-full items-center justify-center rounded-full border border-emerald-600 bg-emerald-600 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-500 sm:w-auto"
                 >
@@ -152,7 +148,10 @@ export default function ProductDetailPage() {
               <div key={pid} className="text-left">
                 <ProductCart
                   productId={pid}
-                  onBuyNow={() => router.push(`/product/${pid}`)}
+                  onBuyNow={() => {
+                    // रेकमेंडेड प्रॉडक्टच्या बाय बटनावरून देखील अचूक आयडी पेमेंट पेजला पाठवला
+                    router.push(`/buy?productId=${pid}`)
+                  }}
                 />
               </div>
             ))}
@@ -161,4 +160,3 @@ export default function ProductDetailPage() {
     </main>
   )
 }
-

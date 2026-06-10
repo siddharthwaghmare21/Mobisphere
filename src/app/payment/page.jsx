@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import ProductCart, { productData } from '@/app/components/common/ProductCart'
+import { productData } from '@/app/components/common/ProductCart'
 
 const initialForm = {
   fullName: '',
@@ -26,45 +26,17 @@ export default function BuyPage() {
     const queryParams = new URLSearchParams(window.location.search)
     const rawPid = queryParams.get('productId')
     
-    let dataSource = productData || []
-    let foundProduct = null
+    if (rawPid && productData) {
+      // ऑब्जेक्टमधील की (Key) मॅच करण्यासाठी नंबर आणि स्ट्रिंग दोन्ही स्वरूपात चेक केले
+      const pidNum = Number(rawPid)
+      const foundProduct = productData[pidNum] || productData[rawPid]
 
-    if (dataSource) {
-      if (rawPid) {
-        const pidNum = Number(rawPid)
-        
-        if (typeof dataSource.find === 'function') {
-          foundProduct = dataSource.find(p => p && (p.id === pidNum || p.id === rawPid || p.productId === pidNum || p.productId === rawPid))
-        }
-        
-        if (!foundProduct && dataSource[rawPid]) {
-          foundProduct = dataSource[rawPid]
-        }
-        if (!foundProduct && dataSource[pidNum]) {
-          foundProduct = dataSource[pidNum]
-        }
-
-        if (!foundProduct) {
-          const entries = Object.entries(dataSource)
-          const match = entries.find(([key]) => key === rawPid || Number(key) === pidNum)
-          if (match) {
-            foundProduct = match[1]
-          }
-        }
-      }
-
-      if (!foundProduct) {
-        const values = Object.values(dataSource)
-        if (values && values.length > 0) {
-          foundProduct = typeof values[0] === 'object' ? values[0] : dataSource[0]
-        }
+      if (foundProduct) {
+        setProduct(foundProduct)
       }
     }
 
-    if (foundProduct) {
-      setProduct(foundProduct)
-    }
-
+    // युझर लॉगिन असेल तर डेटा ऑटो-फिल करणे
     const loggedInUser = JSON.parse(localStorage.getItem('mobisphereLoggedIn') || 'null')
     if (loggedInUser) {
       setFormData((prev) => ({
@@ -119,7 +91,7 @@ export default function BuyPage() {
     return (
       <main className="mx-auto max-w-md px-4 py-20 pt-32 text-center">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
-          <p className="text-sm font-semibold text-slate-500">Loading catalog connection...</p>
+          <p className="text-sm font-semibold text-slate-500">No product selected</p>
           <button
             onClick={() => router.push('/product')}
             className="mt-4 rounded-full bg-slate-950 px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800"

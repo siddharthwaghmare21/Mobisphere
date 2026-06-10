@@ -69,6 +69,7 @@ export default function Product() {
                             key={productId}
                             productId={Number(productId)}
                             onBuyNow={() => {
+                                // हा पाथ /buy असाच ठेवला आहे जो पेमेंट पेजशी तंतोतंत कनेक्टेड आहे
                                 router.push(`/buy?productId=${productId}`)
                             }}
                         />

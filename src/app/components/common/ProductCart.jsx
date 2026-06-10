@@ -1,6 +1,7 @@
 ﻿"use client"
 
 import React from 'react'
+import Link from 'next/link'
 
 export const productData = {
     1: {
@@ -64,7 +65,7 @@ export const productData = {
         specs: {
             RAM: '6GB',
             Storage: '128GB',
-            Camera: '48MP Triple',
+            Camera: '12MP Triple',
             Display: '6.7-inch OLED',
             Battery: '4323mAh',
             Processor: 'A16 Bionic',
@@ -107,19 +108,15 @@ export const productData = {
     },
 }
 
-
-import Link from 'next/link'
-
 export default function ProductCart({ productId, image, alt, title, description, price, onBuyNow, onAdded }) {
     const product = productId ? productData[productId] : null
-
-    // Skeleton state to avoid blank/late-loading UI on slow connections
     const [showSkeleton, setShowSkeleton] = React.useState(true)
 
     React.useEffect(() => {
         const t = window.setTimeout(() => setShowSkeleton(false), 350)
         return () => window.clearTimeout(t)
     }, [])
+
     const cardImage = image || product?.image || "/images/IPhone 16 Pro Max.png"
     const cardAlt = alt || product?.alt || "Product image"
     const cardTitle = title || product?.title || "Featured product"
@@ -129,7 +126,6 @@ export default function ProductCart({ productId, image, alt, title, description,
     const handleAddToCart = () => {
         const currentCart = JSON.parse(localStorage.getItem('mobisphereCart') || '[]')
         currentCart.push({
-            // Create a unique ID for this specific cart entry
             cartItemId: Date.now().toString() + Math.random().toString(36).substring(2, 9),
             productId: productId || null,
             title: cardTitle,
@@ -142,7 +138,6 @@ export default function ProductCart({ productId, image, alt, title, description,
     }
 
     const handleNavigateToDetail = () => {
-        
         if (!productId) return
         window.location.href = `/product/${productId}`
     }
@@ -158,7 +153,6 @@ export default function ProductCart({ productId, image, alt, title, description,
             className="cursor-pointer flex h-full flex-col justify-between rounded-xl bg-white p-3 shadow-lg transition hover:-translate-y-1 hover:shadow-2xl sm:rounded-[1.75rem] sm:p-5"
         >
             <div className="mb-2 overflow-hidden rounded-xl bg-slate-100 sm:mb-4 sm:rounded-3xl">
-
                 <img
                     src={cardImage}
                     alt={cardAlt}
@@ -175,11 +169,10 @@ export default function ProductCart({ productId, image, alt, title, description,
                 <button
                     type="button"
                     onClick={(e) => {
-                        e.stopPropagation()
+                        e.stopPropagation() // कार्डची डिटेल लिंक ओपन होण्यापासून रोखले
                         handleAddToCart()
                         onAdded?.()
                     }}
-
                     className="inline-flex w-full items-center justify-center rounded-full bg-slate-950 px-2 py-1.5 text-[10px] font-semibold text-white transition hover:bg-slate-800 sm:w-auto sm:px-4 sm:py-2 sm:text-sm"
                 >
                     Add to cart
@@ -187,11 +180,12 @@ export default function ProductCart({ productId, image, alt, title, description,
                 <button
                     type="button"
                     onClick={(e) => {
-                        e.stopPropagation()
+                        e.stopPropagation() // कार्डची डिटेल लिंक ओपन होण्यापासून रोखले
                         e.preventDefault()
-                        onBuyNow?.()
+                        if (onBuyNow) {
+                            onBuyNow()
+                        }
                     }}
-                    
                     className="inline-flex w-full items-center justify-center rounded-full border border-emerald-600 bg-emerald-600 px-2 py-1.5 text-[10px] font-semibold text-slate-950 transition hover:bg-emerald-500 sm:w-auto sm:px-4 sm:py-2 sm:text-sm"
                 >
                     Buy product
