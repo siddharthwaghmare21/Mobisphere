@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { productData } from '@/app/components/common/ProductCart'
+import * as ProductModule from '@/app/components/common/ProductCart'
 
 const initialForm = {
   fullName: '',
@@ -14,7 +14,6 @@ const initialForm = {
 export default function PaymentPage() {
   const router = useRouter()
   const [formData, setFormData] = useState(initialForm)
-  const [productId, setProductId] = useState(null)
   const [product, setProduct] = useState(null)
   const [discount, setDiscount] = useState(0)
   const [couponError, setCouponError] = useState('')
@@ -27,24 +26,26 @@ export default function PaymentPage() {
     const queryParams = new URLSearchParams(window.location.search)
     const rawPid = queryParams.get('productId')
     
-    if (rawPid) {
-      const pidNum = Number(rawPid)
-      let foundProduct = null
+    let dataSource = ProductModule.productData || ProductModule.default || []
+    let foundProduct = null
 
-      if (productData) {
-        if (typeof productData.find === 'function') {
-          foundProduct = productData.find(p => p.id === pidNum || p.id === rawPid || p.productId === pidNum || p.productId === rawPid)
+    if (dataSource) {
+      if (rawPid) {
+        const pidNum = Number(rawPid)
+        
+        if (typeof dataSource.find === 'function') {
+          foundProduct = dataSource.find(p => p && (p.id === pidNum || p.id === rawPid || p.productId === pidNum || p.productId === rawPid))
         }
         
-        if (!foundProduct && productData[rawPid]) {
-          foundProduct = productData[rawPid]
+        if (!foundProduct && dataSource[rawPid]) {
+          foundProduct = dataSource[rawPid]
         }
-        if (!foundProduct && productData[pidNum]) {
-          foundProduct = productData[pidNum]
+        if (!foundProduct && dataSource[pidNum]) {
+          foundProduct = dataSource[pidNum]
         }
 
         if (!foundProduct) {
-          const entries = Object.entries(productData)
+          const entries = Object.entries(dataSource)
           const match = entries.find(([key]) => key === rawPid || Number(key) === pidNum)
           if (match) {
             foundProduct = match[1]
@@ -52,10 +53,16 @@ export default function PaymentPage() {
         }
       }
 
-      if (foundProduct) {
-        setProductId(rawPid)
-        setProduct(foundProduct)
+      if (!foundProduct) {
+        const values = Object.values(dataSource)
+        if (values && values.length > 0) {
+          foundProduct = typeof values[0] === 'object' ? values[0] : dataSource[0]
+        }
       }
+    }
+
+    if (foundProduct) {
+      setProduct(foundProduct)
     }
 
     const loggedInUser = JSON.parse(localStorage.getItem('mobisphereLoggedIn') || 'null')
@@ -105,10 +112,6 @@ export default function PaymentPage() {
       return
     }
 
-    const currentCart = JSON.parse(localStorage.getItem('mobisphereCart') || '[]')
-    const updatedCart = currentCart.filter((item) => item.productId !== productId)
-    localStorage.setItem('mobisphereCart', JSON.stringify(updatedCart))
-
     setOrderPlaced(true)
   }
 
@@ -116,7 +119,7 @@ export default function PaymentPage() {
     return (
       <main className="mx-auto max-w-md px-4 py-20 pt-32 text-center">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
-          <p className="text-sm font-semibold text-slate-500">No product selected</p>
+          <p className="text-sm font-semibold text-slate-500">Loading catalog connection...</p>
           <button
             onClick={() => router.push('/product')}
             className="mt-4 rounded-full bg-slate-950 px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800"
