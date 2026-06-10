@@ -1,9 +1,11 @@
 ﻿"use client"
 
 import React, { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import ProductCart, { productData } from '../components/common/ProductCart'
 
 export default function Product() {
+    const router = useRouter()
     const [searchTerm, setSearchTerm] = useState('')
 
     const filteredProducts = useMemo(() => {
@@ -50,7 +52,6 @@ export default function Product() {
                 </div>
             </div>
 
-
             {showInvalidSearch ? (
                 <div className="mt-10 rounded-[2rem] border border-orange-200 bg-orange-50 p-8 text-center text-orange-800 shadow-sm">
                     <p className="text-lg font-semibold">Please type a valid product name.</p>
@@ -68,8 +69,7 @@ export default function Product() {
                             key={productId}
                             productId={Number(productId)}
                             onBuyNow={() => {
-                                // navigate via card's internal handler is not available here; detail page handles Buy now
-                                window.location.href = `/product/${productId}`
+                                router.push(`/buy?productId=${productId}`)
                             }}
                         />
                     ))}
