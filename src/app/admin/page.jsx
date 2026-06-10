@@ -2,10 +2,12 @@
 
 import React, { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { productData } from '@/app/components/common/ProductCart'
 
 const ADMIN_SESSION_KEY = 'mobisphereAdminSession'
 const CUSTOMER_STORAGE_KEY = 'mobisphereCustomers'
 const COUPON_STORAGE_KEY = 'mobisphereCoupons'
+const CART_STORAGE_KEY = 'mobisphereCart'
 
 function loadJson(key) {
   if (typeof window === 'undefined') return null
@@ -21,7 +23,12 @@ function saveJson(key, val) {
   localStorage.setItem(key, JSON.stringify(val))
 }
 
-export default function AdminDashboardPage() {
+function safeNumber(n) {
+  const x = Number(n)
+  return Number.isFinite(x) ? x : 0
+}
+
+export default function CombinedAdminPanelPage() {
   const router = useRouter()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [username, setUsername] = useState('')
@@ -30,7 +37,7 @@ export default function AdminDashboardPage() {
   const [error, setError] = useState('')
   const [hydrated, setHydrated] = useState(false)
 
-  // Default Active Tab: 1 (Dashboard Overview)
+  // Default Active Tab: 1 (Dashboard & Analytics view - जिथे आपला चार्ट दिसेल)
   const [activeTab, setActiveTab] = useState(1)
 
   // Coupons State
@@ -54,14 +61,54 @@ export default function AdminDashboardPage() {
     })
   }, [])
 
-  const salesData = useMemo(() => [
-    { month: 'Jan', sales: 450000, height: '45%' },
-    { month: 'Feb', sales: 550000, height: '55%' },
-    { month: 'Mar', sales: 650000, height: '65%' },
-    { month: 'Apr', sales: 850000, height: '85%' },
-    { month: 'May', sales: 700000, height: '70%' },
-    { month: 'Jun', sales: 950000, height: '95%' },
-  ], [])
+  // Process Live Data for the Chart inside Tab 1
+  const chartAnalytics = useMemo(() => {
+    if (!hydrated) return { totalRevenue: 0, topProducts: [] }
+
+    const cart = loadJson(CART_STORAGE_KEY)
+    const items = Array.isArray(cart) ? cart : []
+
+    const productCount = new Map()
+    const productRevenue = new Map()
+
+    // Default Preview Data if cart is empty
+    const defaultIds = [1, 2, 3, 4, 5, 6]
+    defaultIds.forEach((pid, index) => {
+      productCount.set(pid, 12 - index * 1.5)
+      productRevenue.set(pid, (productData?.[pid]?.price || 45000) * (12 - index * 1.5))
+    })
+
+    // Override with real data if available
+    if (items.length > 0) {
+      productCount.clear()
+      productRevenue.clear()
+      for (const it of items) {
+        const pid = Number(it.productId)
+        if (!Number.isFinite(pid)) continue
+        const price = safeNumber(it.price)
+        productCount.set(pid, (productCount.get(pid) || 0) + 1)
+        productRevenue.set(pid, (productRevenue.get(pid) || 0) + price)
+      }
+    }
+
+    const sortedCount = [...productCount.entries()].sort((a, b) => b[1] - a[1])
+    const totalRevenue = [...productRevenue.values()].reduce((a, b) => a + b, 0)
+    const maxCount = Math.max(...[...productCount.values()], 1)
+
+    const topProducts = sortedCount.slice(0, 6).map(([pid]) => {
+      const count = productCount.get(pid) || 0
+      const barHeightPct = Math.min(Math.round((count / maxCount) * 80 + 10), 95)
+      return {
+        pid,
+        title: productData?.[pid]?.title ? productData[pid].title.replace("iPhone ", "iP ") : `Product ${pid}`,
+        count,
+        revenue: productRevenue.get(pid) || 0,
+        heightStr: `${barHeightPct}%`
+      }
+    })
+
+    return { totalRevenue, topProducts }
+  }, [hydrated])
 
   const handleLogin = (e) => {
     e.preventDefault()
@@ -77,18 +124,14 @@ export default function AdminDashboardPage() {
       (c) => (c.fullName.toLowerCase() === cleanUser || c.mobileNumber === username.trim()) && c.isAdmin
     )
 
-    if (foundAdmin) {
-      if (foundAdmin.password === password) {
-        const sessionData = { username: foundAdmin.fullName, loginAt: new Date().toISOString() }
-        saveJson(ADMIN_SESSION_KEY, sessionData)
-        setIsLoggedIn(true)
-        return
-      }
+    if (foundAdmin && foundAdmin.password === password) {
+      saveJson(ADMIN_SESSION_KEY, { username: foundAdmin.fullName })
+      setIsLoggedIn(true)
+      return
     }
 
     if (cleanUser === 'admin' && password === 'admin') {
-      const sessionData = { username: 'System Admin', loginAt: new Date().toISOString() }
-      saveJson(ADMIN_SESSION_KEY, sessionData)
+      saveJson(ADMIN_SESSION_KEY, { username: 'System Admin' })
       setIsLoggedIn(true)
       return
     }
@@ -99,8 +142,6 @@ export default function AdminDashboardPage() {
   const handleLogout = () => {
     localStorage.removeItem(ADMIN_SESSION_KEY)
     setIsLoggedIn(false)
-    setUsername('')
-    setPassword('')
   }
 
   const handleDeleteCustomer = (id) => {
@@ -112,44 +153,26 @@ export default function AdminDashboardPage() {
   const handleCreateCoupon = (e) => {
     e.preventDefault()
     setCouponAlert('')
-
     const code = newCouponCode.trim().toUpperCase()
     const percent = Number(newDiscountPercent)
 
-    if (!code || !newDiscountPercent) {
-      setCouponAlert('Please fill out both coupon code and discount percentage.')
+    if (!code || !newDiscountPercent || percent <= 0 || percent > 100) {
+      setCouponAlert('Invalid coupon details.')
       return
     }
 
-    if (percent <= 0 || percent > 100) {
-      setCouponAlert('Discount percentage must be between 1 and 100.')
-      return
-    }
-
-    if (coupons.some(c => c.code === code)) {
-      setCouponAlert('This coupon code already exists.')
-      return
-    }
-
-    const newCoupon = {
-      id: Date.now().toString(),
-      code: code,
-      discountPercent: percent
-    }
-
-    const updatedCoupons = [...coupons, newCoupon]
-    setCoupons(updatedCoupons)
-    saveJson(COUPON_STORAGE_KEY, updatedCoupons)
-
+    const newCoupon = { id: Date.now().toString(), code, discountPercent: percent }
+    const next = [...coupons, newCoupon]
+    setCoupons(next)
+    saveJson(COUPON_STORAGE_KEY, next)
     setNewCouponCode('')
     setNewDiscountPercent('')
-    alert(`Coupon "${code}" created successfully!`)
   }
 
   const handleDeleteCoupon = (id) => {
-    const updatedCoupons = coupons.filter(c => c.id !== id)
-    setCoupons(updatedCoupons)
-    saveJson(COUPON_STORAGE_KEY, updatedCoupons)
+    const next = coupons.filter(c => c.id !== id)
+    setCoupons(next)
+    saveJson(COUPON_STORAGE_KEY, next)
   }
 
   if (!hydrated) return null
@@ -157,247 +180,208 @@ export default function AdminDashboardPage() {
   // LOGIN SCREEN
   if (!isLoggedIn) {
     return (
-      <main className="mx-auto max-w-md px-4 py-20 pt-32">
+      <main className="mx-auto max-w-md px-4 py-32">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl">
           <div className="text-center">
-            <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Secure Gateway</p>
-            <h1 className="mt-3 text-3xl font-bold text-slate-950">Admin Portal</h1>
-            <p className="mt-2 text-sm text-slate-600">Enter authorization credentials to view store analytics.</p>
+            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Control Room</p>
+            <h1 className="mt-2 text-2xl font-bold text-slate-950">MobiSphere Admin</h1>
           </div>
-
-          {error && (
-            <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-800">
-              {error}
-            </div>
-          )}
-
+          {error && <div className="mt-4 rounded-xl bg-red-50 p-3 text-xs text-red-700">{error}</div>}
           <form onSubmit={handleLogin} className="mt-6 space-y-4">
-            <label className="block space-y-2 text-sm text-slate-700">
-              <span>Admin Username or Mobile</span>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none"
-                placeholder="Username or 10-digit number"
-              />
-            </label>
-
-            <label className="block space-y-2 text-sm text-slate-700">
-              <span>Password</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none"
-                placeholder="••••••••"
-              />
-            </label>
-
-            <button
-              type="submit"
-              className="w-full rounded-full bg-slate-950 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-            >
-              Verify & Enter
-            </button>
+            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full rounded-2xl border p-3 text-sm outline-none" placeholder="Username" />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-2xl border p-3 text-sm outline-none" placeholder="Password" />
+            <button type="submit" className="w-full rounded-full bg-slate-950 py-3 text-sm font-semibold text-white">Enter Panel</button>
           </form>
         </div>
       </main>
     )
   }
 
-  // LOGGED IN DASHBOARD
+  // MAIN INTEGRATED PANEL
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 pt-28 sm:px-6 space-y-6">
       
-      {/* GLOBAL HEADER - हे बटण आता नेहमी समोर दिसेल! */}
-      <div className="rounded-[2rem] bg-white p-6 shadow-sm border border-slate-200 sm:p-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.3em] text-slate-500">System Dashboard</p>
-            <h1 className="mt-1 text-3xl font-bold text-slate-950 sm:text-4xl">MobiSphere Panel</h1>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {/* हेच ते मुख्य बटण जे ओनर डॅशबोर्ड उघडेल */}
-            <button
-              type="button"
-              onClick={() => router.push('/owner-dashboard')}
-              className="rounded-full bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-700 shadow-sm"
-            >
-              View Analytics Chart 📊
-            </button>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="rounded-full border border-slate-200 bg-slate-50 px-5 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-            >
-              Log out
-            </button>
-          </div>
+      {/* Top Welcome Header */}
+      <div className="rounded-[2rem] bg-white p-6 shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Unified Management Portal</p>
+          <h1 className="text-2xl font-bold text-slate-950 mt-1">MobiSphere Admin Panel</h1>
         </div>
+        <button onClick={handleLogout} className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100">
+          Log out
+        </button>
+      </div>
 
-        {/* Global Tabs Navigation */}
-        <div className="mt-8 flex flex-wrap gap-2 border-t border-slate-100 pt-4 font-medium">
+      {/* Main Grid: Left Sidebar Options (जशी तुझ्या फोटोमध्ये होती) & Right Side Content */}
+      <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+        
+        {/* Left Side Options Panel */}
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 h-fit space-y-1">
+          <p className="text-[11px] uppercase font-bold text-slate-400 px-3 mb-3 tracking-wider">Navigation Menu</p>
           {[
-            { id: 1, name: '1) Dashboard Overview' },
-            { id: 2, name: '2) Product Inventory' },
-            { id: 3, name: '3) Order Management' },
+            { id: 1, name: '1) Dashboard & Analytics view' },
+            { id: 2, name: '2) Product Management (Inventory)' },
+            { id: 3, name: '3) Order Management System' },
             { id: 4, name: '4) User Accounts' },
             { id: 5, name: '5) Coupons & Offers' },
-            { id: 6, name: '6) Big Data Reports' },
+            { id: 6, name: '6) User behavior and sales reports' },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`rounded-full px-4 py-2 text-xs transition ${
+              className={`w-full text-left rounded-2xl px-4 py-3 text-xs font-semibold transition ${
                 activeTab === tab.id
                   ? 'bg-slate-950 text-white shadow-sm'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                  : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
               {tab.name}
             </button>
           ))}
         </div>
-      </div>
 
-      {/* --- TAB 1: OVERVIEW --- */}
-      {activeTab === 1 && (
+        {/* Right Side Dynamic Content Displays */}
         <div className="space-y-6">
-          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs uppercase font-semibold tracking-wider text-slate-500">Gross Revenue</p>
-              <p className="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">₹41,50,000</p>
-            </div>
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs uppercase font-semibold tracking-wider text-slate-500">Products Sold</p>
-              <p className="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">84 Units</p>
-            </div>
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs uppercase font-semibold tracking-wider text-slate-500">Total Store Clients</p>
-              <p className="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">{customers.length} Accounts</p>
-            </div>
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs uppercase font-semibold tracking-wider text-slate-500">Active Coupons</p>
-              <p className="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">{coupons.length} Vouchers</p>
-            </div>
-          </div>
-
-          {/* Mini CSS Chart */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-            <h2 className="text-xl font-bold text-slate-950 mb-4">Sales Chart Preview</h2>
-            <div className="flex h-48 items-end justify-between gap-2 border-b border-l border-slate-200 pb-2 pl-2">
-              {salesData.map((data, index) => (
-                <div key={index} className="flex h-full flex-col justify-end items-center flex-1">
-                  <div style={{ height: data.height }} className="w-full rounded-t-sm bg-slate-950 hover:bg-emerald-600 transition-all"></div>
-                  <span className="mt-2 text-[10px] font-semibold text-slate-500">{data.month}</span>
+          
+          {/* --- OPTION 1: DASHBOARD & ANALYTICS VIEW WITH THE LIVE CSS CHART --- */}
+          {activeTab === 1 && (
+            <div className="space-y-6">
+              {/* Counter Statistics cards */}
+              <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
+                <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <p className="text-[11px] uppercase font-bold text-slate-400">Gross Value Revenue</p>
+                  <p className="mt-1 text-2xl font-bold text-slate-950">₹{chartAnalytics.totalRevenue.toLocaleString()}</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+                <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <p className="text-[11px] uppercase font-bold text-slate-400">Total Clients</p>
+                  <p className="mt-1 text-2xl font-bold text-slate-950">{customers.length} Active</p>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <p className="text-[11px] uppercase font-bold text-slate-400">Live Promo Coupons</p>
+                  <p className="mt-1 text-2xl font-bold text-slate-950">{coupons.length} Vouchers</p>
+                </div>
+              </div>
 
-      {/* --- TAB 2: INVENTORY --- */}
-      {activeTab === 2 && (
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-          <p className="text-lg font-semibold text-slate-900">2) Product Management (Inventory)</p>
-          <p className="mt-2">Inventory configuration block module arriving shortly.</p>
-        </div>
-      )}
+              {/* The Live Chart Component connected directly here */}
+              <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                <div className="mb-6">
+                  <h2 className="text-lg font-bold text-slate-950">Device Sales Volume Distribution</h2>
+                  <p className="text-xs text-slate-400">Live graphical data visualizer embedded directly into Option 1.</p>
+                </div>
 
-      {/* --- TAB 3: ORDER --- */}
-      {activeTab === 3 && (
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-          <p className="text-lg font-semibold text-slate-900">3) Order Management System</p>
-          <p className="mt-2">Live transaction pipeline tracking coming up next.</p>
-        </div>
-      )}
-
-      {/* --- TAB 4: USERS --- */}
-      {activeTab === 4 && (
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <h2 className="text-xl font-bold text-slate-950 mb-6">Registered Store Accounts ({customers.length})</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-400 text-xs">
-                  <th className="py-4 font-semibold">Customer Metadata</th>
-                  <th className="py-4 font-semibold">Security Pass</th>
-                  <th className="py-4 font-semibold text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-900">
-                {customers.map((c) => (
-                  <tr key={c.id}>
-                    <td className="py-4">
-                      <div className="font-semibold">{c.fullName}</div>
-                      <div className="text-xs text-slate-500 font-mono">{c.mobileNumber}</div>
-                    </td>
-                    <td className="py-4 font-mono text-xs">{c.password}</td>
-                    <td className="py-4 text-right">
-                      <button onClick={() => handleDeleteCustomer(c.id)} className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-600">Delete</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* --- TAB 5: COUPONS --- */}
-      {activeTab === 5 && (
-        <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-            <h2 className="text-xl font-bold text-slate-950">Create Store Coupon</h2>
-            <form onSubmit={handleCreateCoupon} className="mt-6 space-y-4">
-              <input
-                type="text"
-                value={newCouponCode}
-                onChange={(e) => setNewCouponCode(e.target.value)}
-                placeholder="E.g., FESTIVAL20"
-                className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm uppercase font-semibold"
-              />
-              <input
-                type="number"
-                value={newDiscountPercent}
-                onChange={(e) => setNewDiscountPercent(e.target.value)}
-                placeholder="Discount Percentage (%)"
-                className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
-              />
-              <button type="submit" className="w-full rounded-full bg-slate-950 py-3.5 text-sm font-semibold text-white">Generate Coupon</button>
-            </form>
-          </div>
-
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-            <h2 className="text-xl font-bold text-slate-950 mb-6">Active Store Coupons ({coupons.length})</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left text-sm">
-                <tbody>
-                  {coupons.map((coupon) => (
-                    <tr key={coupon.id}>
-                      <td className="py-4 font-mono font-bold uppercase">{coupon.code}</td>
-                      <td className="py-4 text-emerald-600 font-bold">{coupon.discountPercent}% OFF</td>
-                      <td className="py-4 text-right">
-                        <button onClick={() => handleDeleteCoupon(coupon.id)} className="rounded-full bg-red-50 px-4 py-2 text-xs font-semibold text-red-600">Remove</button>
-                      </td>
-                    </tr>
+                <div className="flex h-64 items-end justify-between gap-2 border-b border-l border-slate-200 pb-2 pl-2 pt-6 bg-slate-50/50 rounded-br-2xl p-4">
+                  {chartAnalytics.topProducts.map((data, index) => (
+                    <div key={index} className="group flex h-full flex-col justify-end items-center flex-1">
+                      <div className="mb-1 opacity-0 transform translate-y-1 transition duration-150 group-hover:opacity-100 group-hover:translate-y-0 text-[9px] bg-slate-950 text-white px-1.5 py-0.5 rounded font-mono text-center">
+                        {data.count} units
+                      </div>
+                      <div style={{ height: data.heightStr }} className="w-full rounded-t bg-slate-950 transition-all hover:bg-emerald-600 cursor-pointer shadow-sm"></div>
+                      <span className="mt-2 text-[10px] font-bold text-slate-500 text-center truncate max-w-[50px] sm:max-w-none">
+                        {data.title}
+                      </span>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* --- TAB 6: REPORTS --- */}
-      {activeTab === 6 && (
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-          <p className="text-lg font-semibold text-slate-900">6) User Behavior and Sales Reports</p>
-          <p className="mt-2">Advanced Analytics portal coming soon.</p>
+          {/* --- OPTION 2: PRODUCT MANAGEMENT --- */}
+          {activeTab === 2 && (
+            <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center text-xs text-slate-400">
+              <p className="text-base font-bold text-slate-900 mb-1">2) Product Management (Inventory)</p>
+              Inventory configuration block module arriving shortly.
+            </div>
+          )}
+
+          {/* --- OPTION 3: ORDER MANAGEMENT --- */}
+          {activeTab === 3 && (
+            <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center text-xs text-slate-400">
+              <p className="text-base font-bold text-slate-900 mb-1">3) Order Management System</p>
+              Live transaction pipeline tracking coming up next.
+            </div>
+          )}
+
+          {/* --- OPTION 4: USER ACCOUNTS --- */}
+          {activeTab === 4 && (
+            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+              <h2 className="text-lg font-bold text-slate-950 mb-4">Registered Store Accounts ({customers.length})</h2>
+              {customers.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-6">No user profiles created yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-left text-xs">
+                    <thead>
+                      <tr className="border-b text-slate-400 uppercase tracking-wider">
+                        <th className="py-3 font-semibold">User Metadata</th>
+                        <th className="py-3 font-semibold">Password</th>
+                        <th className="py-3 font-semibold text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y font-medium text-slate-900">
+                      {customers.map((c) => (
+                        <tr key={c.id} className="hover:bg-slate-50">
+                          <td className="py-3">
+                            <div className="font-bold text-slate-950">{c.fullName}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{c.mobileNumber}</div>
+                          </td>
+                          <td className="py-3 font-mono text-slate-500">{c.password}</td>
+                          <td className="py-3 text-right">
+                            <button onClick={() => handleDeleteCustomer(c.id)} className="rounded-full bg-red-50 px-3 py-1.5 font-bold text-red-600 hover:bg-red-100">Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* --- OPTION 5: COUPONS & OFFERS --- */}
+          {activeTab === 5 && (
+            <div className="grid gap-6 md:grid-cols-[1fr_1.2fr]">
+              <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 className="text-lg font-bold text-slate-950">Create Store Coupon</h2>
+                {couponAlert && <div className="mt-2 text-xs text-orange-700 bg-orange-50 p-2 rounded-xl">{couponAlert}</div>}
+                <form onSubmit={handleCreateCoupon} className="mt-4 space-y-3">
+                  <input type="text" value={newCouponCode} onChange={(e) => setNewCouponCode(e.target.value)} placeholder="E.g., SAVE20" className="w-full rounded-2xl border p-3 text-xs uppercase font-bold" />
+                  <input type="number" value={newDiscountPercent} onChange={(e) => setNewDiscountPercent(e.target.value)} placeholder="Discount %" className="w-full rounded-2xl border p-3 text-xs" />
+                  <button type="submit" className="w-full rounded-full bg-slate-950 py-3 text-xs font-bold text-white">Generate</button>
+                </form>
+              </div>
+
+              <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 className="text-lg font-bold text-slate-950 mb-4">Active Coupons ({coupons.length})</h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <tbody className="divide-y font-semibold">
+                      {coupons.map((coupon) => (
+                        <tr key={coupon.id}>
+                          <td className="py-3 font-mono text-slate-950 uppercase">{coupon.code}</td>
+                          <td className="py-3 text-emerald-600">{coupon.discountPercent}% OFF</td>
+                          <td className="py-3 text-right">
+                            <button onClick={() => handleDeleteCoupon(coupon.id)} className="text-red-600 hover:underline">Remove</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* --- OPTION 6: USER BEHAVIOR REPORTS --- */}
+          {activeTab === 6 && (
+            <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center text-xs text-slate-400">
+              <p className="text-base font-bold text-slate-900 mb-1">6) User Behavior and Sales Reports</p>
+              Advanced Big Data Analytics engine connecting shortly.
+            </div>
+          )}
+
         </div>
-      )}
+      </div>
     </main>
   )
 }
