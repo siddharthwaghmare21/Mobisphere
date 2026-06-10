@@ -30,6 +30,7 @@ export default function AdminPanelPage() {
   const [enquiries, setEnquiries] = useState([])
   const [message, setMessage] = useState('')
 
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     const storedSession = loadJson(ADMIN_SESSION_KEY)
@@ -76,10 +77,11 @@ export default function AdminPanelPage() {
   }
 
   const handleEnquiryDelete = async (enquiryId) => {
+    const deletedEnquiry = enquiries.find((e) => e.id === enquiryId)
     await supabase.from('enquiries').delete().eq('id', enquiryId)
     const next = enquiries.filter((enquiry) => enquiry.id !== enquiryId)
     setEnquiries(next)
-    setMessage('Enquiry removed successfully.')
+    setMessage(`🗑️ Enquiry Deleted — ID: ${deletedEnquiry?.id} | From: ${deletedEnquiry?.full_name} | Mobile: ${deletedEnquiry?.mobile_number} | Subject: ${deletedEnquiry?.subject}`)
   }
 
   const handleEnquiryChange = async (enquiryId, field, value) => {
@@ -260,7 +262,7 @@ export default function AdminPanelPage() {
                               status: enquiry.status,
                               admin_note: enquiry.admin_note,
                             }).eq('id', enquiry.id)
-                            setMessage('Enquiry saved successfully.')
+                            setMessage(`✅ Your Progress Saved — From: ${enquiry.full_name} | Subject: ${enquiry.subject}`)
                           }}
                           className="inline-flex items-center justify-center rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
                         >
