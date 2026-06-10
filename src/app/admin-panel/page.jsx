@@ -252,13 +252,28 @@ export default function AdminPanelPage() {
                         <p className="text-xs text-slate-500">Submitted on {enquiry.created_at ? new Date(enquiry.created_at).toLocaleString() : '—'}</p>
                         <p className="text-sm text-slate-700">Message: {enquiry.message}</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleEnquiryDelete(enquiry.id)}
-                        className="inline-flex items-center justify-center rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700"
-                      >
-                        Delete
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await supabase.from('enquiries').update({
+                              status: enquiry.status,
+                              admin_note: enquiry.adminNote,
+                            }).eq('id', enquiry.id)
+                            setMessage('Enquiry saved successfully.')
+                          }}
+                          className="inline-flex items-center justify-center rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEnquiryDelete(enquiry.id)}
+                          className="inline-flex items-center justify-center rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <label className="space-y-2 text-sm text-slate-700">
