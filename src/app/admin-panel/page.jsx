@@ -75,26 +75,36 @@ export default function AdminPanelPage() {
     setMessage('Customer removed successfully.')
   }
 
-  const handleEnquiryDelete = (enquiryId) => {
+  const handleEnquiryDelete = async (enquiryId) => {
+    await supabase.from('enquiries').delete().eq('id', enquiryId)
     const next = enquiries.filter((enquiry) => enquiry.id !== enquiryId)
-    saveEnquiries(next)
+    setEnquiries(next)
     setMessage('Enquiry removed successfully.')
   }
 
-  const handleEnquiryChange = (enquiryId, field, value) => {
+  const handleEnquiryChange = async (enquiryId, field, value) => {
+    await supabase.from('enquiries').update({ [field]: value }).eq('id', enquiryId)
     const next = enquiries.map((entry) =>
       entry.id === enquiryId ? { ...entry, [field]: value } : entry,
     )
-    saveEnquiries(next)
+    setEnquiries(next)
   }
 
-  const handleRefresh = () => {
-    const storedCustomers = loadJson(CUSTOMER_STORAGE_KEY)
-    const storedEnquiries = loadJson(ENQUIRY_STORAGE_KEY)
-    setCustomers(Array.isArray(storedCustomers) ? storedCustomers : [])
-    setEnquiries(Array.isArray(storedEnquiries) ? storedEnquiries : [])
-    setMessage('Dashboard refreshed.')
-  }
+  const handleRefresh = async () => {
+  const { data: customersData } = await supabase
+    .from('customers')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  const { data: enquiriesData } = await supabase
+    .from('enquiries')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  setCustomers(customersData || [])
+  setEnquiries(enquiriesData || [])
+  setMessage('Dashboard refreshed.')
+}
 
   const adminName = session?.displayName || session?.userId || 'Admin'
 
@@ -229,9 +239,9 @@ export default function AdminPanelPage() {
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="space-y-1">
                         <p className="font-semibold text-slate-900">{enquiry.subject}</p>
-                        <p className="text-sm">From: {enquiry.fullName} • {enquiry.mobileNumber}</p>
+                        <p className="text-sm">From: {enquiry.full_name} • {enquiry.mobile_number}</p>
                         <p className="text-sm">Email: {enquiry.email}</p>
-                        <p className="text-xs text-slate-500">Submitted on {new Date(enquiry.createdAt).toLocaleString()}</p>
+                        <p className="text-xs text-slate-500">Submitted on {enquiry.created_at ? new Date(enquiry.created_at).toLocaleString() : '—'}</p>
                         <p className="text-sm text-slate-700">Message: {enquiry.message}</p>
                       </div>
                       <button
