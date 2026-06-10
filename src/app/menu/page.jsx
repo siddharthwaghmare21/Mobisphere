@@ -145,34 +145,36 @@ export default function MenuPage() {
   }
 
   const handleLogin = () => {
-    setMessage('')
+  setMessage('')
 
-    if (!loginData.fullName.trim() || !loginData.password || !loginData.mobileNumber.trim() || !loginData.address.trim()) {
-      setMessage('Please enter your name, password, mobile number, and address to login.')
-      return
-    }
+  // १. लॉगिनसाठी फक्त नाव, पासवर्ड आणि मोबाईल नंबर आवश्यक ठेवा (address ची अट काढली)
+  if (!loginData.fullName.trim() || !loginData.password || !loginData.mobileNumber.trim()) {
+    setMessage('Please enter your name, password, and mobile number to login.')
+    return
+  }
 
-    if (!isValidIndianMobile(loginData.mobileNumber.trim())) {
-      setMessage('Please provide a valid 10-digit Indian mobile number to login.')
-      return
-    }
+  if (!isValidIndianMobile(loginData.mobileNumber.trim())) {
+    setMessage('Please provide a valid 10-digit Indian mobile number to login.')
+    return
+  }
 
-    const matchedAccount = accounts.find(
-      (account) =>
-        account.fullName.toLowerCase() === loginData.fullName.trim().toLowerCase() &&
-        account.password === loginData.password &&
-        account.mobileNumber === loginData.mobileNumber.trim() &&
-        account.address.toLowerCase() === loginData.address.trim().toLowerCase(),
-    )
+  // २. मॅचिंग करताना सुद्धा पत्त्याची अट (address.toLowerCase()...) काढून टाकली
+  const matchedAccount = accounts.find(
+    (account) =>
+      account.fullName.toLowerCase() === loginData.fullName.trim().toLowerCase() &&
+      account.password === loginData.password &&
+      account.mobileNumber === loginData.mobileNumber.trim()
+  )
 
-    if (!matchedAccount) {
-      setMessage('No matching account found. Please check your details or sign up first.')
-      return
-    }
+  if (!matchedAccount) {
+    setMessage('No matching account found. Please check your details or sign up first.')
+    return
+  }
 
-    setLoggedInUser(matchedAccount)
-    saveLoggedInUser(matchedAccount)
-    setMessage(`Welcome back, ${matchedAccount.fullName}! You are now logged in.`)
+  setLoggedInUser(matchedAccount)
+  saveLoggedInUser(matchedAccount)
+  setMessage(`Welcome back, ${matchedAccount.fullName}!`)
+}
     router.push('/')
   }
 
