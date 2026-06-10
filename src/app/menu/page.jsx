@@ -305,15 +305,7 @@ export default function MenuPage() {
                     placeholder="10-digit Indian mobile"
                   />
                 </label>
-                <label className="sm:col-span-2 space-y-2 text-sm text-slate-700">
-                  <span>Address</span>
-                  <textarea
-                    value={loginData.address}
-                    onChange={(e) => handleLoginChange('address', e.target.value)}
-                    className="h-28 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200"
-                    placeholder="Street, city, state, pincode"
-                  />
-                </label>
+
               </div>
 
               <div className="mt-6 flex flex-wrap gap-3">
