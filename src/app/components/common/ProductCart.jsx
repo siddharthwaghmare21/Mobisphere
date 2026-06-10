@@ -110,7 +110,7 @@ export const productData = {
 
 import Link from 'next/link'
 
-export default function ProductCard({ productId, image, alt, title, description, price, onBuyNow, onAdded }) {
+export default function ProductCart({ productId, image, alt, title, description, price, onBuyNow, onAdded }) {
     const product = productId ? productData[productId] : null
 
     // Skeleton state to avoid blank/late-loading UI on slow connections

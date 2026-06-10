@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import React, { useMemo, useState } from 'react'
-import ProductCard, { productData } from '../components/common/ProductCart'
+import ProductCart, { productData } from '../components/common/ProductCart'
 
 export default function Product() {
     const [searchTerm, setSearchTerm] = useState('')
@@ -64,7 +64,7 @@ export default function Product() {
             ) : (
                 <section className="mt-8 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-6 lg:grid-cols-3">
                     {filteredProducts.map(([productId]) => (
-                        <ProductCard
+                        <ProductCart
                             key={productId}
                             productId={Number(productId)}
                             onBuyNow={() => {
