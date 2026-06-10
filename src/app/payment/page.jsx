@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import ProductCart, { productData } from '@/app/components/common/ProductCart'
+import { productData } from '@/app/components/common/ProductCart'
 
 const initialForm = {
   fullName: '',
@@ -29,13 +29,32 @@ export default function PaymentPage() {
     
     if (rawPid) {
       const pidNum = Number(rawPid)
-      
-      if (productData[pidNum]) {
-        setProductId(pidNum)
-        setProduct(productData[pidNum])
-      } else if (productData[rawPid]) {
+      let foundProduct = null
+
+      if (productData) {
+        if (typeof productData.find === 'function') {
+          foundProduct = productData.find(p => p.id === pidNum || p.id === rawPid || p.productId === pidNum || p.productId === rawPid)
+        }
+        
+        if (!foundProduct && productData[rawPid]) {
+          foundProduct = productData[rawPid]
+        }
+        if (!foundProduct && productData[pidNum]) {
+          foundProduct = productData[pidNum]
+        }
+
+        if (!foundProduct) {
+          const entries = Object.entries(productData)
+          const match = entries.find(([key]) => key === rawPid || Number(key) === pidNum)
+          if (match) {
+            foundProduct = match[1]
+          }
+        }
+      }
+
+      if (foundProduct) {
         setProductId(rawPid)
-        setProduct(productData[rawPid])
+        setProduct(foundProduct)
       }
     }
 
