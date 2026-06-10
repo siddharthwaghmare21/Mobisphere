@@ -147,7 +147,7 @@ export default function MenuPage() {
   const handleLogin = () => {
     setMessage('')
 
-    // १. लॉगिनसाठी फक्त नाव, पासवर्ड आणि मोबाईल नंबर आवश्यक ठेवा (address ची अट काढली)
+    
     if (!loginData.fullName.trim() || !loginData.password || !loginData.mobileNumber.trim()) {
       setMessage('Please enter your name, password, and mobile number to login.')
       return
@@ -158,7 +158,7 @@ export default function MenuPage() {
       return
     }
 
-    // २. मॅचिंग करताना सुद्धा पत्त्याची अट (address.toLowerCase()...) काढून टाकली
+    
     const matchedAccount = accounts.find(
       (account) =>
         account.fullName.toLowerCase() === loginData.fullName.trim().toLowerCase() &&
