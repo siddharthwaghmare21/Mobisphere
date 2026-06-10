@@ -28,7 +28,7 @@ function safeNumber(n) {
   return Number.isFinite(x) ? x : 0
 }
 
-export default function CombinedAdminPanelPage() {
+export default function UnifiedAdminDashboard() {
   const router = useRouter()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [username, setUsername] = useState('')
@@ -37,7 +37,7 @@ export default function CombinedAdminPanelPage() {
   const [error, setError] = useState('')
   const [hydrated, setHydrated] = useState(false)
 
-  // Default Active Tab: 1 (Dashboard & Analytics view - जिथे आपला चार्ट दिसेल)
+  // Active Tab State (फोटोप्रमाणे ६ ऑप्शन्स)
   const [activeTab, setActiveTab] = useState(1)
 
   // Coupons State
@@ -177,7 +177,7 @@ export default function CombinedAdminPanelPage() {
 
   if (!hydrated) return null
 
-  // LOGIN SCREEN
+  // 🔐 ADMIN LOGIN SCREEN
   if (!isLoggedIn) {
     return (
       <main className="mx-auto max-w-md px-4 py-32">
@@ -197,7 +197,7 @@ export default function CombinedAdminPanelPage() {
     )
   }
 
-  // MAIN INTEGRATED PANEL
+  // 💻 MAIN INTEGRATED SIDEBAR PANEL Layout
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 pt-28 sm:px-6 space-y-6">
       
@@ -212,10 +212,10 @@ export default function CombinedAdminPanelPage() {
         </button>
       </div>
 
-      {/* Main Grid: Left Sidebar Options (जशी तुझ्या फोटोमध्ये होती) & Right Side Content */}
+      {/* Grid: Left Sidebar Options & Right Dynamic Content */}
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
         
-        {/* Left Side Options Panel */}
+        {/* Left Side Options Panel (जसा फोटोमध्ये होता तसाच) */}
         <div className="rounded-[2rem] border border-slate-200 bg-white p-4 h-fit space-y-1">
           <p className="text-[11px] uppercase font-bold text-slate-400 px-3 mb-3 tracking-wider">Navigation Menu</p>
           {[
@@ -240,13 +240,12 @@ export default function CombinedAdminPanelPage() {
           ))}
         </div>
 
-        {/* Right Side Dynamic Content Displays */}
+        {/* Right Side Content Areas */}
         <div className="space-y-6">
           
-          {/* --- OPTION 1: DASHBOARD & ANALYTICS VIEW WITH THE LIVE CSS CHART --- */}
+          {/* --- OPTION 1: DASHBOARD & ANALYTICS VIEW WITH THE LIVE CHART --- */}
           {activeTab === 1 && (
             <div className="space-y-6">
-              {/* Counter Statistics cards */}
               <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
                 <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                   <p className="text-[11px] uppercase font-bold text-slate-400">Gross Value Revenue</p>
@@ -262,7 +261,7 @@ export default function CombinedAdminPanelPage() {
                 </div>
               </div>
 
-              {/* The Live Chart Component connected directly here */}
+              {/* Chart directly embedded inside Option 1 */}
               <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
                 <div className="mb-6">
                   <h2 className="text-lg font-bold text-slate-950">Device Sales Volume Distribution</h2>
