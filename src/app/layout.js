@@ -20,21 +20,22 @@ export default function RootLayout({ children }) {
       // Alt + Shift + A दाबल्यावर थेट नवीन /admin पेजवर नेईल
       if (e.altKey && e.shiftKey && e.key.toLowerCase() === 'a') {
         e.preventDefault();
-        router.push('/admin-dashboard');
+        router.push('/admin-dashboard'); // इथे अचूक नाव असल्याची खात्री कर
       }
-    };
+    }
+  };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [router]);
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+}, [router]);
 
-  return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans dark:bg-slate-950 dark:text-slate-50">
-        <Header />
-        <main className="flex-1 pt-24">{children}</main>
-        <Footer />
-      </body>
-    </html>
-  );
+return (
+  <html lang="en" className={`${inter.variable} h-full antialiased`}>
+    <body className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans dark:bg-slate-950 dark:text-slate-50">
+      <Header />
+      <main className="flex-1 pt-24">{children}</main>
+      <Footer />
+    </body>
+  </html>
+);
 }
