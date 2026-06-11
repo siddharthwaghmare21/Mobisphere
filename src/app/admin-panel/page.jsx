@@ -232,7 +232,7 @@ export default function IntegratedAdminPanelDashboard() {
             { id: 6, icon: '📈', name: 'Sales Reports', path: '/admin-panel/sales-reports' },
             { id: 7, icon: '📩', name: 'Enquiries Log', path: '/admin-panel/enquiries' },
           ].map(tab => (
-            <button key={tab.id} onClick={() => { setActiveTab(tab.id); setMessage(''); router.push(tab.path); }} className={`flex w-full items-center gap-3 rounded-2xl px-5 py-4 text-sm font-bold transition-all ${activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg scale-105' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100'}`}>
+            <button key={tab.id} onClick={() => { setActiveTab(tab.id); setMessage(''); }} className={`flex w-full items-center gap-3 rounded-2xl px-5 py-4 text-sm font-bold transition-all ${activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg scale-105' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100'}`}>
               <span>{tab.icon}</span> {tab.name}
             </button>
           ))}
@@ -377,8 +377,64 @@ export default function IntegratedAdminPanelDashboard() {
             </div>
           )}
 
+          {/* 📦 TAB 2: Product Inventory */}
+          {activeTab === 2 && (
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900">Product Inventory</h2>
+                  <p className="text-sm text-slate-500 mt-1">Manage your store's products, pricing, and stock status.</p>
+                </div>
+                <button className="px-5 py-2.5 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs flex items-center gap-2">
+                  <span>+</span> Add New Product
+                </button>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                <table className="w-full text-left border-collapse min-w-[600px]">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500">
+                      <th className="p-4 font-black">Product ID</th>
+                      <th className="p-4 font-black">Product Name</th>
+                      <th className="p-4 font-black">Base Price</th>
+                      <th className="p-4 font-black text-center">Status</th>
+                      <th className="p-4 font-black text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(Object.keys(productData || {}).length > 0 
+                      ? Object.entries(productData).map(([id, p]) => ({ id, ...p }))
+                      : [
+                          { id: '1', title: 'iPhone 16 Pro Max', price: 95000 },
+                          { id: '2', title: 'iPhone 15 Pro Max', price: 85000 },
+                          { id: '3', title: 'iPhone 14 Pro Max', price: 75000 },
+                          { id: '4', title: 'iPhone 13', price: 55000 },
+                        ]
+                    ).map((product) => (
+                      <tr key={product.id} className="hover:bg-slate-50/80 transition group">
+                        <td className="p-4 text-xs font-mono font-bold text-slate-400">#{product.id}</td>
+                        <td className="p-4 text-sm font-bold text-slate-900 flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-lg shadow-inner">📱</div>
+                          {product.title}
+                        </td>
+                        <td className="p-4 text-sm font-black text-emerald-600">₹{(Number(product.price) || 0).toLocaleString()}</td>
+                        <td className="p-4 text-center">
+                          <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-black text-[9px] uppercase tracking-wider shadow-sm">In Stock</span>
+                        </td>
+                        <td className="p-4 text-right space-x-3 opacity-80 group-hover:opacity-100 transition">
+                          <button className="text-blue-600 font-bold hover:underline text-[11px] uppercase tracking-wide">Edit</button>
+                          <button className="text-rose-600 font-bold hover:underline text-[11px] uppercase tracking-wide">Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Placeholders for other tabs under development */}
-          {([2, 3, 6].includes(activeTab)) && (
+          {([3, 6].includes(activeTab)) && (
             <div className="bg-white p-20 rounded-[2rem] border border-slate-100 shadow-xl text-center">
               <p className="text-4xl">🚧</p>
               <h2 className="text-xl font-black mt-4">Module Integration Pending</h2>
