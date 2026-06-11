@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { productData } from '@/app/components/common/ProductCart'
+import { supabase } from '@/lib/supabase'
 
 // 🎯 मूळ पेजेसशी कनेक्ट होणाऱ्या परफेक्ट लोकल स्टोरेज कीज
 const ADMIN_SESSION_KEY = 'mobisphereAdminSession'
@@ -35,6 +36,8 @@ export default function UnifiedAdminDashboard() {
   const [enquiries, setEnquiries] = useState([])
   const [error, setError] = useState('')
   const [hydrated, setHydrated] = useState(false)
+  const [loadingSupabase, setLoadingSupabase] = useState(true)
+
 
   const [activeTab, setActiveTab] = useState(1)
   const [coupons, setCoupons] = useState([])
@@ -44,36 +47,56 @@ export default function UnifiedAdminDashboard() {
 
   useEffect(() => {
     const session = loadJson(ADMIN_SESSION_KEY)
-    
-    // थेट मूळ पेजेसवरून येणारा शुद्ध लाईव्ह डेटा लोड करणे (कोणताही डमी फॉलबॅक नाही)
-    const storedCustomers = loadJson(CUSTOMER_STORAGE_KEY) || []
-    const storedEnquiries = loadJson(ENQUIRY_STORAGE_KEY) || []
-    const EastonCoupons = loadJson(COUPON_STORAGE_KEY) || []
-    
+
+    const storedCoupons = loadJson(COUPON_STORAGE_KEY) || []
     queueMicrotask(() => {
       if (session) {
         setIsLoggedIn(true)
         setUsername(session.username || 'Admin')
       }
-
-      setCustomers(Array.isArray(storedCustomers) ? storedCustomers : [])
-      setCoupons(Array.isArray(EastonCoupons) ? EastonCoupons : [])
-      
-      // ओरिजनल इन्क्वायरी डेटा सुरक्षित मॅप करणे
-      setEnquiries(Array.isArray(storedEnquiries) ? storedEnquiries.map(e => ({
-        id: e.id || Date.now().toString() + Math.random(),
-        date: e.date || e.submittedAt || '—',
-        productName: e.productName || 'General Enquiry',
-        name: e.name || e.fullName || '—',
-        mobile: e.mobile || e.mobileNumber || '—',
-        email: e.email || '—',
-        message: e.message || e.enquiryMessage || '—',
-        status: e.status || 'Pending',
-        adminNote: e.adminNote || e.note || ''
-      })) : [])
-      
-      setHydrated(true)
+      setCoupons(Array.isArray(storedCoupons) ? storedCoupons : [])
     })
+
+    const hydrateFromSupabase = async () => {
+      try {
+        setLoadingSupabase(true)
+
+        const { data: customersData } = await supabase
+          .from('customers')
+          .select('*')
+          .order('created_at', { ascending: false })
+
+        const { data: enquiriesData } = await supabase
+          .from('enquiries')
+          .select('*')
+          .order('created_at', { ascending: false })
+
+        const nextCustomers = Array.isArray(customersData) ? customersData : []
+        const nextEnquiries = Array.isArray(enquiriesData)
+          ? enquiriesData.map((e) => ({
+              id: e.id || Date.now().toString() + Math.random(),
+              date: e.date || e.submitted_at || e.created_at || '—',
+              productName: e.product_name || e.productName || 'General Enquiry',
+              name: e.full_name || e.name || '—',
+              mobile: e.mobile_number || e.mobile || '—',
+              email: e.email || '—',
+              message: e.message || e.enquiry_message || '—',
+              status: e.status || 'Pending',
+              adminNote: e.admin_note || e.adminNote || ''
+            }))
+          : []
+
+        setCustomers(nextCustomers)
+        setEnquiries(nextEnquiries)
+      } catch {
+        // fallback: keep already initialized local state
+      } finally {
+        setHydrated(true)
+        setLoadingSupabase(false)
+      }
+    }
+
+    hydrateFromSupabase()
   }, [])
 
   // Chart Analytics
@@ -137,27 +160,94 @@ export default function UnifiedAdminDashboard() {
     setIsLoggedIn(false)
   }
 
-  const handleDeleteCustomer = (id) => {
-    const next = customers.filter((c) => c.id !== id)
-    setCustomers(next)
-    saveJson(CUSTOMER_STORAGE_KEY, next)
+  const handleDeleteCustomer = async (id) => {
+    try {
+      await supabase.from('customers').delete().eq('id', id)
+
+      const { data: customersData } = await supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      setCustomers(Array.isArray(customersData) ? customersData : [])
+    } catch {
+      alert('Failed to delete customer')
+    }
   }
+
+
 
   const handleEnquiryFieldChange = (id, field, value) => {
     const next = enquiries.map((e) => (e.id === id ? { ...e, [field]: value } : e))
     setEnquiries(next)
   }
 
-  const handleSaveEnquiry = (id) => {
-    saveJson(ENQUIRY_STORAGE_KEY, enquiries)
-    alert('Enquiry status updated successfully!')
+
+  const handleSaveEnquiry = async (id) => {
+    try {
+      const current = enquiries.find((e) => e.id === id)
+      await supabase
+        .from('enquiries')
+        .update({
+          status: current?.status,
+          admin_note: current?.adminNote,
+        })
+        .eq('id', id)
+
+      const { data: enquiriesData } = await supabase
+        .from('enquiries')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      setEnquiries(
+        Array.isArray(enquiriesData)
+          ? enquiriesData.map((e) => ({
+              id: e.id,
+              date: e.date || e.submitted_at || e.created_at || '—',
+              productName: e.product_name || e.productName || 'General Enquiry',
+              name: e.full_name || e.name || '—',
+              mobile: e.mobile_number || e.mobile || '—',
+              email: e.email || '—',
+              message: e.message || e.enquiry_message || '—',
+              status: e.status || 'Pending',
+              adminNote: e.admin_note || e.adminNote || '',
+            }))
+          : [],
+      )
+    } catch {
+      alert('Failed to save enquiry')
+    }
   }
 
-  const handleDeleteEnquiry = (id) => {
-    const next = enquiries.filter((e) => e.id !== id)
-    setEnquiries(next)
-    saveJson(ENQUIRY_STORAGE_KEY, next)
+  const handleDeleteEnquiry = async (id) => {
+    try {
+      await supabase.from('enquiries').delete().eq('id', id)
+
+      const { data: enquiriesData } = await supabase
+        .from('enquiries')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      setEnquiries(
+        Array.isArray(enquiriesData)
+          ? enquiriesData.map((e) => ({
+              id: e.id,
+              date: e.date || e.submitted_at || e.created_at || '—',
+              productName: e.product_name || e.productName || 'General Enquiry',
+              name: e.full_name || e.name || '—',
+              mobile: e.mobile_number || e.mobile || '—',
+              email: e.email || '—',
+              message: e.message || e.enquiry_message || '—',
+              status: e.status || 'Pending',
+              adminNote: e.admin_note || e.adminNote || '',
+            }))
+          : [],
+      )
+    } catch {
+      alert('Failed to delete enquiry')
+    }
   }
+
 
   const handleCreateCoupon = (e) => {
     e.preventDefault()
@@ -399,6 +489,6 @@ export default function UnifiedAdminDashboard() {
 
         </div>
       </div>
-    </main>
+     </main>
   )
 }
