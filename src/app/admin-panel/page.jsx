@@ -34,6 +34,12 @@ export default function IntegratedAdminPanelDashboard() {
   const [activeTab, setActiveTab] = useState(1)
   const [message, setMessage] = useState('')
   const [hydrated, setHydrated] = useState(false)
+  
+  // Product Inventory States
+  const [localProducts, setLocalProducts] = useState([])
+  const [inventoryView, setInventoryView] = useState('brands') // 'brands', 'products', 'form'
+  const [selectedBrand, setSelectedBrand] = useState('')
+  const [editingProduct, setEditingProduct] = useState(null)
 
   const [coupons, setCoupons] = useState([])
   const [newCouponCode, setNewCouponCode] = useState('')
@@ -68,6 +74,15 @@ export default function IntegratedAdminPanelDashboard() {
     }
     const storedCoupons = loadJson(COUPON_STORAGE_KEY) || []
     setCoupons(storedCoupons)
+    
+    // Load products locally for inventory
+    const initialProducts = Object.keys(productData || {}).length > 0 
+      ? Object.entries(productData).map(([id, p]) => ({ id, ...p }))
+      : [
+          { id: '1', title: 'iPhone 16 Pro Max', brand: 'Apple', price: 95000, specs: {} }
+        ]
+    setLocalProducts(initialProducts)
+
     setHydrated(true)
   }, [fetchData])
 
@@ -172,6 +187,39 @@ export default function IntegratedAdminPanelDashboard() {
     const next = coupons.filter(c => c.id !== id)
     setCoupons(next)
     saveJson(COUPON_STORAGE_KEY, next)
+  }
+
+  // --- Product Inventory Logic ---
+  const uniqueBrands = [...new Set(localProducts.map(p => p.brand || 'Other Models'))]
+
+  const handleSaveProduct = (e) => {
+    e.preventDefault()
+    const formData = new FormData(e.target)
+    const newProd = {
+      id: editingProduct ? editingProduct.id : Date.now().toString(),
+      title: formData.get('title'),
+      brand: formData.get('brand'),
+      price: Number(formData.get('price')),
+      description: formData.get('description'),
+      specs: {
+        RAM: formData.get('ram'),
+        Storage: formData.get('storage'),
+        Camera: formData.get('camera'),
+        Battery: formData.get('battery'),
+        Processor: formData.get('processor'),
+        Charger: formData.get('charger'),
+        Tools: formData.get('tools')
+      }
+    }
+    setLocalProducts(prev => editingProduct ? prev.map(p => p.id === newProd.id ? newProd : p) : [...prev, newProd])
+    setInventoryView(selectedBrand ? 'products' : 'brands')
+    setEditingProduct(null)
+    setMessage(`Product ${editingProduct ? 'updated' : 'added'} successfully!`)
+  }
+
+  const handleDeleteProduct = (id) => {
+    setLocalProducts(prev => prev.filter(p => p.id !== id))
+    setMessage('Product deleted successfully.')
   }
 
   if (!hydrated) return null
@@ -382,54 +430,120 @@ export default function IntegratedAdminPanelDashboard() {
             <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-900">Product Inventory</h2>
+                  <h2 className="text-2xl font-black text-slate-900">
+                    {inventoryView === 'brands' ? 'Brands Inventory' : 
+                     inventoryView === 'form' ? (editingProduct ? 'Edit Product' : 'Add New Product') :
+                     `${selectedBrand} Products`}
+                  </h2>
                   <p className="text-sm text-slate-500 mt-1">Manage your store's products, pricing, and stock status.</p>
                 </div>
-                <button className="px-5 py-2.5 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs flex items-center gap-2">
-                  <span>+</span> Add New Product
-                </button>
+                {inventoryView !== 'form' && (
+                  <button onClick={() => { setEditingProduct(null); setInventoryView('form'); }} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs flex items-center gap-2">
+                    <span>+</span> Add New Product
+                  </button>
+                )}
               </div>
 
-              <div className="overflow-x-auto rounded-2xl border border-slate-100">
-                <table className="w-full text-left border-collapse min-w-[600px]">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500">
-                      <th className="p-4 font-black">Product ID</th>
-                      <th className="p-4 font-black">Product Name</th>
-                      <th className="p-4 font-black">Base Price</th>
-                      <th className="p-4 font-black text-center">Status</th>
-                      <th className="p-4 font-black text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {(Object.keys(productData || {}).length > 0 
-                      ? Object.entries(productData).map(([id, p]) => ({ id, ...p }))
-                      : [
-                          { id: '1', title: 'iPhone 16 Pro Max', price: 95000 },
-                          { id: '2', title: 'iPhone 15 Pro Max', price: 85000 },
-                          { id: '3', title: 'iPhone 14 Pro Max', price: 75000 },
-                          { id: '4', title: 'iPhone 13', price: 55000 },
-                        ]
-                    ).map((product) => (
-                      <tr key={product.id} className="hover:bg-slate-50/80 transition group">
-                        <td className="p-4 text-xs font-mono font-bold text-slate-400">#{product.id}</td>
-                        <td className="p-4 text-sm font-bold text-slate-900 flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-lg shadow-inner">📱</div>
-                          {product.title}
-                        </td>
-                        <td className="p-4 text-sm font-black text-emerald-600">₹{(Number(product.price) || 0).toLocaleString()}</td>
-                        <td className="p-4 text-center">
-                          <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-black text-[9px] uppercase tracking-wider shadow-sm">In Stock</span>
-                        </td>
-                        <td className="p-4 text-right space-x-3 opacity-80 group-hover:opacity-100 transition">
-                          <button className="text-blue-600 font-bold hover:underline text-[11px] uppercase tracking-wide">Edit</button>
-                          <button className="text-rose-600 font-bold hover:underline text-[11px] uppercase tracking-wide">Delete</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {/* VIEW: Brands Grid */}
+              {inventoryView === 'brands' && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {uniqueBrands.map(brand => (
+                    <button key={brand} onClick={() => { setSelectedBrand(brand); setInventoryView('products'); }} className="p-6 bg-slate-50 border border-slate-200 rounded-3xl hover:bg-slate-900 hover:text-white transition group text-left shadow-sm">
+                      <div className="text-3xl mb-3 opacity-80 group-hover:opacity-100">🏷️</div>
+                      <h3 className="font-black text-lg">{brand}</h3>
+                      <p className="text-xs mt-1 opacity-60">{localProducts.filter(p => (p.brand || 'Other Models') === brand).length} Products</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* VIEW: Products Table by Brand */}
+              {inventoryView === 'products' && (
+                <div className="space-y-4">
+                  <button onClick={() => setInventoryView('brands')} className="text-xs font-bold text-slate-500 hover:text-slate-900 flex items-center gap-1">← Back to Brands</button>
+                  <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                    <table className="w-full text-left border-collapse min-w-[600px]">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500">
+                          <th className="p-4 font-black">ID</th>
+                          <th className="p-4 font-black">Model Name</th>
+                          <th className="p-4 font-black">Base Price</th>
+                          <th className="p-4 font-black text-center">Status</th>
+                          <th className="p-4 font-black text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {localProducts.filter(p => (p.brand || 'Other Models') === selectedBrand).map((product) => (
+                          <tr key={product.id} className="hover:bg-slate-50/80 transition group">
+                            <td className="p-4 text-xs font-mono font-bold text-slate-400">#{product.id}</td>
+                            <td className="p-4 text-sm font-bold text-slate-900 flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-lg shadow-inner">📱</div>
+                              {product.title}
+                            </td>
+                            <td className="p-4 text-sm font-black text-emerald-600">₹{(Number(product.price) || 0).toLocaleString()}</td>
+                            <td className="p-4 text-center">
+                              <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-black text-[9px] uppercase tracking-wider shadow-sm">In Stock</span>
+                            </td>
+                            <td className="p-4 text-right space-x-3 opacity-80 group-hover:opacity-100 transition">
+                              <button onClick={() => { setEditingProduct(product); setInventoryView('form'); }} className="text-blue-600 font-bold hover:underline text-[11px] uppercase tracking-wide">Edit</button>
+                              <button onClick={() => handleDeleteProduct(product.id)} className="text-rose-600 font-bold hover:underline text-[11px] uppercase tracking-wide">Delete</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW: Add / Edit Product Form */}
+              {inventoryView === 'form' && (
+                <div>
+                  <button onClick={() => setInventoryView(selectedBrand ? 'products' : 'brands')} className="text-xs font-bold text-slate-500 hover:text-slate-900 mb-6 flex items-center gap-1">← Cancel & Go Back</button>
+                  <form onSubmit={handleSaveProduct} className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400">Company Name (Brand)</label>
+                        <input name="brand" required defaultValue={editingProduct?.brand || ''} placeholder="e.g. Apple, Samsung" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400">Model Name (Title)</label>
+                        <input name="title" required defaultValue={editingProduct?.title || ''} placeholder="e.g. iPhone 16 Pro" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400">Base Price (₹)</label>
+                        <input type="number" name="price" required defaultValue={editingProduct?.price || ''} placeholder="e.g. 120000" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-[10px] font-black uppercase text-slate-400">Product Description</label>
+                        <textarea name="description" rows="4" defaultValue={editingProduct?.description || ''} placeholder="Describe the phone features..." className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900"></textarea>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-slate-400">Memory (Storage)</label>
+                          <input name="storage" defaultValue={editingProduct?.specs?.Storage || ''} placeholder="e.g. 256GB" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-slate-400">RAM</label>
+                          <input name="ram" defaultValue={editingProduct?.specs?.RAM || ''} placeholder="e.g. 8GB" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" />
+                        </div>
+                      </div>
+                      <div><label className="text-[10px] font-black uppercase text-slate-400">Processor</label><input name="processor" defaultValue={editingProduct?.specs?.Processor || ''} placeholder="e.g. A18 Bionic" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" /></div>
+                      <div><label className="text-[10px] font-black uppercase text-slate-400">Camera Specs</label><input name="camera" defaultValue={editingProduct?.specs?.Camera || ''} placeholder="e.g. 48MP Triple" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" /></div>
+                      <div><label className="text-[10px] font-black uppercase text-slate-400">Battery</label><input name="battery" defaultValue={editingProduct?.specs?.Battery || ''} placeholder="e.g. 4700mAh" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" /></div>
+                      <div><label className="text-[10px] font-black uppercase text-slate-400">Charger Info</label><input name="charger" defaultValue={editingProduct?.specs?.Charger || ''} placeholder="e.g. 30W Fast Charging" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" /></div>
+                      <div><label className="text-[10px] font-black uppercase text-slate-400">Additional Tools (In Box)</label><input name="tools" defaultValue={editingProduct?.specs?.Tools || ''} placeholder="e.g. Type-C Cable, SIM Tool" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" /></div>
+                    </div>
+                    
+                    <div className="md:col-span-2 flex justify-end mt-4 pt-4 border-t border-slate-200">
+                      <button type="submit" className="px-8 py-3 bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 transition font-black text-sm">{editingProduct ? 'Save Changes' : 'Add Product'}</button>
+                    </div>
+                  </form>
+                </div>
+              )}
             </div>
           )}
 
