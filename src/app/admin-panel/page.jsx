@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { productData } from '@/app/components/common/ProductCart'
 import { supabase } from '@/lib/supabase'
+import { useProductContext } from '@/app/context/ProductContext'
 
 // Storage Keys
 const ADMIN_SESSION_KEY = 'mobisphereAdminSession'
@@ -35,8 +36,8 @@ export default function IntegratedAdminPanelDashboard() {
   const [message, setMessage] = useState('')
   const [hydrated, setHydrated] = useState(false)
   
-  // Product Inventory States
-  const [localProducts, setLocalProducts] = useState([])
+  // Product Inventory States (from global context)
+  const { products: localProducts, setProducts: setLocalProducts } = useProductContext()
   const [inventoryView, setInventoryView] = useState('brands') // 'brands', 'products', 'form'
   const [selectedBrand, setSelectedBrand] = useState('')
   const [editingProduct, setEditingProduct] = useState(null)
@@ -74,14 +75,6 @@ export default function IntegratedAdminPanelDashboard() {
     }
     const storedCoupons = loadJson(COUPON_STORAGE_KEY) || []
     setCoupons(storedCoupons)
-    
-    // Load products locally for inventory
-    const initialProducts = Object.keys(productData || {}).length > 0 
-      ? Object.entries(productData).map(([id, p]) => ({ id, ...p }))
-      : [
-          { id: '1', title: 'iPhone 16 Pro Max', brand: 'Apple', price: 95000, specs: {} }
-        ]
-    setLocalProducts(initialProducts)
 
     setHydrated(true)
   }, [fetchData])
