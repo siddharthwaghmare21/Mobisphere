@@ -4,11 +4,12 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { productData } from '@/app/components/common/ProductCart'
 
+// 🎯 मूळ पेजेसशी कनेक्ट होणाऱ्या परफेक्ट लोकल स्टोरेज कीज
 const ADMIN_SESSION_KEY = 'mobisphereAdminSession'
-const CUSTOMER_STORAGE_KEY = 'mobisphereCustomers'
-const COUPON_STORAGE_KEY = 'mobisphereCoupons'
-const CART_STORAGE_KEY = 'mobisphereCart'
-const ENQUIRY_STORAGE_KEY = 'mobisphereEnquiries'
+const CUSTOMER_STORAGE_KEY = 'customers' 
+const COUPON_STORAGE_KEY = 'coupons'     
+const CART_STORAGE_KEY = 'cart'         
+const ENQUIRY_STORAGE_KEY = 'enquiries' 
 
 function loadJson(key) {
   if (typeof window === 'undefined') return null
@@ -22,11 +23,6 @@ function loadJson(key) {
 function saveJson(key, val) {
   if (typeof window === 'undefined') return
   localStorage.setItem(key, JSON.stringify(val))
-}
-
-function safeNumber(n) {
-  const x = Number(n)
-  return Number.isFinite(x) ? x : 0
 }
 
 export default function UnifiedAdminDashboard() {
@@ -48,34 +44,33 @@ export default function UnifiedAdminDashboard() {
   useEffect(() => {
     const session = loadJson(ADMIN_SESSION_KEY)
     
-    // 🧠 जुन्या ॲडमीन पॅनलसारखं ऑटो-डेटा जनरेशन लॉजिक जेणेकरून मूळ डेटा गायब होणार नाही
-    let storedCustomers = loadJson(CUSTOMER_STORAGE_KEY) || loadJson('customers') || []
-    if (!Array.isArray(storedCustomers) || storedCustomers.length === 0) {
-      storedCustomers = [
-        { id: 'u1', fullName: 'Siddharth Waghmare', mobileNumber: '7249738821', email: 'siddharthwaghmare2145@gmail.com', address: '285, Dr. BR Ambedkar Nagar, Sangli', password: 'user123', isAdmin: false },
-        { id: 'u2', fullName: 'Shubham Dabade', mobileNumber: '7770011223', email: 'shubham.dabade@gmail.com', address: 'Kolhapur, India', password: 'pass777', isAdmin: true }
-      ]
-      saveJson(CUSTOMER_STORAGE_KEY, storedCustomers)
-    }
-
-    let storedEnquiries = loadJson(ENQUIRY_STORAGE_KEY) || loadJson('enquiries') || loadJson('contactData') || loadJson('enquiry') || []
-    if (!Array.isArray(storedEnquiries) || storedEnquiries.length === 0) {
-      storedEnquiries = [
-        { id: 'e1', date: '6/10/2026 11:23:01 AM', productName: 'iPhone 16 Pro Max', name: 'Siddharth Waghmare', mobile: '7249738821', email: 'siddharthwaghmare2145@gmail.com', message: 'Is that Mobile available in your shop?', status: 'Completed', adminNote: 'Progress completed' }
-      ]
-      saveJson(ENQUIRY_STORAGE_KEY, storedEnquiries)
-    }
-
-    const EastonCoupons = loadJson(COUPON_STORAGE_KEY) || loadJson('coupons') || []
+    // थेट मूळ पेजेसवरून येणारा शुद्ध लाईव्ह डेटा लोड करणे (कोणताही डमी फॉलबॅक नाही)
+    const storedCustomers = loadJson(CUSTOMER_STORAGE_KEY) || []
+    const storedEnquiries = loadJson(ENQUIRY_STORAGE_KEY) || []
+    const EastonCoupons = loadJson(COUPON_STORAGE_KEY) || []
     
     queueMicrotask(() => {
       if (session) {
         setIsLoggedIn(true)
         setUsername(session.username || 'Admin')
       }
-      setCustomers(storedCustomers)
+
+      setCustomers(Array.isArray(storedCustomers) ? storedCustomers : [])
       setCoupons(Array.isArray(EastonCoupons) ? EastonCoupons : [])
-      setEnquiries(storedEnquiries)
+      
+      // ओरिजनल इन्क्वायरी डेटा सुरक्षित मॅप करणे
+      setEnquiries(Array.isArray(storedEnquiries) ? storedEnquiries.map(e => ({
+        id: e.id || Date.now().toString() + Math.random(),
+        date: e.date || e.submittedAt || '—',
+        productName: e.productName || 'General Enquiry',
+        name: e.name || e.fullName || '—',
+        mobile: e.mobile || e.mobileNumber || '—',
+        email: e.email || '—',
+        message: e.message || e.enquiryMessage || '—',
+        status: e.status || 'Pending',
+        adminNote: e.adminNote || e.note || ''
+      })) : [])
+      
       setHydrated(true)
     })
   }, [])
@@ -83,7 +78,7 @@ export default function UnifiedAdminDashboard() {
   // Chart Analytics
   const chartAnalytics = useMemo(() => {
     if (!hydrated) return { totalRevenue: 0, topProducts: [] }
-    const cartData = loadJson(CART_STORAGE_KEY) || loadJson('cart') || []
+    const cartData = loadJson(CART_STORAGE_KEY) || []
 
     const productCount = new Map()
     const productRevenue = new Map()
@@ -100,7 +95,7 @@ export default function UnifiedAdminDashboard() {
       for (const it of cartData) {
         const pid = Number(it.productId)
         if (!Number.isFinite(pid)) continue
-        const price = safeNumber(it.price)
+        const price = Number(it.price) || 0
         productCount.set(pid, (productCount.get(pid) || 0) + 1)
         productRevenue.set(pid, (productRevenue.get(pid) || 0) + price)
       }
@@ -154,7 +149,7 @@ export default function UnifiedAdminDashboard() {
 
   const handleSaveEnquiry = (id) => {
     saveJson(ENQUIRY_STORAGE_KEY, enquiries)
-    alert('Enquiry records updated successfully!')
+    alert('Enquiry status updated successfully!')
   }
 
   const handleDeleteEnquiry = (id) => {
@@ -204,21 +199,19 @@ export default function UnifiedAdminDashboard() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 pt-28 sm:px-6 space-y-6 text-slate-900">
       
-      {/* 👑 कडक काळा वेलकम मेसेज बॅनर - परत आणला आहे! */}
+      {/* 👑 सुरक्षित एडमीन बॅनर */}
       <div className="rounded-[2rem] bg-slate-950 p-6 shadow-md text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border border-slate-800">
         <div>
-          <p className="text-xs uppercase text-emerald-400 font-bold animate-pulse">● System Secure Live</p>
+          <p className="text-xs uppercase text-emerald-400 font-bold tracking-wider">● System Secure Active</p>
           <h1 className="text-2xl font-bold mt-1">Welcome back, Admin! 👋</h1>
-          <p className="text-xs text-slate-400 mt-1">You have full authorization to manage inventory, metrics, and customer profiles.</p>
+          <p className="text-xs text-slate-400 mt-1">Full architectural configuration mode is currently active.</p>
         </div>
-        <button onClick={handleLogout} className="rounded-full bg-slate-900 border border-slate-700 px-5 py-2.5 text-xs font-bold text-slate-200 hover:bg-slate-800 transition">
-          Secure Log out
-        </button>
+        <button onClick={handleLogout} className="rounded-full bg-slate-900 border border-slate-700 px-5 py-2.5 text-xs font-bold text-slate-200 hover:bg-slate-800 transition">Log out</button>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[290px_1fr]">
         
-        {/* Navigation Sidebar Menu */}
+        {/* Navigation Sidebar */}
         <div className="rounded-[2rem] border border-slate-300 bg-white p-4 h-fit shadow-sm space-y-1">
           <p className="text-[11px] uppercase font-bold text-slate-400 px-3 mb-2 tracking-wider">Navigation Menu</p>
           {[
@@ -239,7 +232,7 @@ export default function UnifiedAdminDashboard() {
         {/* Workspace Panels Container */}
         <div className="space-y-6">
           
-          {/* TAB 1: GRAPH COMPONENT */}
+          {/* TAB 1: GRAPH OVERVIEW */}
           {activeTab === 1 && (
             <div className="space-y-6">
               <div className="grid gap-4 grid-cols-3">
@@ -261,53 +254,57 @@ export default function UnifiedAdminDashboard() {
             </div>
           )}
 
-          {/* TAB 2, 3, 6 Placeholders */}
+          {/* TAB 2, 3, 6 */}
           {(activeTab === 2 || activeTab === 3 || activeTab === 6) && (
             <div className="rounded-[2rem] border border-slate-300 bg-white p-8 text-center text-xs font-bold text-slate-800">Module deployed in core sync queue.</div>
           )}
 
-          {/* 👥 TAB 4: USER ACCOUNTS - ओरिजनल टेबल लेआउट विथ ऑल डेटा */}
+          {/* 👥 TAB 4: USER ACCOUNTS - फक्त आणि फक्त रिअल आडवा टेबल */}
           {activeTab === 4 && (
             <div className="rounded-[2rem] border border-slate-300 bg-white p-6 shadow-sm">
               <h2 className="text-base font-black text-slate-950 mb-4">Registered System Users ({customers.length})</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-300 text-slate-900 uppercase font-black tracking-wider text-[11px]">
-                      <th className="py-3 pr-2">Full Name</th>
-                      <th className="py-3 pr-2">Mobile Number</th>
-                      <th className="py-3 pr-2">Email Address</th>
-                      <th className="py-3 pr-2">Address Location</th>
-                      <th className="py-3 pr-2">Password</th>
-                      <th className="py-3 pr-2">Role</th>
-                      <th className="py-3 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 font-bold text-slate-900">
-                    {customers.map((c, index) => (
-                      <tr key={c.id || index} className="hover:bg-slate-50">
-                        <td className="py-3 pr-2 font-black text-slate-950 text-sm">{c.fullName || c.name || c.username}</td>
-                        <td className="py-3 pr-2 text-slate-900 font-mono text-sm">{c.mobileNumber || c.mobile || c.phone}</td>
-                        <td className="py-3 pr-2 text-slate-800 font-medium">{c.email || 'No Email'}</td>
-                        <td className="py-3 pr-2 text-slate-800 font-medium max-w-[150px] truncate">{c.address || 'Not Provided'}</td>
-                        <td className="py-3 pr-2 font-mono text-slate-700 font-bold">{c.password || '••••••'}</td>
-                        <td className="py-3 pr-2">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${c.isAdmin ? 'bg-purple-100 text-purple-900 border-purple-300' : 'bg-slate-100 text-slate-900 border-slate-300'}`}>
-                            {c.isAdmin ? 'Admin' : 'Customer'}
-                          </span>
-                        </td>
-                        <td className="py-3 text-right">
-                          <button onClick={() => handleDeleteCustomer(c.id)} className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700 hover:bg-red-200 transition">Remove</button>
-                        </td>
+              {customers.length === 0 ? (
+                <div className="text-center py-10 text-slate-400 font-medium text-xs">No active user accounts found. Try registering a new user!</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-300 text-slate-900 uppercase font-black tracking-wider text-[11px]">
+                        <th className="py-3 pr-2">Full Name</th>
+                        <th className="py-3 pr-2">Mobile Number</th>
+                        <th className="py-3 pr-2">Email Address</th>
+                        <th className="py-3 pr-2">Address Location</th>
+                        <th className="py-3 pr-2">Password</th>
+                        <th className="py-3 pr-2">Role</th>
+                        <th className="py-3 text-right">Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 font-bold text-slate-900">
+                      {customers.map((c, index) => (
+                        <tr key={c.id || index} className="hover:bg-slate-50">
+                          <td className="py-3 pr-2 font-black text-slate-950 text-sm">{c.fullName || c.name || c.username || '—'}</td>
+                          <td className="py-3 pr-2 text-slate-900 font-mono text-sm">{c.mobileNumber || c.mobile || c.phone || '—'}</td>
+                          <td className="py-3 pr-2 text-slate-800 font-medium">{c.email || '—'}</td>
+                          <td className="py-3 pr-2 text-slate-800 font-medium max-w-[150px] truncate">{c.address || '—'}</td>
+                          <td className="py-3 pr-2 font-mono text-slate-700 font-bold">{c.password || '••••••'}</td>
+                          <td className="py-3 pr-2">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${c.isAdmin || c.role === 'admin' ? 'bg-purple-100 text-purple-900 border-purple-300' : 'bg-slate-100 text-slate-900 border-slate-300'}`}>
+                              {c.isAdmin || c.role === 'admin' ? 'Admin' : 'Customer'}
+                            </span>
+                          </td>
+                          <td className="py-3 text-right">
+                            <button onClick={() => handleDeleteCustomer(c.id)} className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700 hover:bg-red-200 transition">Remove</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
-          {/* TAB 5: CONFIG COUPONS */}
+          {/* TAB 5: COUPONS */}
           {activeTab === 5 && (
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-2xl border border-slate-300 bg-white p-4">
@@ -331,66 +328,71 @@ export default function UnifiedAdminDashboard() {
             </div>
           )}
 
-          {/* 📩 TAB 7: ENQUIRIES - कडक आडवा टेबल लेआउट विथ ड्रॉपडाउन, नोट इनपुट, सेव्ह आणि डिलीट बट्स */}
+          {/* 📩 TAB 7: ENQUIRIES - ओरिजनल टेबल लेआउट विथ ड्रॉपडाउन, नोट इनपुट, सेव्ह आणि डिलीट बट्स */}
           {activeTab === 7 && (
             <div className="rounded-[2rem] border border-slate-300 bg-white p-6 shadow-sm">
               <h2 className="text-base font-black text-slate-950 mb-4">Customer Enquiries Logs ({enquiries.length})</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse min-w-[800px]">
-                  <thead>
-                    <tr className="border-b border-slate-300 text-slate-900 uppercase font-black tracking-wider text-[11px]">
-                      <th className="py-3 pr-2">Date Logs</th>
-                      <th className="py-3 pr-2">Product Name</th>
-                      <th className="py-3 pr-2">Sender & Mobile</th>
-                      <th className="py-3 pr-2">Email</th>
-                      <th className="py-3 pr-2">Message Body</th>
-                      <th className="py-3 pr-2">Status</th>
-                      <th className="py-3 pr-2">Admin Note</th>
-                      <th className="py-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 font-bold text-slate-900">
-                    {enquiries.map((enq, index) => (
-                      <tr key={enq.id || index} className="hover:bg-slate-50">
-                        <td className="py-3 pr-2 font-mono text-[11px] text-slate-800">{enq.date}</td>
-                        <td className="py-3 pr-2 font-black text-slate-950 text-sm">{enq.productName || 'iPhone 16 Pro Max'}</td>
-                        <td className="py-3 pr-2">
-                          <div className="font-black text-slate-900">{enq.name || enq.fullName}</div>
-                          <div className="font-mono text-[11px] text-slate-600">{enq.mobile || enq.mobileNumber}</div>
-                        </td>
-                        <td className="py-3 pr-2 text-slate-700 font-normal">{enq.email || '—'}</td>
-                        <td className="py-3 pr-2 italic text-slate-950 font-medium max-w-[180px] break-words">"{enq.message || enq.enquiryMessage}"</td>
-                        <td className="py-3 pr-2">
-                          <select 
-                            value={enq.status} 
-                            onChange={(e) => handleEnquiryFieldChange(enq.id, 'status', e.target.value)}
-                            className="border border-slate-300 rounded-lg p-1 text-xs bg-white text-slate-800 font-bold outline-none"
-                          >
-                            <option value="Pending">Pending</option>
-                            <option value="Completed">Completed</option>
-                            <option value="In Progress">In Progress</option>
-                          </select>
-                        </td>
-                        <td className="py-3 pr-2">
-                          <input 
-                            type="text" 
-                            value={enq.adminNote || ''}
-                            onChange={(e) => handleEnquiryFieldChange(enq.id, 'adminNote', e.target.value)}
-                            className="border border-slate-300 rounded-lg p-1 text-xs text-slate-800 font-medium outline-none w-full min-w-[120px]"
-                            placeholder="Add progress note..."
-                          />
-                        </td>
-                        <td className="py-3 text-right">
-                          <div className="flex gap-1.5 justify-end">
-                            <button onClick={() => handleSaveEnquiry(enq.id)} className="rounded-lg bg-[#59B29B] text-white px-2.5 py-1.5 text-xs font-bold shadow-sm hover:bg-[#499c87]">Save</button>
-                            <button onClick={() => handleDeleteEnquiry(enq.id)} className="rounded-lg bg-[#D2618A] text-white px-2.5 py-1.5 text-xs font-bold shadow-sm hover:bg-[#b84e73]">Delete</button>
-                          </div>
-                        </td>
+              {enquiries.length === 0 ? (
+                <div className="text-center py-10 text-slate-400 font-medium text-xs">No customer enquiries found in the database.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse min-w-[800px]">
+                    <thead>
+                      <tr className="border-b border-slate-300 text-slate-900 uppercase font-black tracking-wider text-[11px]">
+                        <th className="py-3 pr-2">Date Logs</th>
+                        <th className="py-3 pr-2">Product Name</th>
+                        <th className="py-3 pr-2">Sender & Mobile</th>
+                        <th className="py-3 pr-2">Email</th>
+                        <th className="py-3 pr-2">Message Body</th>
+                        <th className="py-3 pr-2">Status</th>
+                        <th className="py-3 pr-2">Admin Note</th>
+                        <th className="py-3 text-right">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 font-bold text-slate-900">
+                      {enquiries.map((enq, index) => (
+                        <tr key={enq.id || index} className="hover:bg-slate-50">
+                          <td className="py-3 pr-2 font-mono text-[11px] text-slate-800">{enq.date}</td>
+                          <td className="py-3 pr-2 font-black text-slate-950 text-sm">{enq.productName}</td>
+                          <td className="py-3 pr-2">
+                            <div className="font-black text-slate-900">{enq.name}</div>
+                            <div className="font-mono text-[11px] text-slate-600">{enq.mobile}</div>
+                          </td>
+                          <td className="py-3 pr-2 text-slate-700 font-normal">{enq.email}</td>
+                          <td className="py-3 pr-2 italic text-slate-950 font-medium max-w-[180px] break-words">"{enq.message}"</td>
+                          <td className="py-3 pr-2">
+                            <select 
+                              value={enq.status} 
+                              onChange={(e) => handleEnquiryFieldChange(enq.id, 'status', e.target.value)}
+                              className="border border-slate-300 rounded-lg p-1 text-xs bg-white text-slate-800 font-bold outline-none"
+                            >
+                              <option value="Pending">Pending</option>
+                              <option value="Completed">Completed</option>
+                              <option value="In Progress">In Progress</option>
+                              <option value="Resolved">Resolved</option>
+                            </select>
+                          </td>
+                          <td className="py-3 pr-2">
+                            <input 
+                              type="text" 
+                              value={enq.adminNote}
+                              onChange={(e) => handleEnquiryFieldChange(enq.id, 'adminNote', e.target.value)}
+                              className="border border-slate-300 rounded-lg p-1 text-xs text-slate-800 font-medium outline-none w-full min-w-[120px]"
+                              placeholder="Add progress note..."
+                            />
+                          </td>
+                          <td className="py-3 text-right">
+                            <div className="flex gap-1.5 justify-end">
+                              <button onClick={() => handleSaveEnquiry(enq.id)} className="rounded-lg bg-[#59B29B] text-white px-2.5 py-1.5 text-xs font-bold shadow-sm hover:bg-[#499c87]">Save</button>
+                              <button onClick={() => handleDeleteEnquiry(enq.id)} className="rounded-lg bg-[#D2618A] text-white px-2.5 py-1.5 text-xs font-bold shadow-sm hover:bg-[#b84e73]">Delete</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
