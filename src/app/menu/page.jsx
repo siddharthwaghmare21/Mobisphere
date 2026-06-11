@@ -86,10 +86,6 @@ export default function MenuPage() {
     })
   }, [])
 
-  useEffect(() => {
-    saveAccounts(accounts)
-  }, [accounts])
-
   const handleSignupChange = (field, value) => {
     setSignupData((prev) => ({ ...prev, [field]: value }))
   }

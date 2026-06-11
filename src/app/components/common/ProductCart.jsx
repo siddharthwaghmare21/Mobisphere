@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import React from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 export const productData = {
     1: {
@@ -109,6 +109,7 @@ export const productData = {
 }
 
 export default function ProductCart({ productId, image, alt, title, description, price, onBuyNow, onAdded }) {
+    const router = useRouter()
     const product = productId ? productData[productId] : null
     const [showSkeleton, setShowSkeleton] = React.useState(true)
 
@@ -139,7 +140,7 @@ export default function ProductCart({ productId, image, alt, title, description,
 
     const handleNavigateToDetail = () => {
         if (!productId) return
-        window.location.href = `/product/${productId}`
+        router.push(`/product/${productId}`)
     }
 
     return (

@@ -1,6 +1,7 @@
 "use client"
 
 import React from "react"
+import Link from "next/link"
 
 export default function LastOrderStatus() {
   return (
@@ -10,21 +11,21 @@ export default function LastOrderStatus() {
         <p className="mt-2 text-sm leading-6 font-semibold text-slate-900">
           Your last order status will show up here (demo).
         </p>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <a
-            href="/account"
-            className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-900 transition hover:bg-slate-50"
-          >
-            Account
-          </a>
-          <a
-            href="/cart"
-            className="rounded-full bg-slate-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
-          >
-            Cart
-          </a>
-        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Link
+          href="/account"
+          className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-900 transition hover:bg-slate-50"
+        >
+          Account
+        </Link>
+        <Link
+          href="/cart"
+          className="rounded-full bg-slate-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+        >
+          Cart
+        </Link>
+      </div>
     </section>
   )
 }

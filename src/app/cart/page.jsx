@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import link from 'next/link'
 import { productData } from '@/app/components/common/ProductCart'
 
 export default function Cart() {
@@ -24,12 +23,12 @@ export default function Cart() {
     }
   }, [])
 
-  
+
   const totalPrice = useMemo(
     () => cartItems.reduce((acc, item) => acc + (Number(item.price) || 0), 0),
     [cartItems],
   )
-  if(!isMounted) {
+  if (!isMounted) {
     return null
   }
   const toggleRemoveMode = () => {
@@ -80,11 +79,10 @@ export default function Cart() {
         {cartItems.length > 0 ? (
           <button
             onClick={toggleRemoveMode}
-            className={`rounded-full px-6 py-3 text-sm font-semibold transition ${
-              isRemoveMode
+            className={`rounded-full px-6 py-3 text-sm font-semibold transition ${isRemoveMode
                 ? 'bg-rose-100 text-rose-800 hover:bg-rose-200'
                 : 'bg-slate-200 text-slate-800 hover:bg-slate-300'
-            }`}
+              }`}
           >
             {isRemoveMode ? 'Cancel remove' : 'Remove product'}
           </button>
@@ -116,17 +114,15 @@ export default function Cart() {
             <div
               key={item.cartItemId}
               onClick={() => handleSelectItem(item.cartItemId)}
-              className={`relative overflow-hidden rounded-xl bg-white p-3 shadow-lg transition sm:rounded-[1.75rem] sm:p-5 ${
-                isRemoveMode
+              className={`relative overflow-hidden rounded-xl bg-white p-3 shadow-lg transition sm:rounded-[1.75rem] sm:p-5 ${isRemoveMode
                   ? 'cursor-pointer'
                   : 'hover:-translate-y-1 hover:shadow-2xl'
-              } ${
-                isRemoveMode && selectedToRemove.has(item.cartItemId)
+                } ${isRemoveMode && selectedToRemove.has(item.cartItemId)
                   ? 'ring-4 ring-rose-500 opacity-90'
                   : isRemoveMode
                     ? 'hover:ring-2 hover:ring-rose-300'
                     : ''
-              }`}
+                }`}
             >
               <div className="mb-2 overflow-hidden rounded-xl bg-slate-100 sm:mb-4 sm:rounded-3xl">
                 <img
@@ -152,9 +148,9 @@ export default function Cart() {
                     onClick={(e) => {
                       e.stopPropagation()
                       e.preventDefault()
-                      localStorage.setItem('mobisphereBuyEntry', JSON.stringify({allowed:true}))
-                      router.push('/payment')
-                      
+                      localStorage.setItem('mobisphereBuyEntry', JSON.stringify({ allowed: true }))
+                      router.push('/Payment')
+
                     }}
                     className="w-full rounded-full bg-emerald-600 px-4 py-2 text-[12px] font-semibold text-white transition hover:bg-emerald-700"
                   >
@@ -169,4 +165,3 @@ export default function Cart() {
     </main>
   )
 }
-

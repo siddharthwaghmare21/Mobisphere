@@ -44,11 +44,8 @@ export default function Header() {
     }, [])
 
     useEffect(() => {
-        
-
         const handleShortcut = (event) => {
-            console.log("shortcut pressed");
-            if (!event.altKey || !event.shiftKey || event.key.toLowerCase() !== 'a') return
+            if (!event.altKey || !event.shiftKey || event.code !== 'KeyA') return
             const target = event.target
             const tagName = target?.tagName?.toLowerCase()
             if (['input', 'textarea', 'select'].includes(tagName) || target?.isContentEditable) return
