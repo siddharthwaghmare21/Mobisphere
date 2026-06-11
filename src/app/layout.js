@@ -20,10 +20,9 @@ export default function RootLayout({ children }) {
       // Alt + Shift + A दाबल्यावर थेट नवीन /admin पेजवर नेईल
       if (e.altKey && e.shiftKey && e.key.toLowerCase() === 'a') {
         e.preventDefault();
-        router.push('/admin-dashboard'); // इथे अचूक नाव असल्याची खात्री कर
+        router.push('/admin-panel'); // इथे अचूक नाव असल्याची खात्री कर
       }
-    }
-  };
+    };
 
   window.addEventListener('keydown', handleKeyDown);
   return () => window.removeEventListener('keydown', handleKeyDown);
