@@ -1,82 +1,393 @@
-"use client";
-import React, { useState } from 'react';
+"use client"
 
-export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState('Dashboard');
+import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { productData } from '@/app/components/common/ProductCart'
+import { supabase } from '@/lib/supabase'
 
-  const menuItems = [
-    'Dashboard',
-    'Product Inventory',
-    'Order Management',
-    'User Accounts',
-    'Coupons & Offers',
-    'Reports',
-    'Enquiries'
-  ];
+// Storage Keys
+const ADMIN_SESSION_KEY = 'mobisphereAdminSession'
+const COUPON_STORAGE_KEY = 'mobisphereCoupons'
+const CART_STORAGE_KEY = 'cart'
 
-  return (
-    <div className="min-h-screen bg-slate-50 flex font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col fixed h-full">
-        <div className="p-6 text-2xl font-bold border-b border-slate-800 tracking-wide">
-          Admin Panel
-        </div>
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          {menuItems.map((item) => (
-            <button
-              key={item}
-              onClick={() => setActiveTab(item)}
-              className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 ${
-                activeTab === item
-                  ? 'bg-emerald-600 text-white font-semibold shadow-md'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              {item}
-            </button>
-          ))}
-        </nav>
-        <div className="p-4 border-t border-slate-800">
-          <button className="w-full px-4 py-2 text-sm text-slate-400 hover:text-white transition">
-            ← Logout
-          </button>
-        </div>
-      </aside>
+function loadJson(key) {
+  if (typeof window === 'undefined') return null
+  try {
+    return JSON.parse(localStorage.getItem(key) || 'null')
+  } catch {
+    return null
+  }
+}
 
-      {/* Main Content */}
-      <main className="flex-1 p-8 ml-64">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900">{activeTab}</h1>
-          <p className="text-slate-500 mt-2">Manage your {activeTab.toLowerCase()} effectively.</p>
-        </header>
+function saveJson(key, val) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(key, JSON.stringify(val))
+}
 
-        {/* Dashboard specific overview cards */}
-        {activeTab === 'Dashboard' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-              <h3 className="text-slate-500 text-sm font-semibold uppercase tracking-wider">Total Orders</h3>
-              <p className="text-3xl font-bold text-slate-900 mt-2">1,284</p>
-            </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-              <h3 className="text-slate-500 text-sm font-semibold uppercase tracking-wider">Total Revenue</h3>
-              <p className="text-3xl font-bold text-slate-900 mt-2">₹84,300</p>
-            </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-              <h3 className="text-slate-500 text-sm font-semibold uppercase tracking-wider">New Enquiries</h3>
-              <p className="text-3xl font-bold text-slate-900 mt-2">24</p>
-            </div>
-          </div>
-        )}
+export default function IntegratedAdminPanelDashboard() {
+  const router = useRouter()
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [username, setUsername] = useState('Sid')
+  const [password, setPassword] = useState('')
+  const [customers, setCustomers] = useState([])
+  const [enquiries, setEnquiries] = useState([])
+  const [activeTab, setActiveTab] = useState(1)
+  const [message, setMessage] = useState('')
+  const [hydrated, setHydrated] = useState(false)
 
-        {/* Content Area */}
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 min-h-[50vh] flex flex-col items-center justify-center text-center">
-          <div className="text-4xl mb-4">🚧</div>
-          <h2 className="text-xl font-bold text-slate-800 mb-2">{activeTab} Module</h2>
-          <p className="text-slate-500">
-            This section is ready for you to add the {activeTab.toLowerCase()} functionality.
-          </p>
+  const [coupons, setCoupons] = useState([])
+  const [newCouponCode, setNewCouponCode] = useState('')
+  const [newDiscountPercent, setNewDiscountPercent] = useState('')
+
+  // 🔄 Supabase Live Data Fetch (अचूक कॉलम्स मॅप करण्यासाठी)
+  const fetchData = useCallback(async () => {
+    try {
+      const { data: cData } = await supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      const { data: eData } = await supabase
+        .from('enquiries')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      setCustomers(cData || [])
+      setEnquiries(eData || [])
+    } catch (err) {
+      console.error("Supabase fetch error:", err)
+    }
+  }, [])
+
+  useEffect(() => {
+    const session = loadJson(ADMIN_SESSION_KEY)
+    if (session) {
+      setIsLoggedIn(true)
+      setUsername(session.username || 'Sid')
+      fetchData()
+    }
+    const storedCoupons = loadJson(COUPON_STORAGE_KEY) || []
+    setCoupons(storedCoupons)
+    setHydrated(true)
+  }, [fetchData])
+
+  // Analytics Diagram/Graph Logic
+  const chartAnalytics = useMemo(() => {
+    if (!hydrated) return { totalRevenue: 0, topProducts: [] }
+    const cartData = loadJson(CART_STORAGE_KEY) || []
+    const productCount = new Map()
+    const productRevenue = new Map()
+
+    const defaultIds = [1, 2, 3, 4, 5, 6]
+    defaultIds.forEach((pid, index) => {
+      productCount.set(pid, 12 - index * 1.5)
+      productRevenue.set(pid, (productData?.[pid]?.price || 45000) * (12 - index * 1.5))
+    })
+
+    if (Array.isArray(cartData) && cartData.length > 0) {
+      productCount.clear()
+      productRevenue.clear()
+      cartData.forEach(it => {
+        const pid = Number(it.productId)
+        if (!Number.isFinite(pid)) return
+        productCount.set(pid, (productCount.get(pid) || 0) + 1)
+        productRevenue.set(pid, (productRevenue.get(pid) || 0) + (Number(it.price) || 0))
+      })
+    }
+
+    const sortedCount = [...productCount.entries()].sort((a, b) => b[1] - a[1])
+    const maxCount = Math.max(...[...productCount.values()], 1)
+
+    return {
+      totalRevenue: [...productRevenue.values()].reduce((a, b) => a + b, 0),
+      topProducts: sortedCount.slice(0, 6).map(([pid]) => ({
+        title: productData?.[pid]?.title?.replace("iPhone ", "iP ") || `Product ${pid}`,
+        heightStr: `${Math.min(Math.round((productCount.get(pid) / maxCount) * 80 + 10), 95)}%`
+      }))
+    }
+  }, [hydrated])
+
+  const handleLogin = (e) => {
+    e.preventDefault()
+    if (username.trim().toLowerCase() === 'admin' && password === 'admin') {
+      saveJson(ADMIN_SESSION_KEY, { username: 'Sid' })
+      setIsLoggedIn(true)
+      fetchData()
+      setMessage('')
+    } else {
+      setMessage("Invalid Admin Username or Password!")
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem(ADMIN_SESSION_KEY)
+    setIsLoggedIn(false)
+  }
+
+  const handleCustomerDelete = async (id) => {
+    await supabase.from('customers').delete().eq('id', id)
+    setCustomers(customers.filter(c => c.id !== id))
+    setMessage('Customer deleted successfully.')
+  }
+
+  const handleEnquiryFieldChange = (enquiryId, field, value) => {
+    setEnquiries(enquiries.map((e) => (e.id === enquiryId ? { ...e, [field]: value } : e)))
+  }
+
+  const handleSaveEnquiry = async (id) => {
+    const target = enquiries.find(e => e.id === id)
+    if (!target) return
+    
+    // Supabase चे मूळ snake_case कॉलम्स मॅप केले आहेत
+    await supabase.from('enquiries').update({
+      status: target.status,
+      admin_note: target.admin_note
+    }).eq('id', id)
+    
+    setMessage(`✅ Progress Saved for Enquiry ID: ${id}`)
+    alert('Changes saved to Supabase!')
+  }
+
+  const handleEnquiryDelete = async (id) => {
+    await supabase.from('enquiries').delete().eq('id', id)
+    setEnquiries(enquiries.filter(e => e.id !== id))
+    setMessage('Enquiry removed.')
+  }
+
+  const handleCreateCoupon = (e) => {
+    e.preventDefault()
+    const code = newCouponCode.trim().toUpperCase()
+    const percent = Number(newDiscountPercent)
+    if (!code || percent <= 0 || percent > 100) return
+    const newCoupon = { id: Date.now().toString(), code, discountPercent: percent }
+    const next = [...coupons, newCoupon]
+    setCoupons(next)
+    saveJson(COUPON_STORAGE_KEY, next)
+    setNewCouponCode('')
+    setNewDiscountPercent('')
+    setMessage('Coupon code activated!')
+  }
+
+  const handleDeleteCoupon = (id) => {
+    const next = coupons.filter(c => c.id !== id)
+    setCoupons(next)
+    saveJson(COUPON_STORAGE_KEY, next)
+  }
+
+  if (!hydrated) return null
+
+  // 🔒 Login Screen प्रोटेक्शन
+  if (!isLoggedIn) {
+    return (
+      <main className="mx-auto max-w-md px-4 py-32 font-sans">
+        <div className="rounded-[2.5rem] border border-slate-200 bg-white p-10 shadow-2xl">
+          <h1 className="text-center text-2xl font-black text-slate-900">MobiSphere Admin Control</h1>
+          {message && <div className="mt-4 text-xs text-center text-red-600 bg-red-50 p-2 rounded-xl">{message}</div>}
+          <form onSubmit={handleLogin} className="mt-8 space-y-5">
+            <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full rounded-2xl border p-4 outline-none focus:ring-2 ring-slate-900 text-slate-900" placeholder="Username (admin)" />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full rounded-2xl border p-4 outline-none focus:ring-2 ring-slate-900 text-slate-900" placeholder="Password (admin)" />
+            <button className="w-full rounded-full bg-slate-900 py-4 font-bold text-white hover:bg-slate-800 transition">Sign In</button>
+          </form>
         </div>
       </main>
-    </div>
-  );
+    )
+  }
+
+  return (
+    <main className="mx-auto max-w-7xl px-4 py-10 pt-28 sm:px-6 font-sans text-slate-900">
+      
+      {/* 👑 Welcome Header Banner */}
+      <div className="mb-8 rounded-[2rem] bg-white p-8 shadow-xl border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-emerald-500 font-bold">● System Dashboard Live</p>
+          <h1 className="text-4xl font-black text-slate-900 mt-2">Welcome back, {username}! 👋</h1>
+          <p className="text-sm text-slate-500 mt-2 italic">Use this panel to manage customers and enquiries. Shortcut: Alt + Shift + A</p>
+        </div>
+        <div className="flex flex-col items-end gap-3">
+          <div className="rounded-full bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow-lg">
+            Customers: {customers.length} • Enquiries: {enquiries.length}
+          </div>
+          <button onClick={handleLogout} className="text-xs font-bold text-rose-600 hover:underline">Logout Session</button>
+        </div>
+      </div>
+
+      {message && (
+        <div className="mb-4 rounded-2xl bg-slate-100 p-4 text-xs font-bold text-slate-800 border border-slate-200">
+          {message}
+        </div>
+      )}
+
+      {/* Main Layout Divided into Sidebar & Dashboard Panels */}
+      <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
+        
+        {/* 📋 Sidebar Links (7 Tabs System) */}
+        <aside className="space-y-2">
+          <p className="text-[10px] font-black uppercase text-slate-400 px-4 mb-4 tracking-wider">Navigation Menu</p>
+          {[
+            { id: 1, icon: '📊', name: 'Dashboard Overview', path: '/admin-panel' },
+            { id: 2, icon: '📦', name: 'Product Inventory', path: '/admin-panel/product-inventory' },
+            { id: 3, icon: '🛒', name: 'Order Management', path: '/admin-panel/order-management' },
+            { id: 4, icon: '👥', name: 'User Accounts', path: '/admin-panel/user-accounts' },
+            { id: 5, icon: '🎫', name: 'Coupons & Offers', path: '/admin-panel/coupons-offers' },
+            { id: 6, icon: '📈', name: 'Sales Reports', path: '/admin-panel/sales-reports' },
+            { id: 7, icon: '📩', name: 'Enquiries Log', path: '/admin-panel/enquiries' },
+          ].map(tab => (
+            <button key={tab.id} onClick={() => { setActiveTab(tab.id); setMessage(''); router.push(tab.path); }} className={`flex w-full items-center gap-3 rounded-2xl px-5 py-4 text-sm font-bold transition-all ${activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg scale-105' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100'}`}>
+              <span>{tab.icon}</span> {tab.name}
+            </button>
+          ))}
+
+          {/* Dark Quick Actions Info Box */}
+          <div className="mt-8 rounded-3xl bg-slate-950 p-6 text-white shadow-xl">
+             <h3 className="text-sm font-bold border-b border-slate-800 pb-2 mb-3">Quick Actions</h3>
+             <p className="text-[11px] leading-relaxed text-slate-400">Control panel for adding devices, inventory analytics sync, and customer resolution pathways.</p>
+          </div>
+        </aside>
+
+        {/* 💻 Active Workspace View */}
+        <div className="space-y-8">
+          
+          {/* TAB 1: Graphs & Summary Metrics */}
+          {activeTab === 1 && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                   <p className="text-[10px] font-bold text-slate-400 uppercase">Gross Revenue Matrix</p>
+                   <p className="text-2xl font-black mt-1">₹{chartAnalytics.totalRevenue.toLocaleString()}</p>
+                 </div>
+                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                   <p className="text-[10px] font-bold text-slate-400 uppercase">Tracked Enquiries</p>
+                   <p className="text-2xl font-black mt-1 text-emerald-600">{enquiries.length}</p>
+                 </div>
+                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                   <p className="text-[10px] font-bold text-slate-400 uppercase">Live Database Users</p>
+                   <p className="text-2xl font-black mt-1 text-blue-600">{customers.length}</p>
+                 </div>
+              </div>
+              <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-lg font-black text-slate-900">Device Sales Bar Graph Analytics</h2>
+                  <button onClick={fetchData} className="text-xs bg-slate-100 px-3 py-1.5 rounded-lg font-bold text-slate-900 hover:bg-slate-200">🔄 Sync Live Server</button>
+                </div>
+                <div className="flex h-56 items-end justify-between gap-2 border-b border-l border-slate-200 pb-2 pl-2 bg-slate-50/60 p-4 rounded-2xl">
+                  {chartAnalytics.topProducts.map((p, i) => (
+                    <div key={i} className="flex h-full flex-col justify-end items-center flex-1 group">
+                      <div style={{ height: p.heightStr }} className="w-full rounded-t-lg bg-slate-900 group-hover:bg-emerald-500 transition-all"></div>
+                      <span className="mt-3 text-[9px] font-black text-slate-500 uppercase truncate w-full text-center">{p.title}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 👥 TAB 4: Registered Customers (Supabase Snake Case Columns) */}
+          {activeTab === 4 && (
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
+              <h2 className="text-2xl font-black mb-6">Registered Customers ({customers.length})</h2>
+              {customers.length === 0 ? (
+                <p className="text-sm text-slate-400 py-6 text-center">No accounts found in Supabase server.</p>
+              ) : (
+                <div className="grid gap-4">
+                  {customers.map(c => (
+                    <div key={c.id} className="flex flex-col sm:flex-row justify-between items-center bg-slate-50 p-5 rounded-3xl border border-slate-100">
+                      <div>
+                        {/* full_name, mobile_number, address columns mapped accurately */}
+                        <p className="text-lg font-black text-slate-900">{c.full_name || 'No Name Provided'}</p>
+                        <p className="text-sm font-bold text-slate-600">📞 {c.mobile_number || '—'} | 📍 {c.address || '—'}</p>
+                        <p className="text-[10px] font-mono mt-1 text-slate-400">UUID: {c.id} | Joined: {c.created_at ? new Date(c.created_at).toLocaleString() : '—'}</p>
+                      </div>
+                      <button onClick={() => handleCustomerDelete(c.id)} className="mt-4 sm:mt-0 px-6 py-2 bg-rose-100 text-rose-600 rounded-full text-xs font-black hover:bg-rose-600 hover:text-white transition">Remove Account</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 🎫 TAB 5: Coupons & Promo Management */}
+          {activeTab === 5 && (
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+                <h3 className="font-black text-slate-900 text-sm mb-4">Create System Coupon</h3>
+                <form onSubmit={handleCreateCoupon} className="space-y-3">
+                  <input type="text" value={newCouponCode} onChange={(e) => setNewCouponCode(e.target.value)} placeholder="COUPON CODE (e.g. IPHONE10)" className="w-full border p-3 text-xs uppercase font-bold rounded-xl text-slate-900 outline-none focus:border-slate-900" />
+                  <input type="number" value={newDiscountPercent} onChange={(e) => setNewDiscountPercent(e.target.value)} placeholder="Discount Percentage %" className="w-full border p-3 text-xs rounded-xl text-slate-900 outline-none focus:border-slate-900" />
+                  <button type="submit" className="w-full bg-slate-900 text-white py-3 text-xs font-bold rounded-xl hover:bg-slate-800">Generate Coupon</button>
+                </form>
+              </div>
+              <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+                <h3 className="font-black text-slate-900 text-sm mb-4">Active Coupons</h3>
+                <div className="overflow-y-auto max-h-[220px] divide-y">
+                  {coupons.length === 0 ? <p className="text-xs text-slate-400 py-4">No active coupon parameters saved.</p> : coupons.map((coupon) => (
+                    <div key={coupon.id} className="flex justify-between items-center py-2 text-xs">
+                      <span className="font-mono font-black text-slate-900 uppercase bg-slate-100 px-2 py-1 rounded-md">{coupon.code}</span>
+                      <span className="text-emerald-700 font-black">{coupon.discountPercent}% OFF</span>
+                      <button onClick={() => handleDeleteCoupon(coupon.id)} className="text-rose-600 font-bold hover:underline">Remove</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 📩 TAB 7: Enquiry Management Logs */}
+          {activeTab === 7 && (
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
+              <h2 className="text-2xl font-black mb-2">Enquiry Management</h2>
+              <p className="text-sm text-slate-500 mb-6">Review input logs, modify resolution states and save internal records.</p>
+              
+              {enquiries.length === 0 ? (
+                <p className="text-sm text-slate-400 py-6 text-center">No user enquiries tracked inside system logs.</p>
+              ) : (
+                <div className="space-y-6">
+                  {enquiries.map(e => (
+                    <div key={e.id} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200">
+                      <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
+                         <div>
+                           <span className="text-xs font-black bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full uppercase tracking-wider">{e.subject || 'iPhone Enquiry'}</span>
+                           <h3 className="text-lg font-black text-slate-900 mt-2">{e.full_name || 'Visitor'} — <span className="font-mono font-medium text-slate-600 text-base">{e.mobile_number || '—'}</span></h3>
+                           <p className="text-xs text-slate-500 font-mono mt-0.5">Email: {e.email || '—'} | Received: {e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</p>
+                           <p className="text-sm text-slate-900 font-medium italic mt-3 bg-white p-3 rounded-xl border border-slate-100">"{e.message || '—'}"</p>
+                         </div>
+                         <div className="flex gap-2 self-end sm:self-start">
+                           <button onClick={() => handleSaveEnquiry(e.id)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 transition font-bold text-xs">Save Changes</button>
+                           <button onClick={() => handleEnquiryDelete(e.id)} className="px-4 py-2 bg-rose-600 text-white rounded-xl shadow-md hover:bg-rose-700 transition font-bold text-xs">Delete</button>
+                         </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-200/80">
+                         <div className="flex flex-col gap-1.5">
+                           <label className="text-[10px] font-black uppercase text-slate-400">Status Selector</label>
+                           <select value={e.status || 'New'} onChange={(el) => handleEnquiryFieldChange(e.id, 'status', el.target.value)} className="p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none bg-white text-slate-900">
+                             <option value="New">New</option>
+                             <option value="In progress">In progress</option>
+                             <option value="Completed">Completed</option>
+                             <option value="Closed">Closed</option>
+                           </select>
+                         </div>
+                         <div className="flex flex-col gap-1.5">
+                           <label className="text-[10px] font-black uppercase text-slate-400">Admin Response Note</label>
+                           <input type="text" value={e.admin_note || ''} onChange={(el) => handleEnquiryFieldChange(e.id, 'admin_note', el.target.value)} className="p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none bg-white text-slate-900" placeholder="Add internal database comment..." />
+                         </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Placeholders for other tabs under development */}
+          {([2, 3, 6].includes(activeTab)) && (
+            <div className="bg-white p-20 rounded-[2rem] border border-slate-100 shadow-xl text-center">
+              <p className="text-4xl">🚧</p>
+              <h2 className="text-xl font-black mt-4">Module Integration Pending</h2>
+              <p className="text-sm text-slate-400 mt-2">This dashboard slice is ready for dynamic backend routing hooks.</p>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </main>
+  )
 }
