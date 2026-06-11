@@ -195,12 +195,21 @@ export default function IntegratedAdminPanelDashboard() {
   const handleSaveProduct = (e) => {
     e.preventDefault()
     const formData = new FormData(e.target)
+    
+    // 📸 हँडल इमेज (Local फाईल मधून)
+    const imageFile = formData.get('image')
+    let imageUrl = editingProduct?.image || ''
+    if (imageFile && imageFile.size > 0) {
+      imageUrl = URL.createObjectURL(imageFile) // कम्प्युटरवरील फाईलचा तात्पुरता URL बनवतो
+    }
+
     const newProd = {
       id: editingProduct ? editingProduct.id : Date.now().toString(),
       title: formData.get('title'),
       brand: formData.get('brand'),
       price: Number(formData.get('price')),
       description: formData.get('description'),
+      image: imageUrl, // <-- इथे इमेज ऍड केली
       specs: {
         RAM: formData.get('ram'),
         Storage: formData.get('storage'),
@@ -477,7 +486,10 @@ export default function IntegratedAdminPanelDashboard() {
                           <tr key={product.id} className="hover:bg-slate-50/80 transition group">
                             <td className="p-4 text-xs font-mono font-bold text-slate-400">#{product.id}</td>
                             <td className="p-4 text-sm font-bold text-slate-900 flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-lg shadow-inner">📱</div>
+                              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-lg shadow-inner overflow-hidden">
+                                {/* 🖼️ जर प्रॉडक्टला फोटो असेल तर तो दाखवा, नाहीतर डमी 📱 दाखवा */}
+                                {product.image ? <img src={product.image} alt={product.title} className="w-full h-full object-cover" /> : '📱'}
+                              </div>
                               {product.title}
                             </td>
                             <td className="p-4 text-sm font-black text-emerald-600">₹{(Number(product.price) || 0).toLocaleString()}</td>
@@ -517,6 +529,16 @@ export default function IntegratedAdminPanelDashboard() {
                       <div className="md:col-span-2">
                         <label className="text-[10px] font-black uppercase text-slate-400">Product Description</label>
                         <textarea name="description" rows="4" defaultValue={editingProduct?.description || ''} placeholder="Describe the phone features..." className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900"></textarea>
+                      </div>
+                      {/* 📸 Image Upload Field */}
+                      <div className="md:col-span-2">
+                        <label className="text-[10px] font-black uppercase text-slate-400">Product Image (Local File)</label>
+                        <div className="mt-1 flex items-center gap-4">
+                          {editingProduct?.image && (
+                            <img src={editingProduct.image} alt="Preview" className="w-12 h-12 object-cover rounded-lg border border-slate-200 shadow-sm" />
+                          )}
+                          <input type="file" name="image" accept="image/*" className="w-full p-2 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 bg-white cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 transition" />
+                        </div>
                       </div>
                     </div>
                     
