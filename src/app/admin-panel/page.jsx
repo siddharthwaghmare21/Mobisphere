@@ -173,6 +173,10 @@ export default function IntegratedAdminPanelDashboard() {
         setMessage("❌ Passwords do not match!")
         return
       }
+      if (!regName.trim()) {
+        setMessage("❌ Please enter your name!")
+        return
+      }
 
       const exists = adminUsers.find(a => a.username.toLowerCase() === uname.toLowerCase())
       if (exists) {
@@ -302,7 +306,7 @@ export default function IntegratedAdminPanelDashboard() {
       <main className="mx-auto max-w-md px-4 py-24 font-sans">
         <div className="rounded-[2.5rem] border border-slate-200 bg-white p-10 shadow-2xl">
           <h1 className="text-center text-2xl font-black text-slate-900">
-            {isRegistering ? 'Create Admin Profile' : 'MobiSphere Admin Control'}
+            {isRegistering ? 'Admin Sign Up' : 'Admin Login'}
           </h1>
           
           <div className="flex bg-slate-100 p-1 rounded-2xl mt-6 mb-2">
@@ -314,19 +318,19 @@ export default function IntegratedAdminPanelDashboard() {
           
           <form onSubmit={handleAuthSubmit} className="mt-6 space-y-4">
             {isRegistering && (
-              <input type="text" value={regName} onChange={e => setRegName(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder="Your Full Name" required />
+              <input type="text" value={regName} onChange={e => setRegName(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder="Name" required />
             )}
             
-            <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder={isRegistering ? "Choose a Username" : "Username"} required />
+            <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder="Username" required />
             
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder={isRegistering ? "Create a Password" : "Password"} required />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder="Password" required />
             
             {isRegistering && (
               <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder="Confirm Password" required />
             )}
             
             <button type="submit" className="w-full rounded-full bg-slate-900 py-4 font-bold text-white hover:bg-slate-800 transition mt-2 shadow-md">
-              {isRegistering ? 'Register Account' : 'Sign In'}
+              {isRegistering ? 'Sign Up' : 'Login'}
             </button>
           </form>
         </div>
