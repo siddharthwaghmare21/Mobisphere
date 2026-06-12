@@ -317,7 +317,9 @@ export default function IntegratedAdminPanelDashboard() {
 
           {/* Dark Quick Actions Info Box */}
           <div className="mt-8 rounded-3xl bg-slate-950 p-6 text-white shadow-xl">
-             <h3 className="text-sm font-bold border-b border-slate-800 pb-2 mb-3">Quick Actions</h3>
+             <h3 className="text-sm font-bold border-b border-slate-800 pb-2 mb-3 flex justify-between items-center">
+               Quick Actions <span className="text-[9px] text-emerald-400 font-mono bg-emerald-400/10 px-2 py-0.5 rounded-full">v2.0</span>
+             </h3>
              <p className="text-[11px] leading-relaxed text-slate-400">Control panel for adding devices, inventory analytics sync, and customer resolution pathways.</p>
           </div>
         </aside>
