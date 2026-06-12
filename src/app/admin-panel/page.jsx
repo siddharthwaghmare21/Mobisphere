@@ -52,6 +52,7 @@ export default function IntegratedAdminPanelDashboard() {
     { id: 'ORD-4M55', customer: 'Amit Desai', date: '2024-05-10', total: 45000, status: 'Delivered', items: 1 },
     { id: 'ORD-9K33', customer: 'Pooja Joshi', date: '2024-05-09', total: 155000, status: 'Cancelled', items: 2 }
   ])
+  const [orderFilter, setOrderFilter] = useState('All')
 
   // 🔄 Supabase Live Data Fetch (अचूक कॉलम्स मॅप करण्यासाठी)
   const fetchData = useCallback(async () => {
@@ -621,9 +622,22 @@ export default function IntegratedAdminPanelDashboard() {
                   <h2 className="text-2xl font-black text-slate-900">Order Management</h2>
                   <p className="text-sm text-slate-500 mt-1">Track, update, and manage customer orders.</p>
                 </div>
-                <button className="px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl shadow-sm hover:bg-slate-200 transition font-bold text-xs flex items-center gap-2">
-                  📥 Export CSV
-                </button>
+                <div className="flex items-center gap-3">
+                  <select 
+                    value={orderFilter} 
+                    onChange={(e) => setOrderFilter(e.target.value)}
+                    className="px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs outline-none focus:border-slate-900 cursor-pointer"
+                  >
+                    <option value="All">All Orders</option>
+                    <option value="Processing">Processing</option>
+                    <option value="Shipped">Shipped</option>
+                    <option value="Delivered">Delivered</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                  <button className="px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl shadow-sm hover:bg-slate-200 transition font-bold text-xs flex items-center gap-2">
+                    📥 Export CSV
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-x-auto rounded-2xl border border-slate-100">
@@ -640,7 +654,9 @@ export default function IntegratedAdminPanelDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {orders.map((order) => (
+                    {orders
+                      .filter(order => orderFilter === 'All' || order.status === orderFilter)
+                      .map((order) => (
                       <tr key={order.id} className="hover:bg-slate-50/80 transition group">
                         <td className="p-4 text-xs font-mono font-bold text-slate-900">{order.id}</td>
                         <td className="p-4 text-sm font-bold text-slate-700">{order.customer}</td>
