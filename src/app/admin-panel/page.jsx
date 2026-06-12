@@ -257,7 +257,7 @@ export default function IntegratedAdminPanelDashboard() {
       <div className="mb-8 rounded-[2rem] bg-white p-8 shadow-xl border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
         <div>
           <p className="text-xs uppercase tracking-widest text-emerald-500 font-bold">● System Dashboard Live</p>
-          <h1 className="text-4xl font-black text-slate-900 mt-2">{greeting}, {username}! 👋</h1>
+          <h1 className="text-4xl font-black text-slate-900 mt-2">✨ {greeting}, {username}! 👋</h1>
           <p className="text-sm text-slate-500 mt-2 italic">Use this panel to manage customers and enquiries. Shortcut: Alt + Shift + A</p>
         </div>
         <div className="flex flex-col items-end gap-3">
