@@ -293,19 +293,20 @@ export default function IntegratedAdminPanelDashboard() {
           <h1 className="text-center text-2xl font-black text-slate-900">
             {isRegistering ? 'Create Admin Profile' : 'MobiSphere Admin Control'}
           </h1>
+          
+          <div className="flex bg-slate-100 p-1 rounded-2xl mt-6 mb-2">
+            <button onClick={() => { setIsRegistering(false); setMessage(''); }} className={`flex-1 py-3 text-xs font-bold rounded-xl transition ${!isRegistering ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}>Login</button>
+            <button onClick={() => { setIsRegistering(true); setMessage(''); }} className={`flex-1 py-3 text-xs font-bold rounded-xl transition ${isRegistering ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}>Sign Up</button>
+          </div>
+
           {message && <div className="mt-4 text-xs text-center text-red-600 bg-red-50 p-2 rounded-xl">{message}</div>}
-          <form onSubmit={handleLogin} className="mt-8 space-y-5">
-            <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full rounded-2xl border p-4 outline-none focus:ring-2 ring-slate-900 text-slate-900" placeholder="Username" />
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full rounded-2xl border p-4 outline-none focus:ring-2 ring-slate-900 text-slate-900" placeholder="Password" />
+          <form onSubmit={handleLogin} className="mt-6 space-y-5">
+            <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200 text-slate-900 text-sm font-medium" placeholder={isRegistering ? "Choose a Username" : "Username"} />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200 text-slate-900 text-sm font-medium" placeholder={isRegistering ? "Create a Password" : "Password"} />
             <button className="w-full rounded-full bg-slate-900 py-4 font-bold text-white hover:bg-slate-800 transition">
               {isRegistering ? 'Create Profile' : 'Sign In'}
             </button>
           </form>
-          <div className="mt-6 text-center">
-            <button onClick={() => { setIsRegistering(!isRegistering); setMessage(''); }} className="text-xs font-bold text-slate-500 hover:text-slate-900 transition">
-              {isRegistering ? 'Already have an account? Sign In' : 'Create new admin profile?'}
-            </button>
-          </div>
         </div>
       </main>
     )
