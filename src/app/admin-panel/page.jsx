@@ -115,6 +115,13 @@ export default function IntegratedAdminPanelDashboard() {
     }
   }, [hydrated])
 
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours()
+    if (hour < 12) return 'Good Morning'
+    if (hour < 18) return 'Good Afternoon'
+    return 'Good Evening'
+  }, [])
+
   const handleLogin = (e) => {
     e.preventDefault()
     if (username.trim().toLowerCase() === 'admin' && password === 'admin') {
@@ -250,7 +257,7 @@ export default function IntegratedAdminPanelDashboard() {
       <div className="mb-8 rounded-[2rem] bg-white p-8 shadow-xl border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
         <div>
           <p className="text-xs uppercase tracking-widest text-emerald-500 font-bold">● System Dashboard Live</p>
-          <h1 className="text-4xl font-black text-slate-900 mt-2">Welcome back, {username}! 👋</h1>
+          <h1 className="text-4xl font-black text-slate-900 mt-2">{greeting}, {username}! 👋</h1>
           <p className="text-sm text-slate-500 mt-2 italic">Use this panel to manage customers and enquiries. Shortcut: Alt + Shift + A</p>
         </div>
         <div className="flex flex-col items-end gap-3">
@@ -301,31 +308,68 @@ export default function IntegratedAdminPanelDashboard() {
           {activeTab === 1 && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase">Gross Revenue Matrix</p>
-                   <p className="text-2xl font-black mt-1">₹{chartAnalytics.totalRevenue.toLocaleString()}</p>
+                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group">
+                   <div className="absolute right-[-10px] top-[-10px] text-6xl opacity-5 group-hover:scale-110 transition-transform duration-500">💰</div>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase relative z-10">Gross Revenue</p>
+                   <div className="flex items-end gap-2 mt-1 relative z-10">
+                     <p className="text-2xl font-black text-slate-900">₹{chartAnalytics.totalRevenue.toLocaleString()}</p>
+                     <p className="text-xs font-bold text-emerald-500 mb-1">↑ 12.5%</p>
+                   </div>
                  </div>
-                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase">Tracked Enquiries</p>
-                   <p className="text-2xl font-black mt-1 text-emerald-600">{enquiries.length}</p>
+                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group">
+                   <div className="absolute right-[-10px] top-[-10px] text-6xl opacity-5 group-hover:scale-110 transition-transform duration-500">📩</div>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase relative z-10">Tracked Enquiries</p>
+                   <div className="flex items-end gap-2 mt-1 relative z-10">
+                     <p className="text-2xl font-black text-emerald-600">{enquiries.length}</p>
+                     <p className="text-xs font-bold text-emerald-500 mb-1">↑ 3 new</p>
+                   </div>
                  </div>
-                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase">Live Database Users</p>
-                   <p className="text-2xl font-black mt-1 text-blue-600">{customers.length}</p>
+                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group">
+                   <div className="absolute right-[-10px] top-[-10px] text-6xl opacity-5 group-hover:scale-110 transition-transform duration-500">👥</div>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase relative z-10">Live Users</p>
+                   <div className="flex items-end gap-2 mt-1 relative z-10">
+                     <p className="text-2xl font-black text-blue-600">{customers.length}</p>
+                     <p className="text-xs font-bold text-emerald-500 mb-1">↑ 8%</p>
+                   </div>
                  </div>
               </div>
-              <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-lg font-black text-slate-900">Device Sales Bar Graph Analytics</h2>
-                  <button onClick={fetchData} className="text-xs bg-slate-100 px-3 py-1.5 rounded-lg font-bold text-slate-900 hover:bg-slate-200">🔄 Sync Live Server</button>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-lg font-black text-slate-900">Device Sales Analytics</h2>
+                    <button onClick={fetchData} className="text-xs bg-slate-100 px-3 py-1.5 rounded-lg font-bold text-slate-900 hover:bg-slate-200 transition">🔄 Sync Server</button>
+                  </div>
+                  <div className="flex h-56 items-end justify-between gap-2 border-b border-l border-slate-200 pb-2 pl-2 bg-slate-50/60 p-4 rounded-2xl">
+                    {chartAnalytics.topProducts.map((p, i) => (
+                      <div key={i} className="flex h-full flex-col justify-end items-center flex-1 group cursor-pointer">
+                        <div style={{ height: p.heightStr }} className="w-full rounded-t-lg bg-slate-900 group-hover:bg-emerald-500 transition-all relative">
+                          <span className="absolute -top-7 left-1/2 -translate-x-1/2 text-[10px] font-black opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white px-2 py-1 rounded-md shadow-md">{p.heightStr}</span>
+                        </div>
+                        <span className="mt-3 text-[9px] font-black text-slate-500 uppercase truncate w-full text-center">{p.title}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex h-56 items-end justify-between gap-2 border-b border-l border-slate-200 pb-2 pl-2 bg-slate-50/60 p-4 rounded-2xl">
-                  {chartAnalytics.topProducts.map((p, i) => (
-                    <div key={i} className="flex h-full flex-col justify-end items-center flex-1 group">
-                      <div style={{ height: p.heightStr }} className="w-full rounded-t-lg bg-slate-900 group-hover:bg-emerald-500 transition-all"></div>
-                      <span className="mt-3 text-[9px] font-black text-slate-500 uppercase truncate w-full text-center">{p.title}</span>
-                    </div>
-                  ))}
+                <div className="lg:col-span-1 bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl flex flex-col">
+                  <h2 className="text-lg font-black text-slate-900 mb-6">Recent Enquiries</h2>
+                  <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                    {enquiries.slice(0, 4).map(e => (
+                      <div key={e.id} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="text-sm font-bold text-slate-900 truncate pr-2">{e.full_name || 'Visitor'}</span>
+                          <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${e.status === 'New' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{e.status || 'New'}</span>
+                        </div>
+                        <p className="text-xs text-slate-500 truncate">{e.message || e.subject || 'No message provided'}</p>
+                        <p className="text-[9px] text-slate-400 font-mono mt-1">{new Date(e.created_at).toLocaleDateString()}</p>
+                      </div>
+                    ))}
+                    {enquiries.length === 0 && (
+                      <div className="text-center text-slate-400 text-sm mt-10">No recent activity.</div>
+                    )}
+                  </div>
+                  {enquiries.length > 4 && (
+                    <button onClick={() => setActiveTab(7)} className="mt-4 pt-4 border-t border-slate-100 text-xs font-bold text-emerald-600 hover:text-emerald-700 text-center w-full transition">View All Enquiries →</button>
+                  )}
                 </div>
               </div>
             </div>
