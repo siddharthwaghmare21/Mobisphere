@@ -1,167 +1,131 @@
-"use client"
+"use client";
 
-import React, { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import dynamic from 'next/dynamic'
-import { productData } from '@/app/components/common/ProductCart'
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
-export default function Cart() {
-  const router = useRouter()
-  const [cartItems, setCartItems] = useState([])
-  const [isRemoveMode, setIsRemoveMode] = useState(false)
-  const [selectedToRemove, setSelectedToRemove] = useState(new Set())
-  const [isMounted, setIsMounted] = useState(false)
+export default function CartPage() {
+  const router = useRouter();
+  const [cartItems, setCartItems] = useState([]);
+  const [isHydrated, setIsHydrated] = useState(false);
 
+  // पेज लोड झाल्यावर Local Storage मधून कार्टचा डेटा वाचतो
   useEffect(() => {
-    setIsMounted(true)
-    try {
-      const storedCart = JSON.parse(localStorage.getItem('mobisphereCart') || '[]')
-      const next = Array.isArray(storedCart) ? storedCart : []
-      setCartItems(next)
-    } catch {
-      queueMicrotask(() => setCartItems([]))
-    }
-  }, [])
+    const storedCart = JSON.parse(localStorage.getItem('mobisphereCart') || '[]');
+    setCartItems(storedCart);
+    setIsHydrated(true);
+  }, []);
 
+  const saveCart = (items) => {
+    setCartItems(items);
+    localStorage.setItem('mobisphereCart', JSON.stringify(items));
+  };
 
-  const totalPrice = useMemo(
-    () => cartItems.reduce((acc, item) => acc + (Number(item.price) || 0), 0),
-    [cartItems],
-  )
-  if (!isMounted) {
-    return null
-  }
-  const toggleRemoveMode = () => {
-    setIsRemoveMode((prev) => !prev)
-    setSelectedToRemove(new Set())
-  }
+  const updateQuantity = (cartItemId, newQuantity) => {
+    if (newQuantity < 1) return;
+    const updated = cartItems.map(item => 
+      item.cartItemId === cartItemId ? { ...item, quantity: newQuantity } : item
+    );
+    saveCart(updated);
+  };
 
-  const handleSelectItem = (cartItemId) => {
-    if (!isRemoveMode) return
+  const removeItem = (cartItemId) => {
+    const updated = cartItems.filter(item => item.cartItemId !== cartItemId);
+    saveCart(updated);
+  };
 
-    setSelectedToRemove((prev) => {
-      const next = new Set(prev)
-      if (next.has(cartItemId)) next.delete(cartItemId)
-      else next.add(cartItemId)
-      return next
-    })
+  if (!isHydrated) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center font-bold text-slate-500">
+        Loading your cart...
+      </div>
+    );
   }
 
-  const handleRemoveSelected = () => {
-    const updatedCart = cartItems.filter((item) => !selectedToRemove.has(item.cartItemId))
-    setCartItems(updatedCart)
-    localStorage.setItem('mobisphereCart', JSON.stringify(updatedCart))
-    setSelectedToRemove(new Set())
-    setIsRemoveMode(false)
-  }
+  // एकूण रक्कम कॅल्क्युलेट करतो
+  const subtotal = cartItems.reduce((acc, item) => acc + (Number(item.price || 0) * (item.quantity || 1)), 0);
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-10 pt-28 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-3xl text-center">
-        <p className="text-sm uppercase tracking-[0.3em] text-emerald-600">Your Cart</p>
-        <h1 className="mt-4 text-3xl font-bold text-slate-950 sm:text-4xl">Shopping Cart</h1>
-        {cartItems.length > 0 ? (
-          <p className="mt-4 text-xl font-medium text-slate-700">
-            Estimated Total:{' '}
-            <span className="font-bold text-emerald-600">₹{totalPrice.toLocaleString()}</span>
-          </p>
-        ) : null}
-      </div>
-
-      <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-        <button
-          onClick={() => router.push('/product')}
-          className="rounded-full bg-slate-950 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-800"
-        >
-          Add product
-        </button>
-
-        {cartItems.length > 0 ? (
-          <button
-            onClick={toggleRemoveMode}
-            className={`rounded-full px-6 py-3 text-sm font-semibold transition ${isRemoveMode
-                ? 'bg-rose-100 text-rose-800 hover:bg-rose-200'
-                : 'bg-slate-200 text-slate-800 hover:bg-slate-300'
-              }`}
-          >
-            {isRemoveMode ? 'Cancel remove' : 'Remove product'}
-          </button>
-        ) : null}
-      </div>
-
-      {isRemoveMode ? (
-        <div className="mt-8 flex flex-col items-center gap-4 rounded-3xl border border-rose-200 bg-rose-50 p-6 text-center shadow-sm">
-          <p className="text-lg font-semibold text-rose-700">Select product to remove</p>
-          {selectedToRemove.size > 0 ? (
-            <button
-              onClick={handleRemoveSelected}
-              className="rounded-full bg-rose-600 px-6 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-rose-700"
-            >
-              Remove selected product
-            </button>
-          ) : null}
+    <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+      <header className="mb-8 rounded-[2rem] bg-white p-8 shadow-xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-black text-slate-900">Your Shopping Cart</h1>
+          <p className="text-sm text-slate-500 mt-2">Review your selected items and proceed to checkout.</p>
         </div>
-      ) : null}
+        <div className="px-5 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-bold text-sm">
+          {cartItems.length} {cartItems.length === 1 ? 'Item' : 'Items'}
+        </div>
+      </header>
 
       {cartItems.length === 0 ? (
-        <div className="mt-10 rounded-[2rem] border border-slate-200 bg-slate-50 p-8 text-center text-slate-600 shadow-sm">
-          <p className="text-lg font-semibold">Your cart is currently empty.</p>
-          <p className="mt-2 text-sm">Add some products to see them here.</p>
+        <div className="bg-white p-16 rounded-[2rem] border border-slate-100 shadow-sm text-center flex flex-col items-center">
+          <div className="text-6xl mb-4 opacity-80">🛒</div>
+          <h2 className="text-2xl font-black text-slate-900">Your cart is empty</h2>
+          <p className="text-slate-500 mt-2 mb-8 font-medium">Looks like you haven't added any products to your cart yet.</p>
+          <Link href="/product" className="px-8 py-3 bg-emerald-600 text-white rounded-full font-bold shadow-md hover:bg-emerald-700 transition">
+            Start Shopping
+          </Link>
         </div>
       ) : (
-        <section className="mt-8 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-6 lg:grid-cols-3">
-          {cartItems.map((item) => (
-            <div
-              key={item.cartItemId}
-              onClick={() => handleSelectItem(item.cartItemId)}
-              className={`relative overflow-hidden rounded-xl bg-white p-3 shadow-lg transition sm:rounded-[1.75rem] sm:p-5 ${isRemoveMode
-                  ? 'cursor-pointer'
-                  : 'hover:-translate-y-1 hover:shadow-2xl'
-                } ${isRemoveMode && selectedToRemove.has(item.cartItemId)
-                  ? 'ring-4 ring-rose-500 opacity-90'
-                  : isRemoveMode
-                    ? 'hover:ring-2 hover:ring-rose-300'
-                    : ''
-                }`}
-            >
-              <div className="mb-2 overflow-hidden rounded-xl bg-slate-100 sm:mb-4 sm:rounded-3xl">
-                <img
-                  src={item.image}
-                  alt={item.title}
-                  className="min-h-[100px] w-full object-cover sm:min-h-[160px] md:min-h-[200px]"
-                />
-              </div>
-              <div>
-                <h3 className="mb-1 text-sm font-semibold text-slate-950 line-clamp-1 sm:mb-2 sm:text-xl sm:line-clamp-none">
-                  {item.title}
-                </h3>
-                <p className="mb-2 text-[10px] leading-4 text-slate-600 line-clamp-2 sm:mb-4 sm:text-sm sm:leading-6 sm:line-clamp-none">
-                  {item.description}
-                </p>
-                {item.price ? (
-                  <div className="text-xs font-bold text-slate-900 sm:text-base">₹{Number(item.price).toLocaleString()}</div>
-                ) : null}
-
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      e.preventDefault()
-                      localStorage.setItem('mobisphereBuyEntry', JSON.stringify({ allowed: true }))
-                      router.push('/Payment')
-
-                    }}
-                    className="w-full rounded-full bg-emerald-600 px-4 py-2 text-[12px] font-semibold text-white transition hover:bg-emerald-700"
-                  >
-                    Buy Product
-                  </button>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* 🛒 Cart Items List */}
+          <div className="lg:col-span-2 space-y-4">
+            {cartItems.map((item) => (
+              <div key={item.cartItemId} className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col sm:flex-row items-center gap-6 transition hover:shadow-md">
+                <div className="w-24 h-24 sm:w-28 sm:h-28 bg-slate-50 rounded-2xl flex-shrink-0 p-2 overflow-hidden shadow-inner flex items-center justify-center">
+                  <img src={item.image || '/images/IPhone 16 Pro Max.png'} alt={item.title} className="w-full h-full object-cover rounded-xl" />
+                </div>
+                <div className="flex-1 text-center sm:text-left">
+                  <h3 className="text-lg font-black text-slate-900">{item.title}</h3>
+                  <p className="text-sm font-bold text-emerald-600 mt-1">₹{Number(item.price || 0).toLocaleString()}</p>
+                  
+                  <div className="mt-4 flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-4">
+                    <div className="flex items-center border border-slate-200 rounded-full bg-slate-50 overflow-hidden shadow-sm">
+                      <button onClick={() => updateQuantity(item.cartItemId, (item.quantity || 1) - 1)} className="px-4 py-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 font-black transition">-</button>
+                      <span className="px-4 py-1.5 font-bold text-sm bg-white border-x border-slate-200">{item.quantity || 1}</span>
+                      <button onClick={() => updateQuantity(item.cartItemId, (item.quantity || 1) + 1)} className="px-4 py-1.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 font-black transition">+</button>
+                    </div>
+                    <button onClick={() => removeItem(item.cartItemId)} className="text-xs font-bold text-rose-500 hover:text-rose-700 hover:underline transition">Remove</button>
+                  </div>
+                </div>
+                <div className="text-right hidden sm:block border-l border-slate-100 pl-6">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Total</p>
+                  <p className="text-xl font-black text-slate-900">₹{(Number(item.price || 0) * (item.quantity || 1)).toLocaleString()}</p>
                 </div>
               </div>
+            ))}
+          </div>
+
+          {/* 🧾 Order Summary */}
+          <div className="lg:col-span-1">
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl sticky top-28">
+              <h3 className="text-xl font-black text-slate-900 mb-6">Order Summary</h3>
+              <div className="space-y-4 text-sm font-semibold text-slate-600 border-b border-slate-100 pb-6 mb-6">
+                <div className="flex justify-between">
+                  <span>Subtotal</span>
+                  <span className="text-slate-900">₹{subtotal.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Estimated Shipping</span>
+                  <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-xs font-black uppercase">Free</span>
+                </div>
+              </div>
+              <div className="flex justify-between items-end mb-8">
+                <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">Total Amount</span>
+                <span className="text-3xl font-black text-slate-900">₹{subtotal.toLocaleString()}</span>
+              </div>
+              <button onClick={() => router.push('/checkout')} className="w-full py-4 bg-slate-900 text-white rounded-full font-black text-sm hover:bg-slate-800 hover:-translate-y-0.5 transition-all shadow-lg active:scale-95">
+                Proceed to Checkout
+              </button>
+              <div className="mt-4 text-center">
+                <Link href="/product" className="text-xs font-bold text-slate-500 hover:text-slate-900 hover:underline transition">
+                  ← Continue Shopping
+                </Link>
+              </div>
             </div>
-          ))}
-        </section>
+          </div>
+        </div>
       )}
     </main>
-  )
+  );
 }
