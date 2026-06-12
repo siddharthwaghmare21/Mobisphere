@@ -9,6 +9,7 @@ import { useProductContext } from '@/app/context/ProductContext'
 // Storage Keys
 const ADMIN_SESSION_KEY = 'mobisphereAdminSession'
 const COUPON_STORAGE_KEY = 'mobisphereCoupons'
+const ADMIN_USERS_KEY = 'mobisphereAdminUsers'
 const CART_STORAGE_KEY = 'cart'
 
 function loadJson(key) {
@@ -28,7 +29,9 @@ function saveJson(key, val) {
 export default function IntegratedAdminPanelDashboard() {
   const router = useRouter()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [username, setUsername] = useState('Sid')
+  const [isRegistering, setIsRegistering] = useState(false)
+  const [adminUsers, setAdminUsers] = useState([{ username: 'admin', password: 'admin' }])
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [customers, setCustomers] = useState([])
   const [enquiries, setEnquiries] = useState([])
@@ -91,8 +94,14 @@ export default function IntegratedAdminPanelDashboard() {
     const session = loadJson(ADMIN_SESSION_KEY)
     if (session) {
       setIsLoggedIn(true)
-      setUsername(session.username || 'Sid')
+      setUsername(session.username || 'Admin')
       fetchData()
+    }
+    const storedAdmins = loadJson(ADMIN_USERS_KEY)
+    if (storedAdmins && storedAdmins.length > 0) {
+      setAdminUsers(storedAdmins)
+    } else {
+      saveJson(ADMIN_USERS_KEY, [{ username: 'admin', password: 'admin' }])
     }
     const storedCoupons = loadJson(COUPON_STORAGE_KEY) || []
     setCoupons(storedCoupons)
@@ -145,13 +154,35 @@ export default function IntegratedAdminPanelDashboard() {
 
   const handleLogin = (e) => {
     e.preventDefault()
-    if (username.trim().toLowerCase() === 'admin' && password === 'admin') {
-      saveJson(ADMIN_SESSION_KEY, { username: 'Sid' })
-      setIsLoggedIn(true)
-      fetchData()
-      setMessage('')
+    const uname = username.trim()
+    if (!uname || !password) {
+      setMessage("Please enter both username and password!")
+      return
+    }
+
+    if (isRegistering) {
+      const exists = adminUsers.find(a => a.username.toLowerCase() === uname.toLowerCase())
+      if (exists) {
+        setMessage("Username already exists. Please choose another.")
+      } else {
+        const updatedAdmins = [...adminUsers, { username: uname, password }]
+        setAdminUsers(updatedAdmins)
+        saveJson(ADMIN_USERS_KEY, updatedAdmins)
+        saveJson(ADMIN_SESSION_KEY, { username: uname })
+        setIsLoggedIn(true)
+        fetchData()
+        setMessage('')
+      }
     } else {
-      setMessage("Invalid Admin Username or Password!")
+      const validAdmin = adminUsers.find(a => a.username.toLowerCase() === uname.toLowerCase() && a.password === password)
+      if (validAdmin) {
+        saveJson(ADMIN_SESSION_KEY, { username: validAdmin.username })
+        setIsLoggedIn(true)
+        fetchData()
+        setMessage('')
+      } else {
+        setMessage("Invalid Username or Password!")
+      }
     }
   }
 
@@ -259,13 +290,22 @@ export default function IntegratedAdminPanelDashboard() {
     return (
       <main className="mx-auto max-w-md px-4 py-32 font-sans">
         <div className="rounded-[2.5rem] border border-slate-200 bg-white p-10 shadow-2xl">
-          <h1 className="text-center text-2xl font-black text-slate-900">MobiSphere Admin Control</h1>
+          <h1 className="text-center text-2xl font-black text-slate-900">
+            {isRegistering ? 'Create Admin Profile' : 'MobiSphere Admin Control'}
+          </h1>
           {message && <div className="mt-4 text-xs text-center text-red-600 bg-red-50 p-2 rounded-xl">{message}</div>}
           <form onSubmit={handleLogin} className="mt-8 space-y-5">
-            <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full rounded-2xl border p-4 outline-none focus:ring-2 ring-slate-900 text-slate-900" placeholder="Username (admin)" />
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full rounded-2xl border p-4 outline-none focus:ring-2 ring-slate-900 text-slate-900" placeholder="Password (admin)" />
-            <button className="w-full rounded-full bg-slate-900 py-4 font-bold text-white hover:bg-slate-800 transition">Sign In</button>
+            <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full rounded-2xl border p-4 outline-none focus:ring-2 ring-slate-900 text-slate-900" placeholder="Username" />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full rounded-2xl border p-4 outline-none focus:ring-2 ring-slate-900 text-slate-900" placeholder="Password" />
+            <button className="w-full rounded-full bg-slate-900 py-4 font-bold text-white hover:bg-slate-800 transition">
+              {isRegistering ? 'Create Profile' : 'Sign In'}
+            </button>
           </form>
+          <div className="mt-6 text-center">
+            <button onClick={() => { setIsRegistering(!isRegistering); setMessage(''); }} className="text-xs font-bold text-slate-500 hover:text-slate-900 transition">
+              {isRegistering ? 'Already have an account? Sign In' : 'Create new admin profile?'}
+            </button>
+          </div>
         </div>
       </main>
     )
@@ -318,7 +358,7 @@ export default function IntegratedAdminPanelDashboard() {
           {/* Dark Quick Actions Info Box */}
           <div className="mt-8 rounded-3xl bg-slate-950 p-6 text-white shadow-xl">
              <h3 className="text-sm font-bold border-b border-slate-800 pb-2 mb-3 flex justify-between items-center">
-               Quick Actions <span className="text-[9px] text-emerald-400 font-mono bg-emerald-400/10 px-2 py-0.5 rounded-full">v2.0</span>
+               Quick Actions <span className="text-[9px] text-emerald-400 font-mono bg-emerald-400/10 px-2 py-0.5 rounded-full">v2.1</span>
              </h3>
              <p className="text-[11px] leading-relaxed text-slate-400">Control panel for adding devices, inventory analytics sync, and customer resolution pathways.</p>
           </div>
