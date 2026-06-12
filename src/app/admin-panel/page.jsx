@@ -31,8 +31,13 @@ export default function IntegratedAdminPanelDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
   const [adminUsers, setAdminUsers] = useState([{ username: 'admin', password: 'admin' }])
+  
+  // 🎯 साईन-अप फॉर्मसाठी आवश्यक स्टेट्स
+  const [regName, setRegName] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  
   const [customers, setCustomers] = useState([])
   const [enquiries, setEnquiries] = useState([])
   const [activeTab, setActiveTab] = useState(1)
@@ -58,7 +63,7 @@ export default function IntegratedAdminPanelDashboard() {
   ])
   const [orderFilter, setOrderFilter] = useState('All')
 
-  // 🔄 Supabase Live Data Fetch (अचूक कॉलम्स मॅप करण्यासाठी)
+  // 🔄 Supabase Live Data Fetch
   const fetchData = useCallback(async (showFeedback = false) => {
     if (showFeedback === true) setIsSyncing(true)
     try {
@@ -109,7 +114,7 @@ export default function IntegratedAdminPanelDashboard() {
     setHydrated(true)
   }, [fetchData])
 
-  // Analytics Diagram/Graph Logic
+  // Analytics Graph Logic
   const chartAnalytics = useMemo(() => {
     if (!hydrated) return { totalRevenue: 0, topProducts: [] }
     const cartData = loadJson(CART_STORAGE_KEY) || []
@@ -152,28 +157,39 @@ export default function IntegratedAdminPanelDashboard() {
     return 'Good Evening'
   }, [])
 
-  const handleLogin = (e) => {
+  // 🎯 दुरुस्त केलेले साईन-अप आणि लॉगिन मॅनेजमेंट लॉजिक
+  const handleAuthSubmit = (e) => {
     e.preventDefault()
     const uname = username.trim()
+    
     if (!uname || !password) {
-      setMessage("Please enter both username and password!")
+      setMessage("Please fill in all fields!")
       return
     }
 
     if (isRegistering) {
+      // 📝 SIGN UP PROCESS
+      if (password !== confirmPassword) {
+        setMessage("❌ Passwords do not match!")
+        return
+      }
+
       const exists = adminUsers.find(a => a.username.toLowerCase() === uname.toLowerCase())
       if (exists) {
-        setMessage("Username already exists. Please choose another.")
+        setMessage("❌ Username already exists. Choose another.")
       } else {
-        const updatedAdmins = [...adminUsers, { username: uname, password }]
+        const updatedAdmins = [...adminUsers, { name: regName, username: uname, password }]
         setAdminUsers(updatedAdmins)
         saveJson(ADMIN_USERS_KEY, updatedAdmins)
         saveJson(ADMIN_SESSION_KEY, { username: uname })
         setIsLoggedIn(true)
         fetchData()
         setMessage('')
+        setRegName('')
+        setConfirmPassword('')
       }
     } else {
+      // 🔐 SIGN IN PROCESS
       const validAdmin = adminUsers.find(a => a.username.toLowerCase() === uname.toLowerCase() && a.password === password)
       if (validAdmin) {
         saveJson(ADMIN_SESSION_KEY, { username: validAdmin.username })
@@ -181,7 +197,7 @@ export default function IntegratedAdminPanelDashboard() {
         fetchData()
         setMessage('')
       } else {
-        setMessage("Invalid Username or Password!")
+        setMessage("❌ Invalid Username or Password!")
       }
     }
   }
@@ -204,13 +220,10 @@ export default function IntegratedAdminPanelDashboard() {
   const handleSaveEnquiry = async (id) => {
     const target = enquiries.find(e => e.id === id)
     if (!target) return
-    
-    // Supabase चे मूळ snake_case कॉलम्स मॅप केले आहेत
     await supabase.from('enquiries').update({
       status: target.status,
       admin_note: target.admin_note
     }).eq('id', id)
-    
     setMessage(`✅ Progress Saved for Enquiry ID: ${id}`)
     alert('Changes saved to Supabase!')
   }
@@ -247,12 +260,10 @@ export default function IntegratedAdminPanelDashboard() {
   const handleSaveProduct = (e) => {
     e.preventDefault()
     const formData = new FormData(e.target)
-    
-    // 📸 हँडल इमेज (Local फाईल मधून)
     const imageFile = formData.get('image')
     let imageUrl = editingProduct?.image || ''
     if (imageFile && imageFile.size > 0) {
-      imageUrl = URL.createObjectURL(imageFile) // कम्प्युटरवरील फाईलचा तात्पुरता URL बनवतो
+      imageUrl = URL.createObjectURL(imageFile)
     }
 
     const newProd = {
@@ -261,7 +272,7 @@ export default function IntegratedAdminPanelDashboard() {
       brand: formData.get('brand'),
       price: Number(formData.get('price')),
       description: formData.get('description'),
-      image: imageUrl, // <-- इथे इमेज ऍड केली
+      image: imageUrl,
       specs: {
         RAM: formData.get('ram'),
         Storage: formData.get('storage'),
@@ -285,26 +296,37 @@ export default function IntegratedAdminPanelDashboard() {
 
   if (!hydrated) return null
 
-  // 🔒 Login Screen प्रोटेक्शन
+  // 🔒 AUTH INTERFACE (SIGN IN / SIGN UP FIXED)
   if (!isLoggedIn) {
     return (
-      <main className="mx-auto max-w-md px-4 py-32 font-sans">
+      <main className="mx-auto max-w-md px-4 py-24 font-sans">
         <div className="rounded-[2.5rem] border border-slate-200 bg-white p-10 shadow-2xl">
           <h1 className="text-center text-2xl font-black text-slate-900">
             {isRegistering ? 'Create Admin Profile' : 'MobiSphere Admin Control'}
           </h1>
           
           <div className="flex bg-slate-100 p-1 rounded-2xl mt-6 mb-2">
-            <button onClick={() => { setIsRegistering(false); setMessage(''); }} className={`flex-1 py-3 text-xs font-bold rounded-xl transition ${!isRegistering ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}>Login</button>
-            <button onClick={() => { setIsRegistering(true); setMessage(''); }} className={`flex-1 py-3 text-xs font-bold rounded-xl transition ${isRegistering ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}>Sign Up</button>
+            <button type="button" onClick={() => { setIsRegistering(false); setMessage(''); }} className={`flex-1 py-3 text-xs font-bold rounded-xl transition ${!isRegistering ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}>Login</button>
+            <button type="button" onClick={() => { setIsRegistering(true); setMessage(''); }} className={`flex-1 py-3 text-xs font-bold rounded-xl transition ${isRegistering ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}>Sign Up</button>
           </div>
 
-          {message && <div className="mt-4 text-xs text-center text-red-600 bg-red-50 p-2 rounded-xl">{message}</div>}
-          <form onSubmit={handleLogin} className="mt-6 space-y-5">
-            <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200 text-slate-900 text-sm font-medium" placeholder={isRegistering ? "Choose a Username" : "Username"} />
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200 text-slate-900 text-sm font-medium" placeholder={isRegistering ? "Create a Password" : "Password"} />
-            <button className="w-full rounded-full bg-slate-900 py-4 font-bold text-white hover:bg-slate-800 transition">
-              {isRegistering ? 'Create Profile' : 'Sign In'}
+          {message && <div className="mt-4 text-xs text-center text-red-600 bg-red-50 p-2.5 rounded-xl font-bold">{message}</div>}
+          
+          <form onSubmit={handleAuthSubmit} className="mt-6 space-y-4">
+            {isRegistering && (
+              <input type="text" value={regName} onChange={e => setRegName(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder="Your Full Name" required />
+            )}
+            
+            <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder={isRegistering ? "Choose a Username" : "Username"} required />
+            
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder={isRegistering ? "Create a Password" : "Password"} required />
+            
+            {isRegistering && (
+              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder="Confirm Password" required />
+            )}
+            
+            <button type="submit" className="w-full rounded-full bg-slate-900 py-4 font-bold text-white hover:bg-slate-800 transition mt-2 shadow-md">
+              {isRegistering ? 'Register Account' : 'Sign In'}
             </button>
           </form>
         </div>
@@ -343,13 +365,13 @@ export default function IntegratedAdminPanelDashboard() {
         <aside className="space-y-2">
           <p className="text-[10px] font-black uppercase text-slate-400 px-4 mb-4 tracking-wider">Navigation Menu</p>
           {[
-            { id: 1, icon: '📊', name: 'Dashboard Overview', path: '/admin-panel' },
-            { id: 2, icon: '📦', name: 'Product Inventory', path: '/admin-panel/product-inventory' },
-            { id: 3, icon: '🛒', name: 'Order Management', path: '/admin-panel/order-management' },
-            { id: 4, icon: '👥', name: 'User Accounts', path: '/admin-panel/user-accounts' },
-            { id: 5, icon: '🎫', name: 'Coupons & Offers', path: '/admin-panel/coupons-offers' },
-            { id: 6, icon: '📈', name: 'Sales Reports', path: '/admin-panel/sales-reports' },
-            { id: 7, icon: '📩', name: 'Enquiries Log', path: '/admin-panel/enquiries' },
+            { id: 1, icon: '📊', name: 'Dashboard Overview' },
+            { id: 2, icon: '📦', name: 'Product Inventory' },
+            { id: 3, icon: '🛒', name: 'Order Management' },
+            { id: 4, icon: '👥', name: 'User Accounts' },
+            { id: 5, icon: '🎫', name: 'Coupons & Offers' },
+            { id: 6, icon: '📈', name: 'Sales Reports' },
+            { id: 7, icon: '📩', name: 'Enquiries Log' },
           ].map(tab => (
             <button key={tab.id} onClick={() => { setActiveTab(tab.id); setMessage(''); }} className={`flex w-full items-center gap-3 rounded-2xl px-5 py-4 text-sm font-bold transition-all ${activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg scale-105' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100'}`}>
               <span>{tab.icon}</span> {tab.name}
@@ -406,7 +428,7 @@ export default function IntegratedAdminPanelDashboard() {
             </div>
           )}
 
-          {/* 👥 TAB 4: Registered Customers (Supabase Snake Case Columns) */}
+          {/* 👥 TAB 4: Registered Customers */}
           {activeTab === 4 && (
             <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
               <h2 className="text-2xl font-black mb-6">Registered Customers ({customers.length})</h2>
@@ -417,7 +439,6 @@ export default function IntegratedAdminPanelDashboard() {
                   {customers.map(c => (
                     <div key={c.id} className="flex flex-col sm:flex-row justify-between items-center bg-slate-50 p-5 rounded-3xl border border-slate-100">
                       <div>
-                        {/* full_name, mobile_number, address columns mapped accurately */}
                         <p className="text-lg font-black text-slate-900">{c.full_name || 'No Name Provided'}</p>
                         <p className="text-sm font-bold text-slate-600">📞 {c.mobile_number || '—'} | 📍 {c.address || '—'}</p>
                         <p className="text-[10px] font-mono mt-1 text-slate-400">UUID: {c.id} | Joined: {c.created_at ? new Date(c.created_at).toLocaleString() : '—'}</p>
@@ -430,7 +451,7 @@ export default function IntegratedAdminPanelDashboard() {
             </div>
           )}
 
-          {/* 🎫 TAB 5: Coupons & Promo Management */}
+          {/* 🎫 TAB 5: Coupons & Offers */}
           {activeTab === 5 && (
             <div className="grid gap-6 md:grid-cols-2">
               <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
@@ -452,6 +473,199 @@ export default function IntegratedAdminPanelDashboard() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* 📦 TAB 2: Product Inventory */}
+          {activeTab === 2 && (
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900">
+                    {inventoryView === 'brands' ? 'Brands Inventory' : 
+                     inventoryView === 'form' ? (editingProduct ? 'Edit Product' : 'Add New Product') :
+                     `${selectedBrand} Products`}
+                  </h2>
+                  <p className="text-sm text-slate-500 mt-1">Manage your store's products, pricing, and stock status.</p>
+                </div>
+                {inventoryView !== 'form' && (
+                  <button onClick={() => { setEditingProduct(null); setInventoryView('form'); }} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs flex items-center gap-2">
+                    <span>+</span> Add New Product
+                  </button>
+                )}
+              </div>
+
+              {inventoryView === 'brands' && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {uniqueBrands.map(brand => (
+                    <button key={brand} onClick={() => { setSelectedBrand(brand); setInventoryView('products'); }} className="p-6 bg-slate-50 border border-slate-200 rounded-3xl hover:bg-slate-900 hover:text-white transition group text-left shadow-sm">
+                      <div className="text-3xl mb-3 opacity-80 group-hover:opacity-100">🏷️</div>
+                      <h3 className="font-black text-lg">{brand}</h3>
+                      <p className="text-xs mt-1 opacity-60">{localProducts.filter(p => (p.brand || 'Other Models') === brand).length} Products</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {inventoryView === 'products' && (
+                <div className="space-y-4">
+                  <button onClick={() => setInventoryView('brands')} className="text-xs font-bold text-slate-500 hover:text-slate-900 flex items-center gap-1">← Back to Brands</button>
+                  <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                    <table className="w-full text-left border-collapse min-w-[600px]">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500">
+                          <th className="p-4 font-black">ID</th>
+                          <th className="p-4 font-black">Model Name</th>
+                          <th className="p-4 font-black">Base Price</th>
+                          <th className="p-4 font-black text-center">Status</th>
+                          <th className="p-4 font-black text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {localProducts.filter(p => (p.brand || 'Other Models') === selectedBrand).map((product) => (
+                          <tr key={product.id} className="hover:bg-slate-50/80 transition group">
+                            <td className="p-4 text-xs font-mono font-bold text-slate-400">#{product.id}</td>
+                            <td className="p-4 text-sm font-bold text-slate-900 flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-lg shadow-inner overflow-hidden">
+                                {product.image ? <img src={product.image} alt={product.title} className="w-full h-full object-cover" /> : '📱'}
+                              </div>
+                              {product.title}
+                            </td>
+                            <td className="p-4 text-sm font-black text-emerald-600">₹{(Number(product.price) || 0).toLocaleString()}</td>
+                            <td className="p-4 text-center">
+                              <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-black text-[9px] uppercase tracking-wider shadow-sm">In Stock</span>
+                            </td>
+                            <td className="p-4 text-right space-x-3 opacity-80 group-hover:opacity-100 transition">
+                              <button onClick={() => { setEditingProduct(product); setInventoryView('form'); }} className="text-blue-600 font-bold hover:underline text-[11px] uppercase tracking-wide">Edit</button>
+                              <button onClick={() => handleDeleteProduct(product.id)} className="text-rose-600 font-bold hover:underline text-[11px] uppercase tracking-wide">Delete</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {inventoryView === 'form' && (
+                <div>
+                  <button onClick={() => setInventoryView(selectedBrand ? 'products' : 'brands')} className="text-xs font-bold text-slate-500 hover:text-slate-900 mb-6 flex items-center gap-1">← Cancel & Go Back</button>
+                  <form onSubmit={handleSaveProduct} className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400">Company Name (Brand)</label>
+                        <input name="brand" required defaultValue={editingProduct?.brand || ''} placeholder="e.g. Apple, Samsung" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400">Model Name (Title)</label>
+                        <input name="title" required defaultValue={editingProduct?.title || ''} placeholder="e.g. iPhone 16 Pro" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400">Base Price (₹)</label>
+                        <input type="number" name="price" required defaultValue={editingProduct?.price || ''} placeholder="e.g. 120000" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-[10px] font-black uppercase text-slate-400">Product Description</label>
+                        <textarea name="description" rows="4" defaultValue={editingProduct?.description || ''} placeholder="Describe the phone features..." className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white"></textarea>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-[10px] font-black uppercase text-slate-400">Product Image (Local File)</label>
+                        <div className="mt-1 flex items-center gap-4">
+                          {editingProduct?.image && (
+                            <img src={editingProduct.image} alt="Preview" className="w-12 h-12 object-cover rounded-lg border border-slate-200 shadow-sm" />
+                          )}
+                          <input type="file" name="image" accept="image/*" className="w-full p-2 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 bg-white cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 transition" />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-slate-400">Memory (Storage)</label>
+                          <input name="storage" defaultValue={editingProduct?.specs?.Storage || ''} placeholder="e.g. 256GB" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-slate-400">RAM</label>
+                          <input name="ram" defaultValue={editingProduct?.specs?.RAM || ''} placeholder="e.g. 8GB" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" />
+                        </div>
+                      </div>
+                      <div><label className="text-[10px] font-black uppercase text-slate-400">Processor</label><input name="processor" defaultValue={editingProduct?.specs?.Processor || ''} placeholder="e.g. A18 Bionic" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" /></div>
+                      <div><label className="text-[10px] font-black uppercase text-slate-400">Camera Specs</label><input name="camera" defaultValue={editingProduct?.specs?.Camera || ''} placeholder="e.g. 48MP Triple" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" /></div>
+                      <div><label className="text-[10px] font-black uppercase text-slate-400">Battery</label><input name="battery" defaultValue={editingProduct?.specs?.Battery || ''} placeholder="e.g. 4700mAh" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" /></div>
+                      <div><label className="text-[10px] font-black uppercase text-slate-400">Charger Info</label><input name="charger" defaultValue={editingProduct?.specs?.Charger || ''} placeholder="e.g. 30W Fast Charging" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" /></div>
+                      <div><label className="text-[10px] font-black uppercase text-slate-400">Additional Tools (In Box)</label><input name="tools" defaultValue={editingProduct?.specs?.Tools || ''} placeholder="e.g. Type-C Cable, SIM Tool" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" /></div>
+                    </div>
+                    
+                    <div className="md:col-span-2 flex justify-end mt-4 pt-4 border-t border-slate-200">
+                      <button type="submit" className="px-8 py-3 bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 transition font-black text-sm">{editingProduct ? 'Save Changes' : 'Add Product'}</button>
+                    </div>
+                  </form>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 🛒 TAB 3: Order Management */}
+          {activeTab === 3 && (
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900">Order Management</h2>
+                  <p className="text-sm text-slate-500 mt-1">Track, update, and manage customer orders.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <select 
+                    value={orderFilter} 
+                    onChange={(e) => setOrderFilter(e.target.value)}
+                    className="px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs outline-none focus:border-slate-900 cursor-pointer"
+                  >
+                    <option value="All">All Orders</option>
+                    <option value="Processing">Processing</option>
+                    <option value="Shipped">Shipped</option>
+                    <option value="Delivered">Delivered</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                <table className="w-full text-left border-collapse min-w-[800px]">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500">
+                      <th className="p-4 font-black">Order ID</th>
+                      <th className="p-4 font-black">Customer Name</th>
+                      <th className="p-4 font-black">Date</th>
+                      <th className="p-4 font-black text-center">Items</th>
+                      <th className="p-4 font-black">Total Amount</th>
+                      <th className="p-4 font-black text-center">Status</th>
+                      <th className="p-4 font-black text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {orders
+                      .filter(order => orderFilter === 'All' || order.status === orderFilter)
+                      .map((order) => (
+                      <tr key={order.id} className="hover:bg-slate-50/80 transition group">
+                        <td className="p-4 text-xs font-mono font-bold text-slate-900">{order.id}</td>
+                        <td className="p-4 text-sm font-bold text-slate-700">{order.customer}</td>
+                        <td className="p-4 text-xs font-semibold text-slate-500">{order.date}</td>
+                        <td className="p-4 text-sm font-bold text-slate-700 text-center">{order.items}</td>
+                        <td className="p-4 text-sm font-black text-emerald-600">₹{order.total.toLocaleString()}</td>
+                        <td className="p-4 text-center">
+                          <select value={order.status} onChange={(e) => { setOrders(orders.map(o => o.id === order.id ? { ...o, status: e.target.value } : o)); setMessage(`Order ${order.id} status updated!`); }} className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full outline-none cursor-pointer border-2 ${order.status === 'Processing' ? 'bg-amber-50 text-amber-700 border-amber-200' : order.status === 'Shipped' ? 'bg-blue-50 text-blue-700 border-blue-200' : order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+                            <option value="Processing">Processing</option>
+                            <option value="Shipped">Shipped</option>
+                            <option value="Delivered">Delivered</option>
+                            <option value="Cancelled">Cancelled</option>
+                          </select>
+                        </td>
+                        <td className="p-4 text-right opacity-80 group-hover:opacity-100 transition"><button className="text-slate-600 font-bold hover:text-slate-900 text-[11px] uppercase tracking-wide">View Details</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -502,208 +716,7 @@ export default function IntegratedAdminPanelDashboard() {
             </div>
           )}
 
-          {/* 📦 TAB 2: Product Inventory */}
-          {activeTab === 2 && (
-            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-900">
-                    {inventoryView === 'brands' ? 'Brands Inventory' : 
-                     inventoryView === 'form' ? (editingProduct ? 'Edit Product' : 'Add New Product') :
-                     `${selectedBrand} Products`}
-                  </h2>
-                  <p className="text-sm text-slate-500 mt-1">Manage your store's products, pricing, and stock status.</p>
-                </div>
-                {inventoryView !== 'form' && (
-                  <button onClick={() => { setEditingProduct(null); setInventoryView('form'); }} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs flex items-center gap-2">
-                    <span>+</span> Add New Product
-                  </button>
-                )}
-              </div>
-
-              {/* VIEW: Brands Grid */}
-              {inventoryView === 'brands' && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {uniqueBrands.map(brand => (
-                    <button key={brand} onClick={() => { setSelectedBrand(brand); setInventoryView('products'); }} className="p-6 bg-slate-50 border border-slate-200 rounded-3xl hover:bg-slate-900 hover:text-white transition group text-left shadow-sm">
-                      <div className="text-3xl mb-3 opacity-80 group-hover:opacity-100">🏷️</div>
-                      <h3 className="font-black text-lg">{brand}</h3>
-                      <p className="text-xs mt-1 opacity-60">{localProducts.filter(p => (p.brand || 'Other Models') === brand).length} Products</p>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* VIEW: Products Table by Brand */}
-              {inventoryView === 'products' && (
-                <div className="space-y-4">
-                  <button onClick={() => setInventoryView('brands')} className="text-xs font-bold text-slate-500 hover:text-slate-900 flex items-center gap-1">← Back to Brands</button>
-                  <div className="overflow-x-auto rounded-2xl border border-slate-100">
-                    <table className="w-full text-left border-collapse min-w-[600px]">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500">
-                          <th className="p-4 font-black">ID</th>
-                          <th className="p-4 font-black">Model Name</th>
-                          <th className="p-4 font-black">Base Price</th>
-                          <th className="p-4 font-black text-center">Status</th>
-                          <th className="p-4 font-black text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {localProducts.filter(p => (p.brand || 'Other Models') === selectedBrand).map((product) => (
-                          <tr key={product.id} className="hover:bg-slate-50/80 transition group">
-                            <td className="p-4 text-xs font-mono font-bold text-slate-400">#{product.id}</td>
-                            <td className="p-4 text-sm font-bold text-slate-900 flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-lg shadow-inner overflow-hidden">
-                                {/* 🖼️ जर प्रॉडक्टला फोटो असेल तर तो दाखवा, नाहीतर डमी 📱 दाखवा */}
-                                {product.image ? <img src={product.image} alt={product.title} className="w-full h-full object-cover" /> : '📱'}
-                              </div>
-                              {product.title}
-                            </td>
-                            <td className="p-4 text-sm font-black text-emerald-600">₹{(Number(product.price) || 0).toLocaleString()}</td>
-                            <td className="p-4 text-center">
-                              <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-black text-[9px] uppercase tracking-wider shadow-sm">In Stock</span>
-                            </td>
-                            <td className="p-4 text-right space-x-3 opacity-80 group-hover:opacity-100 transition">
-                              <button onClick={() => { setEditingProduct(product); setInventoryView('form'); }} className="text-blue-600 font-bold hover:underline text-[11px] uppercase tracking-wide">Edit</button>
-                              <button onClick={() => handleDeleteProduct(product.id)} className="text-rose-600 font-bold hover:underline text-[11px] uppercase tracking-wide">Delete</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* VIEW: Add / Edit Product Form */}
-              {inventoryView === 'form' && (
-                <div>
-                  <button onClick={() => setInventoryView(selectedBrand ? 'products' : 'brands')} className="text-xs font-bold text-slate-500 hover:text-slate-900 mb-6 flex items-center gap-1">← Cancel & Go Back</button>
-                  <form onSubmit={handleSaveProduct} className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                    <div className="space-y-4">
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-slate-400">Company Name (Brand)</label>
-                        <input name="brand" required defaultValue={editingProduct?.brand || ''} placeholder="e.g. Apple, Samsung" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-slate-400">Model Name (Title)</label>
-                        <input name="title" required defaultValue={editingProduct?.title || ''} placeholder="e.g. iPhone 16 Pro" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-slate-400">Base Price (₹)</label>
-                        <input type="number" name="price" required defaultValue={editingProduct?.price || ''} placeholder="e.g. 120000" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="text-[10px] font-black uppercase text-slate-400">Product Description</label>
-                        <textarea name="description" rows="4" defaultValue={editingProduct?.description || ''} placeholder="Describe the phone features..." className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900"></textarea>
-                      </div>
-                      {/* 📸 Image Upload Field */}
-                      <div className="md:col-span-2">
-                        <label className="text-[10px] font-black uppercase text-slate-400">Product Image (Local File)</label>
-                        <div className="mt-1 flex items-center gap-4">
-                          {editingProduct?.image && (
-                            <img src={editingProduct.image} alt="Preview" className="w-12 h-12 object-cover rounded-lg border border-slate-200 shadow-sm" />
-                          )}
-                          <input type="file" name="image" accept="image/*" className="w-full p-2 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 bg-white cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 transition" />
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-[10px] font-black uppercase text-slate-400">Memory (Storage)</label>
-                          <input name="storage" defaultValue={editingProduct?.specs?.Storage || ''} placeholder="e.g. 256GB" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-black uppercase text-slate-400">RAM</label>
-                          <input name="ram" defaultValue={editingProduct?.specs?.RAM || ''} placeholder="e.g. 8GB" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" />
-                        </div>
-                      </div>
-                      <div><label className="text-[10px] font-black uppercase text-slate-400">Processor</label><input name="processor" defaultValue={editingProduct?.specs?.Processor || ''} placeholder="e.g. A18 Bionic" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" /></div>
-                      <div><label className="text-[10px] font-black uppercase text-slate-400">Camera Specs</label><input name="camera" defaultValue={editingProduct?.specs?.Camera || ''} placeholder="e.g. 48MP Triple" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" /></div>
-                      <div><label className="text-[10px] font-black uppercase text-slate-400">Battery</label><input name="battery" defaultValue={editingProduct?.specs?.Battery || ''} placeholder="e.g. 4700mAh" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" /></div>
-                      <div><label className="text-[10px] font-black uppercase text-slate-400">Charger Info</label><input name="charger" defaultValue={editingProduct?.specs?.Charger || ''} placeholder="e.g. 30W Fast Charging" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" /></div>
-                      <div><label className="text-[10px] font-black uppercase text-slate-400">Additional Tools (In Box)</label><input name="tools" defaultValue={editingProduct?.specs?.Tools || ''} placeholder="e.g. Type-C Cable, SIM Tool" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" /></div>
-                    </div>
-                    
-                    <div className="md:col-span-2 flex justify-end mt-4 pt-4 border-t border-slate-200">
-                      <button type="submit" className="px-8 py-3 bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 transition font-black text-sm">{editingProduct ? 'Save Changes' : 'Add Product'}</button>
-                    </div>
-                  </form>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 🛒 TAB 3: Order Management */}
-          {activeTab === 3 && (
-            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-900">Order Management</h2>
-                  <p className="text-sm text-slate-500 mt-1">Track, update, and manage customer orders.</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <select 
-                    value={orderFilter} 
-                    onChange={(e) => setOrderFilter(e.target.value)}
-                    className="px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs outline-none focus:border-slate-900 cursor-pointer"
-                  >
-                    <option value="All">All Orders</option>
-                    <option value="Processing">Processing</option>
-                    <option value="Shipped">Shipped</option>
-                    <option value="Delivered">Delivered</option>
-                    <option value="Cancelled">Cancelled</option>
-                  </select>
-                  <button className="px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl shadow-sm hover:bg-slate-200 transition font-bold text-xs flex items-center gap-2">
-                    📥 Export CSV
-                  </button>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto rounded-2xl border border-slate-100">
-                <table className="w-full text-left border-collapse min-w-[800px]">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500">
-                      <th className="p-4 font-black">Order ID</th>
-                      <th className="p-4 font-black">Customer Name</th>
-                      <th className="p-4 font-black">Date</th>
-                      <th className="p-4 font-black text-center">Items</th>
-                      <th className="p-4 font-black">Total Amount</th>
-                      <th className="p-4 font-black text-center">Status</th>
-                      <th className="p-4 font-black text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {orders
-                      .filter(order => orderFilter === 'All' || order.status === orderFilter)
-                      .map((order) => (
-                      <tr key={order.id} className="hover:bg-slate-50/80 transition group">
-                        <td className="p-4 text-xs font-mono font-bold text-slate-900">{order.id}</td>
-                        <td className="p-4 text-sm font-bold text-slate-700">{order.customer}</td>
-                        <td className="p-4 text-xs font-semibold text-slate-500">{order.date}</td>
-                        <td className="p-4 text-sm font-bold text-slate-700 text-center">{order.items}</td>
-                        <td className="p-4 text-sm font-black text-emerald-600">₹{order.total.toLocaleString()}</td>
-                        <td className="p-4 text-center">
-                          <select value={order.status} onChange={(e) => { setOrders(orders.map(o => o.id === order.id ? { ...o, status: e.target.value } : o)); setMessage(`Order ${order.id} status updated!`); }} className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full outline-none cursor-pointer border-2 ${order.status === 'Processing' ? 'bg-amber-50 text-amber-700 border-amber-200' : order.status === 'Shipped' ? 'bg-blue-50 text-blue-700 border-blue-200' : order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
-                            <option value="Processing" className="text-slate-900 bg-white">Processing</option>
-                            <option value="Shipped" className="text-slate-900 bg-white">Shipped</option>
-                            <option value="Delivered" className="text-slate-900 bg-white">Delivered</option>
-                            <option value="Cancelled" className="text-slate-900 bg-white">Cancelled</option>
-                          </select>
-                        </td>
-                        <td className="p-4 text-right opacity-80 group-hover:opacity-100 transition"><button className="text-slate-600 font-bold hover:text-slate-900 text-[11px] uppercase tracking-wide">View Details</button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Placeholders for other tabs under development */}
+          {/* Placeholders */}
           {([6].includes(activeTab)) && (
             <div className="bg-white p-20 rounded-[2rem] border border-slate-100 shadow-xl text-center">
               <p className="text-4xl">🚧</p>
