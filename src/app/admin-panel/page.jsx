@@ -46,6 +46,13 @@ export default function IntegratedAdminPanelDashboard() {
   const [newCouponCode, setNewCouponCode] = useState('')
   const [newDiscountPercent, setNewDiscountPercent] = useState('')
 
+  const [orders, setOrders] = useState([
+    { id: 'ORD-8X91', customer: 'Rahul Sharma', date: '2024-05-12', total: 125000, status: 'Processing', items: 2 },
+    { id: 'ORD-7V22', customer: 'Sneha Patil', date: '2024-05-11', total: 85000, status: 'Shipped', items: 1 },
+    { id: 'ORD-4M55', customer: 'Amit Desai', date: '2024-05-10', total: 45000, status: 'Delivered', items: 1 },
+    { id: 'ORD-9K33', customer: 'Pooja Joshi', date: '2024-05-09', total: 155000, status: 'Cancelled', items: 2 }
+  ])
+
   // 🔄 Supabase Live Data Fetch (अचूक कॉलम्स मॅप करण्यासाठी)
   const fetchData = useCallback(async () => {
     try {
@@ -606,8 +613,59 @@ export default function IntegratedAdminPanelDashboard() {
             </div>
           )}
 
+          {/* 🛒 TAB 3: Order Management */}
+          {activeTab === 3 && (
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900">Order Management</h2>
+                  <p className="text-sm text-slate-500 mt-1">Track, update, and manage customer orders.</p>
+                </div>
+                <button className="px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl shadow-sm hover:bg-slate-200 transition font-bold text-xs flex items-center gap-2">
+                  📥 Export CSV
+                </button>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                <table className="w-full text-left border-collapse min-w-[800px]">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500">
+                      <th className="p-4 font-black">Order ID</th>
+                      <th className="p-4 font-black">Customer Name</th>
+                      <th className="p-4 font-black">Date</th>
+                      <th className="p-4 font-black text-center">Items</th>
+                      <th className="p-4 font-black">Total Amount</th>
+                      <th className="p-4 font-black text-center">Status</th>
+                      <th className="p-4 font-black text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {orders.map((order) => (
+                      <tr key={order.id} className="hover:bg-slate-50/80 transition group">
+                        <td className="p-4 text-xs font-mono font-bold text-slate-900">{order.id}</td>
+                        <td className="p-4 text-sm font-bold text-slate-700">{order.customer}</td>
+                        <td className="p-4 text-xs font-semibold text-slate-500">{order.date}</td>
+                        <td className="p-4 text-sm font-bold text-slate-700 text-center">{order.items}</td>
+                        <td className="p-4 text-sm font-black text-emerald-600">₹{order.total.toLocaleString()}</td>
+                        <td className="p-4 text-center">
+                          <select value={order.status} onChange={(e) => { setOrders(orders.map(o => o.id === order.id ? { ...o, status: e.target.value } : o)); setMessage(`Order ${order.id} status updated!`); }} className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full outline-none cursor-pointer border-2 ${order.status === 'Processing' ? 'bg-amber-50 text-amber-700 border-amber-200' : order.status === 'Shipped' ? 'bg-blue-50 text-blue-700 border-blue-200' : order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+                            <option value="Processing" className="text-slate-900 bg-white">Processing</option>
+                            <option value="Shipped" className="text-slate-900 bg-white">Shipped</option>
+                            <option value="Delivered" className="text-slate-900 bg-white">Delivered</option>
+                            <option value="Cancelled" className="text-slate-900 bg-white">Cancelled</option>
+                          </select>
+                        </td>
+                        <td className="p-4 text-right opacity-80 group-hover:opacity-100 transition"><button className="text-slate-600 font-bold hover:text-slate-900 text-[11px] uppercase tracking-wide">View Details</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Placeholders for other tabs under development */}
-          {([3, 6].includes(activeTab)) && (
+          {([6].includes(activeTab)) && (
             <div className="bg-white p-20 rounded-[2rem] border border-slate-100 shadow-xl text-center">
               <p className="text-4xl">🚧</p>
               <h2 className="text-xl font-black mt-4">Module Integration Pending</h2>
