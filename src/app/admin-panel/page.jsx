@@ -75,6 +75,117 @@ function getStockStatusDetails(product) {
   }
 }
 
+function getOrderDate(order) {
+  const rawDate = order?.date || order?.createdAt || order?.created_at || order?.orderDate
+  const date = new Date(rawDate || 0)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function isSameCalendarDay(dateA, dateB) {
+  if (!dateA || !dateB) return false
+  return (
+    dateA.getFullYear() === dateB.getFullYear() &&
+    dateA.getMonth() === dateB.getMonth() &&
+    dateA.getDate() === dateB.getDate()
+  )
+}
+
+function getRangeStart(range) {
+  const now = new Date()
+  if (range === 'today') {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  }
+  if (range === 'week') {
+    const date = new Date(now)
+    date.setDate(now.getDate() - 7)
+    date.setHours(0, 0, 0, 0)
+    return date
+  }
+  if (range === 'month') {
+    return new Date(now.getFullYear(), now.getMonth(), 1)
+  }
+  return null
+}
+
+function filterOrdersByRange(orders, range) {
+  const safeOrders = Array.isArray(orders) ? orders : []
+  const start = getRangeStart(range)
+
+  if (!start || range === 'all') return safeOrders
+
+  return safeOrders.filter((order) => {
+    const date = getOrderDate(order)
+    return date ? date >= start : false
+  })
+}
+
+function getOrderCustomerName(order) {
+  return order?.customer || order?.customerName || order?.fullName || 'Customer'
+}
+
+function getOrderMobile(order) {
+  return order?.mobileNumber || order?.mobile || order?.phone || '—'
+}
+
+function getOrderAddress(order) {
+  return order?.address || order?.deliveryAddress || '—'
+}
+
+function getOrderTotal(order) {
+  return Number(order?.total || order?.totalAmount || order?.amount || 0)
+}
+
+function sanitizeCsvValue(value) {
+  const text = String(value ?? '').replace(/"/g, '""')
+  return `"${text}"`
+}
+
+function downloadTextFile(filename, content, mimeType = 'text/plain;charset=utf-8') {
+  if (typeof window === 'undefined') return
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+function buildInvoiceText(order, orderProducts = []) {
+  const lines = [
+    'MOBISPHERE MOBILE SHOP',
+    'Invoice / Order Bill',
+    '----------------------------------------',
+    `Order ID: ${order?.id || '—'}`,
+    `Date: ${order?.date ? new Date(order.date).toLocaleString() : '—'}`,
+    `Customer: ${getOrderCustomerName(order)}`,
+    `Mobile: ${getOrderMobile(order)}`,
+    `Address: ${getOrderAddress(order)}`,
+    `Status: ${order?.status || 'Processing'}`,
+    '----------------------------------------',
+    'Products:'
+  ]
+
+  if (orderProducts.length === 0) {
+    lines.push('Product list not available for this order.')
+  } else {
+    orderProducts.forEach((item, index) => {
+      const qty = Math.max(Number(item.quantity || 1), 1)
+      const price = Number(item.price || 0)
+      lines.push(`${index + 1}. ${item.title || 'Mobisphere Product'} | Qty: ${qty} | Price: ₹${price.toLocaleString()} | Total: ₹${(price * qty).toLocaleString()}`)
+    })
+  }
+
+  lines.push('----------------------------------------')
+  lines.push(`Grand Total: ₹${getOrderTotal(order).toLocaleString()}`)
+  lines.push('Payment Mode: Cash on Delivery')
+  lines.push('Thank you for shopping with Mobisphere!')
+
+  return lines.join('\n')
+}
+
 export default function IntegratedAdminPanelDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
@@ -109,6 +220,7 @@ export default function IntegratedAdminPanelDashboard() {
   const [coupons, setCoupons] = useState([])
   const [newCouponCode, setNewCouponCode] = useState('')
   const [newDiscountPercent, setNewDiscountPercent] = useState('')
+  const [newCouponExpiryDate, setNewCouponExpiryDate] = useState('')
 
   const [orders, setOrders] = useState([
     { id: 'ORD-8X91', customer: 'Rahul Sharma', date: '2024-05-12', total: 125000, status: 'Processing', items: 2 },
@@ -118,6 +230,7 @@ export default function IntegratedAdminPanelDashboard() {
   ])
   const [orderFilter, setOrderFilter] = useState('All')
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [salesReportRange, setSalesReportRange] = useState('all')
 
   // 🔄 Supabase Live Data Fetch
   const fetchData = useCallback(async (showFeedback = false) => {
@@ -163,7 +276,7 @@ export default function IntegratedAdminPanelDashboard() {
         setUsername(session.username || 'Admin')
       }
       setAdminUsers(Array.isArray(storedAdmins) ? storedAdmins : [])
-      setCoupons(storedCoupons)
+      setCoupons(Array.isArray(storedCoupons) ? storedCoupons.map((coupon) => ({ active: coupon.active !== false, expiresAt: coupon.expiresAt || coupon.expiryDate || '', ...coupon })) : [])
       if (Array.isArray(storedOrders) && storedOrders.length > 0) {
         setOrders(storedOrders)
       }
@@ -191,6 +304,8 @@ export default function IntegratedAdminPanelDashboard() {
         lowStockProducts: 0,
         outOfStockProducts: 0,
         cartItems: 0,
+        todayOrders: 0,
+        todayRevenue: 0,
         topProducts: [],
         kpiCards: [],
         statusSummary: [],
@@ -254,6 +369,9 @@ export default function IntegratedAdminPanelDashboard() {
     const totalRevenue = safeOrders.reduce((sum, order) => sum + orderTotal(order), 0)
     const fallbackRevenue = [...productRevenue.values()].reduce((sum, value) => sum + value, 0)
     const finalRevenue = totalRevenue > 0 ? totalRevenue : fallbackRevenue
+    const today = new Date()
+    const todayOrdersList = safeOrders.filter((order) => isSameCalendarDay(getOrderDate(order), today))
+    const todayRevenue = todayOrdersList.reduce((sum, order) => sum + orderTotal(order), 0)
 
     const countStatus = (status) =>
       safeOrders.filter((order) => String(order.status || '').toLowerCase() === status.toLowerCase()).length
@@ -319,6 +437,8 @@ export default function IntegratedAdminPanelDashboard() {
       lowStockProducts,
       outOfStockProducts,
       cartItems: safeCart.length,
+      todayOrders: todayOrdersList.length,
+      todayRevenue,
       topProducts,
       statusSummary,
       recentOrders,
@@ -335,6 +455,20 @@ export default function IntegratedAdminPanelDashboard() {
           helper: 'Based on saved orders',
           icon: '₹',
           accent: 'text-emerald-600'
+        },
+        {
+          label: 'Today Revenue',
+          value: `₹${todayRevenue.toLocaleString()}`,
+          helper: `${todayOrdersList.length} orders today`,
+          icon: '📅',
+          accent: 'text-emerald-700'
+        },
+        {
+          label: 'Today Orders',
+          value: todayOrdersList.length.toLocaleString(),
+          helper: 'Orders received today',
+          icon: '🧾',
+          accent: 'text-cyan-600'
         },
         {
           label: 'Total Orders',
@@ -395,6 +529,31 @@ export default function IntegratedAdminPanelDashboard() {
     if (hour < 18) return 'Good Afternoon'
     return 'Good Evening'
   }, [])
+
+
+  const salesReportOrders = useMemo(() => {
+    return filterOrdersByRange(orders, salesReportRange)
+  }, [orders, salesReportRange])
+
+  const salesReportStats = useMemo(() => {
+    const safeOrders = Array.isArray(salesReportOrders) ? salesReportOrders : []
+    const revenue = safeOrders.reduce((sum, order) => sum + getOrderTotal(order), 0)
+    const items = safeOrders.reduce((sum, order) => {
+      const orderProducts = order?.products || order?.cartItems || order?.itemsList || []
+      const fallbackItems = Array.isArray(orderProducts) ? orderProducts.length : 0
+      return sum + Number(order.items ?? fallbackItems ?? 0)
+    }, 0)
+    const delivered = safeOrders.filter((order) => String(order.status || '').toLowerCase() === 'delivered').length
+    const cancelled = safeOrders.filter((order) => String(order.status || '').toLowerCase() === 'cancelled').length
+
+    return {
+      revenue,
+      orders: safeOrders.length,
+      items,
+      delivered,
+      cancelled
+    }
+  }, [salesReportOrders])
 
   // Admin Sign Up / Login Logic
   const resetAuthForm = () => {
@@ -528,13 +687,31 @@ export default function IntegratedAdminPanelDashboard() {
     const code = newCouponCode.trim().toUpperCase()
     const percent = Number(newDiscountPercent)
     if (!code || percent <= 0 || percent > 100) return
-    const newCoupon = { id: Date.now().toString(), code, discountPercent: percent }
+
+    const newCoupon = {
+      id: Date.now().toString(),
+      code,
+      discountPercent: percent,
+      active: true,
+      expiresAt: newCouponExpiryDate || '',
+      createdAt: new Date().toISOString()
+    }
+
     const next = [...coupons, newCoupon]
     setCoupons(next)
     saveJson(COUPON_STORAGE_KEY, next)
     setNewCouponCode('')
     setNewDiscountPercent('')
+    setNewCouponExpiryDate('')
     setMessage('Coupon code activated!')
+  }
+
+  const handleToggleCouponActive = (id) => {
+    const next = coupons.map((coupon) =>
+      coupon.id === id ? { ...coupon, active: coupon.active === false ? true : false } : coupon
+    )
+    setCoupons(next)
+    saveJson(COUPON_STORAGE_KEY, next)
   }
 
   const handleDeleteCoupon = (id) => {
@@ -542,6 +719,119 @@ export default function IntegratedAdminPanelDashboard() {
     setCoupons(next)
     saveJson(COUPON_STORAGE_KEY, next)
   }
+
+  const handleExportStockReport = () => {
+    const safeProducts = Array.isArray(localProducts) ? localProducts : []
+    const rows = [
+      ['Brand', 'Product', 'Selling Price', 'Purchase Price', 'Stock', 'Minimum Alert', 'Status', 'Supplier']
+    ]
+
+    safeProducts.forEach((product) => {
+      rows.push([
+        product.brand || 'Other Models',
+        product.title || 'Mobisphere Product',
+        Number(product.price || 0),
+        Number(product.purchasePrice || 0),
+        getStockQuantity(product),
+        getMinStockAlert(product),
+        getStockStatusDetails(product).label,
+        product.supplierName || ''
+      ])
+    })
+
+    const csv = rows.map((row) => row.map(sanitizeCsvValue).join(',')).join('\n')
+    downloadTextFile(`mobisphere-stock-report-${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv;charset=utf-8')
+    setMessage('Stock report downloaded successfully.')
+  }
+
+  const handlePrintInvoice = (order) => {
+    if (typeof window === 'undefined' || !order) return
+    const orderProducts = getOrderProducts(order)
+    const invoiceText = buildInvoiceText(order, orderProducts)
+    const printWindow = window.open('', '_blank', 'width=800,height=900')
+
+    if (!printWindow) {
+      alert('Popup blocked. Please allow popups to print invoice.')
+      return
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Invoice ${order.id}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 32px; color: #0f172a; }
+            pre { white-space: pre-wrap; font-size: 14px; line-height: 1.7; }
+          </style>
+        </head>
+        <body>
+          <pre>${invoiceText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+    printWindow.focus()
+    printWindow.print()
+  }
+
+  const handleDownloadInvoice = (order) => {
+    if (!order) return
+    const orderProducts = getOrderProducts(order)
+    downloadTextFile(`mobisphere-invoice-${order.id || Date.now()}.txt`, buildInvoiceText(order, orderProducts))
+  }
+
+  const handleConvertEnquiryToCustomer = async (enquiry) => {
+    if (!enquiry) return
+
+    try {
+      const newCustomer = {
+        full_name: enquiry.full_name || 'Visitor',
+        mobile_number: enquiry.mobile_number || '',
+        address: enquiry.address || ''
+      }
+
+      const { data, error } = await supabase.from('customers').insert([newCustomer]).select()
+
+      if (error) throw error
+
+      const createdCustomer = Array.isArray(data) && data.length > 0 ? data[0] : { ...newCustomer, id: `local-${Date.now()}` }
+      setCustomers((prev) => [createdCustomer, ...prev])
+      setEnquiries((prev) => prev.map((item) => item.id === enquiry.id ? { ...item, status: 'Converted', admin_note: 'Converted to customer.' } : item))
+      setMessage('✅ Enquiry converted to customer successfully.')
+    } catch (error) {
+      console.error('Convert enquiry error:', error)
+      setMessage('❌ Could not convert enquiry to customer. Check Supabase customer table fields.')
+    }
+  }
+
+  const handleCreateOrderFromEnquiry = (enquiry) => {
+    if (!enquiry) return
+
+    const order = {
+      id: `ORD-${Date.now().toString(36).toUpperCase().slice(-5)}`,
+      customer: enquiry.full_name || 'Visitor',
+      mobileNumber: enquiry.mobile_number || '',
+      address: enquiry.address || '',
+      date: new Date().toISOString(),
+      total: 0,
+      status: 'Processing',
+      items: 0,
+      products: [],
+      enquiryId: enquiry.id,
+      note: enquiry.message || 'Order created from enquiry.'
+    }
+
+    setOrders((prev) => {
+      const next = [order, ...(Array.isArray(prev) ? prev : [])]
+      saveJson(ORDERS_STORAGE_KEY, next)
+      return next
+    })
+
+    setEnquiries((prev) => prev.map((item) => item.id === enquiry.id ? { ...item, status: 'Converted to Order', admin_note: `Order ${order.id} created from enquiry.` } : item))
+    setSelectedOrder(order)
+    setMessage(`✅ Order ${order.id} created from enquiry.`)
+  }
+
 
   // --- Product Inventory Logic ---
   const uniqueBrands = [...new Set(localProducts.map(p => p.brand || 'Other Models'))]
@@ -971,7 +1261,7 @@ export default function IntegratedAdminPanelDashboard() {
           {/* Dark Quick Actions Info Box */}
           <div className="mt-8 rounded-3xl bg-slate-950 p-6 text-white shadow-xl">
              <h3 className="text-sm font-bold border-b border-slate-800 pb-2 mb-3 flex justify-between items-center">
-               Quick Actions <span className="text-[9px] text-emerald-400 font-mono bg-emerald-400/10 px-2 py-0.5 rounded-full">v2.2</span>
+               Quick Actions <span className="text-[9px] text-emerald-400 font-mono bg-emerald-400/10 px-2 py-0.5 rounded-full">v2.3</span>
              </h3>
              <p className="text-[11px] leading-relaxed text-slate-400">Control panel for adding devices, inventory analytics sync, and customer resolution pathways.</p>
           </div>
@@ -1285,16 +1575,52 @@ export default function IntegratedAdminPanelDashboard() {
                 <p className="text-sm text-slate-400 py-6 text-center">No accounts found in Supabase server.</p>
               ) : (
                 <div className="grid gap-4">
-                  {customers.map(c => (
-                    <div key={c.id} className="flex flex-col sm:flex-row justify-between items-center bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                      <div>
-                        <p className="text-lg font-black text-slate-900">{c.full_name || 'No Name Provided'}</p>
-                        <p className="text-sm font-bold text-slate-600">📞 {c.mobile_number || '—'} | 📍 {c.address || '—'}</p>
-                        <p className="text-[10px] font-mono mt-1 text-slate-400">UUID: {c.id} | Joined: {c.created_at ? new Date(c.created_at).toLocaleString() : '—'}</p>
+                  {customers.map(c => {
+                    const customerOrders = orders.filter((order) => {
+                      const sameMobile = String(getOrderMobile(order) || '').trim() && String(getOrderMobile(order)).trim() === String(c.mobile_number || '').trim()
+                      const sameName = String(getOrderCustomerName(order) || '').toLowerCase().trim() === String(c.full_name || '').toLowerCase().trim()
+                      return sameMobile || sameName
+                    })
+                    const customerSpend = customerOrders.reduce((sum, order) => sum + getOrderTotal(order), 0)
+
+                    return (
+                      <div key={c.id} className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                          <div>
+                            <p className="text-lg font-black text-slate-900">{c.full_name || 'No Name Provided'}</p>
+                            <p className="text-sm font-bold text-slate-600">📞 {c.mobile_number || '—'} | 📍 {c.address || '—'}</p>
+                            <p className="text-[10px] font-mono mt-1 text-slate-400">UUID: {c.id} | Joined: {c.created_at ? new Date(c.created_at).toLocaleString() : '—'}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-600">{customerOrders.length} Orders</span>
+                            <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-700">₹{customerSpend.toLocaleString()}</span>
+                            <button onClick={() => handleCustomerDelete(c.id)} className="px-4 py-1.5 bg-rose-100 text-rose-600 rounded-full text-[10px] font-black hover:bg-rose-600 hover:text-white transition">Remove</button>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 rounded-2xl bg-white p-4">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Order History</p>
+                          {customerOrders.length === 0 ? (
+                            <p className="mt-2 text-xs font-bold text-slate-400">No orders found for this customer.</p>
+                          ) : (
+                            <div className="mt-3 space-y-2">
+                              {customerOrders.slice(0, 4).map((order) => (
+                                <button
+                                  key={order.id}
+                                  type="button"
+                                  onClick={() => setSelectedOrder(order)}
+                                  className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-left text-xs font-bold transition hover:bg-slate-100"
+                                >
+                                  <span>{order.id} • {order.status || 'Processing'}</span>
+                                  <span className="font-black text-emerald-600">₹{getOrderTotal(order).toLocaleString()}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <button onClick={() => handleCustomerDelete(c.id)} className="mt-4 sm:mt-0 px-6 py-2 bg-rose-100 text-rose-600 rounded-full text-xs font-black hover:bg-rose-600 hover:text-white transition">Remove Account</button>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -1308,19 +1634,41 @@ export default function IntegratedAdminPanelDashboard() {
                 <form onSubmit={handleCreateCoupon} className="space-y-3">
                   <input type="text" value={newCouponCode} onChange={(e) => setNewCouponCode(e.target.value)} placeholder="COUPON CODE (e.g. IPHONE10)" className="w-full border p-3 text-xs uppercase font-bold rounded-xl text-slate-900 outline-none focus:border-slate-900" />
                   <input type="number" value={newDiscountPercent} onChange={(e) => setNewDiscountPercent(e.target.value)} placeholder="Discount Percentage %" className="w-full border p-3 text-xs rounded-xl text-slate-900 outline-none focus:border-slate-900" />
+                  <div>
+                    <label className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-400">Expiry Date</label>
+                    <input type="date" value={newCouponExpiryDate} onChange={(e) => setNewCouponExpiryDate(e.target.value)} className="w-full border p-3 text-xs rounded-xl text-slate-900 outline-none focus:border-slate-900" />
+                  </div>
                   <button type="submit" className="w-full bg-slate-900 text-white py-3 text-xs font-bold rounded-xl hover:bg-slate-800">Generate Coupon</button>
                 </form>
               </div>
               <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
                 <h3 className="font-black text-slate-900 text-sm mb-4">Active Coupons</h3>
-                <div className="overflow-y-auto max-h-[220px] divide-y">
-                  {coupons.length === 0 ? <p className="text-xs text-slate-400 py-4">No active coupon parameters saved.</p> : coupons.map((coupon) => (
-                    <div key={coupon.id} className="flex justify-between items-center py-2 text-xs">
-                      <span className="font-mono font-black text-slate-900 uppercase bg-slate-100 px-2 py-1 rounded-md">{coupon.code}</span>
-                      <span className="text-emerald-700 font-black">{coupon.discountPercent}% OFF</span>
-                      <button onClick={() => handleDeleteCoupon(coupon.id)} className="text-rose-600 font-bold hover:underline">Remove</button>
-                    </div>
-                  ))}
+                <div className="overflow-y-auto max-h-[320px] divide-y">
+                  {coupons.length === 0 ? <p className="text-xs text-slate-400 py-4">No active coupon parameters saved.</p> : coupons.map((coupon) => {
+                    const expiryDate = coupon.expiresAt || coupon.expiryDate || ''
+                    const isExpired = expiryDate ? new Date(expiryDate) < new Date(new Date().toDateString()) : false
+                    const isActive = coupon.active !== false && !isExpired
+
+                    return (
+                      <div key={coupon.id} className="flex flex-col gap-2 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <span className="font-mono font-black text-slate-900 uppercase bg-slate-100 px-2 py-1 rounded-md">{coupon.code}</span>
+                          <p className="mt-2 font-black text-emerald-700">{coupon.discountPercent}% OFF</p>
+                          <p className="mt-1 text-[10px] font-bold text-slate-400">Expiry: {expiryDate || 'No expiry date'}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCouponActive(coupon.id)}
+                            className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wider ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}
+                          >
+                            {isActive ? 'Active' : isExpired ? 'Expired' : 'Inactive'}
+                          </button>
+                          <button onClick={() => handleDeleteCoupon(coupon.id)} className="rounded-full bg-rose-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700 hover:bg-rose-600 hover:text-white">Remove</button>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </div>
@@ -1339,9 +1687,14 @@ export default function IntegratedAdminPanelDashboard() {
                   <p className="text-sm text-slate-500 mt-1">Manage products, pricing, stock quantity, supplier details, and low-stock alerts.</p>
                 </div>
                 {inventoryView !== 'form' && (
-                  <button onClick={() => { setEditingProduct(null); setInventoryView('form'); }} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs flex items-center gap-2">
-                    <span>+</span> Add New Product
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={handleExportStockReport} className="px-5 py-2.5 bg-emerald-100 text-emerald-700 rounded-xl shadow-sm hover:bg-emerald-600 hover:text-white transition font-bold text-xs flex items-center gap-2">
+                      Export Stock Report
+                    </button>
+                    <button onClick={() => { setEditingProduct(null); setInventoryView('form'); }} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs flex items-center gap-2">
+                      <span>+</span> Add New Product
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -1602,6 +1955,8 @@ export default function IntegratedAdminPanelDashboard() {
                          </div>
                          <div className="flex gap-2 self-end sm:self-start">
                            <button onClick={() => handleSaveEnquiry(e.id)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 transition font-bold text-xs">Save Changes</button>
+                           <button onClick={() => handleConvertEnquiryToCustomer(e)} className="px-4 py-2 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 transition font-bold text-xs">Convert Customer</button>
+                           <button onClick={() => handleCreateOrderFromEnquiry(e)} className="px-4 py-2 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs">Create Order</button>
                            <button onClick={() => handleEnquiryDelete(e.id)} className="px-4 py-2 bg-rose-600 text-white rounded-xl shadow-md hover:bg-rose-700 transition font-bold text-xs">Delete</button>
                          </div>
                       </div>
@@ -1631,23 +1986,45 @@ export default function IntegratedAdminPanelDashboard() {
           {activeTab === 6 && (
             <div className="space-y-6">
               <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl sm:p-8">
-                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600">
-                  Sales Reports
-                </p>
-                <h2 className="mt-2 text-3xl font-black text-slate-950">
-                  Business summary
-                </h2>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                  Revenue, order status, top products, and stock health in one reporting view.
-                </p>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600">
+                      Sales Reports
+                    </p>
+                    <h2 className="mt-2 text-3xl font-black text-slate-950">
+                      Business summary
+                    </h2>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                      Revenue, order status, top products, and stock health with date filters.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      ['all', 'All'],
+                      ['today', 'Today'],
+                      ['week', 'This Week'],
+                      ['month', 'This Month']
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setSalesReportRange(value)}
+                        className={`rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-wider transition ${salesReportRange === value ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 {[
-                  ['Revenue', `₹${chartAnalytics.totalRevenue.toLocaleString()}`, 'Total saved order value', 'text-emerald-600'],
-                  ['Orders', chartAnalytics.totalOrders.toLocaleString(), 'All saved customer orders', 'text-slate-900'],
-                  ['Stock Units', chartAnalytics.totalStockUnits.toLocaleString(), 'Total available inventory', 'text-blue-600'],
-                  ['Unavailable', chartAnalytics.outOfStockProducts.toLocaleString(), 'Out of stock products', 'text-rose-600']
+                  ['Revenue', `₹${salesReportStats.revenue.toLocaleString()}`, `${salesReportRange === 'all' ? 'All time' : salesReportRange} order value`, 'text-emerald-600'],
+                  ['Orders', salesReportStats.orders.toLocaleString(), 'Filtered customer orders', 'text-slate-900'],
+                  ['Items Sold', salesReportStats.items.toLocaleString(), 'Units in filtered orders', 'text-blue-600'],
+                  ['Cancelled', salesReportStats.cancelled.toLocaleString(), 'Cancelled in selected range', 'text-rose-600']
                 ].map(([label, value, helper, color]) => (
                   <div key={label} className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p>
@@ -1659,22 +2036,22 @@ export default function IntegratedAdminPanelDashboard() {
 
               <div className="grid gap-6 xl:grid-cols-2">
                 <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl">
-                  <h3 className="text-lg font-black text-slate-900">Top product activity</h3>
+                  <h3 className="text-lg font-black text-slate-900">Filtered orders</h3>
                   <p className="mt-1 text-xs font-semibold text-slate-500">
-                    Based on cart/order activity available in local storage.
+                    Date range: {salesReportRange === 'all' ? 'All time' : salesReportRange}
                   </p>
 
                   <div className="mt-5 space-y-3">
-                    {chartAnalytics.topProducts.length === 0 ? (
-                      <p className="rounded-2xl bg-slate-50 p-5 text-sm font-bold text-slate-500">No product activity yet.</p>
-                    ) : chartAnalytics.topProducts.map((product, index) => (
-                      <div key={`${product.title}-${index}`} className="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
+                    {salesReportOrders.length === 0 ? (
+                      <p className="rounded-2xl bg-slate-50 p-5 text-sm font-bold text-slate-500">No orders found for this filter.</p>
+                    ) : salesReportOrders.slice(0, 8).map((order) => (
+                      <button key={order.id} type="button" onClick={() => setSelectedOrder(order)} className="flex w-full items-center justify-between rounded-2xl bg-slate-50 p-4 text-left transition hover:bg-slate-100">
                         <div>
-                          <p className="text-sm font-black text-slate-900">{product.title}</p>
-                          <p className="text-xs font-bold text-slate-500">{product.count} units activity</p>
+                          <p className="text-sm font-black text-slate-900">{order.id}</p>
+                          <p className="text-xs font-bold text-slate-500">{getOrderCustomerName(order)} • {getOrderDate(order)?.toLocaleDateString() || 'No date'}</p>
                         </div>
-                        <p className="text-sm font-black text-emerald-600">₹{Number(product.revenue || 0).toLocaleString()}</p>
-                      </div>
+                        <p className="text-sm font-black text-emerald-600">₹{getOrderTotal(order).toLocaleString()}</p>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -1715,6 +2092,7 @@ export default function IntegratedAdminPanelDashboard() {
               </div>
             </div>
           )}
+
 
         </div>
       </div>
@@ -1812,6 +2190,22 @@ export default function IntegratedAdminPanelDashboard() {
             </div>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => handlePrintInvoice(selectedOrder)}
+                className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-black text-white shadow-lg transition hover:bg-slate-800"
+              >
+                Print Invoice
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDownloadInvoice(selectedOrder)}
+                className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-lg transition hover:bg-emerald-700"
+              >
+                Download Bill
+              </button>
+
               <button
                 type="button"
                 onClick={() => setSelectedOrder(null)}
