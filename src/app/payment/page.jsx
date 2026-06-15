@@ -6,6 +6,8 @@ import { useProductContext } from "@/app/context/ProductContext"
 
 const CART_STORAGE_KEY = "mobisphereCart"
 const ORDERS_STORAGE_KEY = "mobisphereOrders"
+const COUPON_STORAGE_KEY = "mobisphereCoupons"
+const SALE_CAMPAIGN_STORAGE_KEY = "mobisphereSaleCampaigns"
 
 const initialForm = {
   fullName: "",
@@ -76,9 +78,172 @@ function getStockStatusFromNumbers(stock, minStock) {
 function findProductById(products, productId) {
   if (!Array.isArray(products)) return null
 
+  return products.find((item) => String(item.id) === String(productId)) || null
+}
+
+function getCampaignStartDate(campaign) {
+  return campaign?.startDate || campaign?.startsAt || campaign?.fromDate || ""
+}
+
+function getCampaignEndDate(campaign) {
   return (
-    products.find((item) => String(item.id) === String(productId)) || null
+    campaign?.endDate ||
+    campaign?.endsAt ||
+    campaign?.expiresAt ||
+    campaign?.expiryDate ||
+    campaign?.toDate ||
+    ""
   )
+}
+
+function isCampaignDateActive(campaign) {
+  const now = new Date()
+  const startDate = getCampaignStartDate(campaign)
+  const endDate = getCampaignEndDate(campaign)
+
+  if (startDate) {
+    const start = new Date(startDate)
+    start.setHours(0, 0, 0, 0)
+
+    if (!Number.isNaN(start.getTime()) && now < start) {
+      return false
+    }
+  }
+
+  if (endDate) {
+    const end = new Date(endDate)
+    end.setHours(23, 59, 59, 999)
+
+    if (!Number.isNaN(end.getTime()) && now > end) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function campaignMatchesProduct(campaign, product) {
+  const applyOn = String(
+    campaign?.applyOn ||
+      campaign?.targetType ||
+      campaign?.scope ||
+      campaign?.offerScope ||
+      "all"
+  ).toLowerCase()
+
+  if (applyOn === "all" || applyOn === "all-products" || applyOn === "allproducts") {
+    return true
+  }
+
+  if (applyOn === "brand" || applyOn === "selected-brand" || applyOn === "selectedbrand") {
+    const campaignBrand = String(
+      campaign?.brand || campaign?.targetBrand || campaign?.selectedBrand || ""
+    )
+      .toLowerCase()
+      .trim()
+
+    const productBrand = String(product?.brand || "Other Models")
+      .toLowerCase()
+      .trim()
+
+    return campaignBrand && campaignBrand === productBrand
+  }
+
+  if (applyOn === "product" || applyOn === "selected-product" || applyOn === "selectedproduct") {
+    const campaignProductId = String(
+      campaign?.productId ||
+        campaign?.targetProductId ||
+        campaign?.selectedProductId ||
+        ""
+    ).trim()
+
+    return campaignProductId && campaignProductId === String(product?.id)
+  }
+
+  return false
+}
+
+function calculateCampaignPrice(product, campaign) {
+  const originalPrice = Number(product?.price) || 0
+  const discountValue = Number(
+    campaign?.discountValue ?? campaign?.discount ?? campaign?.discountPercent ?? 0
+  )
+
+  if (originalPrice <= 0 || discountValue <= 0) {
+    return null
+  }
+
+  const discountType = String(campaign?.discountType || campaign?.type || "percentage").toLowerCase()
+
+  let discountAmount = 0
+
+  if (discountType === "percentage" || discountType === "percent" || discountType === "%") {
+    discountAmount = Math.round((originalPrice * discountValue) / 100)
+  } else {
+    discountAmount = Math.round(discountValue)
+  }
+
+  const salePrice = Math.max(originalPrice - discountAmount, 0)
+
+  if (salePrice >= originalPrice) {
+    return null
+  }
+
+  return {
+    campaignId: campaign?.id || "",
+    title: campaign?.title || campaign?.name || campaign?.offerTitle || "Festival Sale",
+    originalPrice,
+    salePrice,
+    discountAmount,
+    discountValue,
+    discountType,
+    discountLabel:
+      discountType === "percentage" || discountType === "percent" || discountType === "%"
+        ? `${discountValue}% OFF`
+        : `₹${discountAmount.toLocaleString()} OFF`,
+    endsAt: getCampaignEndDate(campaign),
+  }
+}
+
+function getBestSaleForProduct(product) {
+  const campaigns = safeJson(SALE_CAMPAIGN_STORAGE_KEY, [])
+
+  if (!Array.isArray(campaigns) || campaigns.length === 0 || !product) {
+    return null
+  }
+
+  const validSales = campaigns
+    .filter((campaign) => campaign?.active !== false)
+    .filter((campaign) => isCampaignDateActive(campaign))
+    .filter((campaign) => campaignMatchesProduct(campaign, product))
+    .map((campaign) => calculateCampaignPrice(product, campaign))
+    .filter(Boolean)
+    .sort((a, b) => b.discountAmount - a.discountAmount)
+
+  return validSales[0] || null
+}
+
+function getSavedSaleFromCartItem(item) {
+  const originalPrice = Number(item?.originalPrice ?? item?.price) || 0
+  const salePrice = Number(item?.salePrice ?? item?.price) || 0
+
+  if (!item || originalPrice <= 0 || salePrice <= 0 || salePrice >= originalPrice) {
+    return null
+  }
+
+  const discountAmount = originalPrice - salePrice
+
+  return {
+    campaignId: item.saleCampaignId || "",
+    title: item.saleCampaignTitle || "Festival Sale",
+    originalPrice,
+    salePrice,
+    discountAmount,
+    discountValue: item.saleDiscountValue || 0,
+    discountType: item.saleDiscountType || "",
+    discountLabel: item.saleDiscountLabel || `₹${discountAmount.toLocaleString()} OFF`,
+    endsAt: item.saleEndsAt || "",
+  }
 }
 
 function normalizeCartItem(item, latestProduct = null) {
@@ -88,17 +253,28 @@ function normalizeCartItem(item, latestProduct = null) {
   const stockQty = getStockQuantity(source)
   const minStockAlert = getMinimumStockAlert(source)
   const stockStatus = getStockStatusFromNumbers(stockQty, minStockAlert)
+  const liveSale = latestProduct ? getBestSaleForProduct(latestProduct) : null
+  const savedSale = !liveSale && !latestProduct ? getSavedSaleFromCartItem(item) : null
+  const saleInfo = liveSale || savedSale
+  const originalPrice = Number(latestProduct?.price ?? item.originalPrice ?? item.price) || 0
+  const finalPrice = Number(
+    saleInfo?.salePrice ?? (latestProduct ? originalPrice : item.price ?? originalPrice)
+  ) || 0
 
   return {
     productId,
     title: latestProduct?.title || item.title || "Mobisphere Product",
     brand: latestProduct?.brand || item.brand || "Mobisphere",
-    image:
-      latestProduct?.image ||
-      item.image ||
-      "/images/IPhone 16 Pro Max.png",
+    image: latestProduct?.image || item.image || "/images/IPhone 16 Pro Max.png",
     description: latestProduct?.description || item.description || "",
-    price: Number(latestProduct?.price ?? item.price) || 0,
+    price: finalPrice,
+    originalPrice,
+    salePrice: saleInfo?.salePrice || null,
+    saleDiscountAmount: saleInfo?.discountAmount || 0,
+    saleDiscountLabel: saleInfo?.discountLabel || "",
+    saleCampaignId: saleInfo?.campaignId || "",
+    saleCampaignTitle: saleInfo?.title || "",
+    saleEndsAt: saleInfo?.endsAt || "",
     quantity,
     stockQty,
     minStockAlert,
@@ -111,68 +287,68 @@ function makeOrderId() {
   return `ORD-${Date.now().toString(36).toUpperCase().slice(-5)}`
 }
 
-function getCouponCode(coupon) {
-  return String(coupon?.code || coupon?.couponCode || "").trim().toUpperCase()
-}
-
-function getCouponDiscount(coupon) {
-  const value =
-    coupon?.discountPercent ??
-    coupon?.discount ??
-    coupon?.percent ??
-    coupon?.discount_percentage ??
-    0
-
-  const percent = Number(value)
-  return Number.isFinite(percent) ? percent : 0
-}
-
-function isCouponActive(coupon) {
-  if (!coupon) return false
-
-  if (typeof coupon.isActive === "boolean") return coupon.isActive
-  if (typeof coupon.active === "boolean") return coupon.active
-  if (typeof coupon.enabled === "boolean") return coupon.enabled
-
-  const status = String(coupon.status || "active").toLowerCase()
-  return !["inactive", "disabled", "expired", "blocked"].includes(status)
-}
-
 function getCouponExpiryDate(coupon) {
-  const rawExpiry =
-    coupon?.expiryDate ??
-    coupon?.expiresAt ??
-    coupon?.validUntil ??
-    coupon?.expireDate ??
-    coupon?.expiry ??
-    ""
-
-  if (!rawExpiry) return null
-
-  const expiryDate = new Date(rawExpiry)
-  if (Number.isNaN(expiryDate.getTime())) return null
-
-  const rawString = String(rawExpiry)
-  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(rawString)
-
-  if (isDateOnly) {
-    expiryDate.setHours(23, 59, 59, 999)
-  }
-
-  return expiryDate
+  return coupon?.expiresAt || coupon?.expiryDate || coupon?.endDate || ""
 }
 
 function isCouponExpired(coupon) {
   const expiryDate = getCouponExpiryDate(coupon)
+
   if (!expiryDate) return false
-  return expiryDate.getTime() < Date.now()
+
+  const end = new Date(expiryDate)
+  end.setHours(23, 59, 59, 999)
+
+  return !Number.isNaN(end.getTime()) && new Date() > end
 }
 
-function formatCouponExpiry(coupon) {
-  const expiryDate = getCouponExpiryDate(coupon)
-  if (!expiryDate) return "No expiry"
+function validateCouponCode(code) {
+  const cleanCode = String(code || "").trim().toUpperCase()
 
-  return expiryDate.toLocaleDateString("en-IN", {
+  if (!cleanCode) {
+    return { valid: false, message: "Please enter a coupon code." }
+  }
+
+  const storedCoupons = safeJson(COUPON_STORAGE_KEY, [])
+  const found = Array.isArray(storedCoupons)
+    ? storedCoupons.find((coupon) => String(coupon.code || "").toUpperCase() === cleanCode)
+    : null
+
+  if (!found) {
+    return { valid: false, message: "Invalid coupon code. Try another one." }
+  }
+
+  if (found.active === false) {
+    return { valid: false, message: "This coupon is currently inactive." }
+  }
+
+  if (isCouponExpired(found)) {
+    return { valid: false, message: "This coupon has expired." }
+  }
+
+  const percent = Number(found.discountPercent) || 0
+
+  if (percent <= 0 || percent > 100) {
+    return { valid: false, message: "This coupon is not valid." }
+  }
+
+  return {
+    valid: true,
+    coupon: found,
+    code: cleanCode,
+    percent,
+    message: `Coupon applied! You got ${percent}% off.`,
+  }
+}
+
+function formatDateLabel(value) {
+  if (!value) return ""
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) return ""
+
+  return date.toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -248,9 +424,7 @@ export default function PaymentPage() {
       })
     }
 
-    return selectedProduct
-      ? [normalizeCartItem(selectedProduct, selectedProduct)]
-      : []
+    return selectedProduct ? [normalizeCartItem(selectedProduct, selectedProduct)] : []
   }, [cartItems, checkoutMode.cart, selectedProduct, products])
 
   const stockValidation = useMemo(() => {
@@ -282,9 +456,7 @@ export default function PaymentPage() {
       }
 
       if (orderedQuantity > availableStock) {
-        issues.push(
-          `${item?.title || "Product"} has only ${availableStock} units available.`
-        )
+        issues.push(`${item?.title || "Product"} has only ${availableStock} units available.`)
       }
     })
 
@@ -294,10 +466,19 @@ export default function PaymentPage() {
     }
   }, [checkoutItems])
 
+  const originalItemsTotal = checkoutItems.reduce((sum, item) => {
+    const originalPrice = Number(item.originalPrice ?? item.price ?? 0)
+    const unitPrice = Number(item.price || 0)
+    const quantity = Number(item.quantity || 1)
+
+    return sum + Math.max(originalPrice, unitPrice) * quantity
+  }, 0)
+
   const basePrice = checkoutItems.reduce((sum, item) => {
     return sum + Number(item.price || 0) * Number(item.quantity || 1)
   }, 0)
 
+  const saleSavingsAmount = Math.max(originalItemsTotal - basePrice, 0)
   const discountAmount = Math.round((basePrice * discount) / 100)
   const finalPrice = Math.max(basePrice - discountAmount, 0)
 
@@ -308,59 +489,34 @@ export default function PaymentPage() {
     }))
 
     if (field === "couponCode") {
-      setCouponError("")
-      setCouponSuccess("")
       setDiscount(0)
       setAppliedCoupon(null)
+      setCouponError("")
+      setCouponSuccess("")
     }
   }
 
   const applyCoupon = () => {
     setCouponError("")
     setCouponSuccess("")
-    setDiscount(0)
-    setAppliedCoupon(null)
 
-    const code = formData.couponCode.trim().toUpperCase()
+    const result = validateCouponCode(formData.couponCode)
 
-    if (!code) {
-      setCouponError("Please enter a coupon code.")
+    if (!result.valid) {
+      setCouponError(result.message)
+      setDiscount(0)
+      setAppliedCoupon(null)
       return
     }
 
-    const storedCoupons = safeJson("mobisphereCoupons", [])
-
-    const found = Array.isArray(storedCoupons)
-      ? storedCoupons.find((coupon) => getCouponCode(coupon) === code)
-      : null
-
-    if (!found) {
-      setCouponError("Invalid coupon code. Try another one.")
-      return
-    }
-
-    if (!isCouponActive(found)) {
-      setCouponError("This coupon is currently inactive.")
-      return
-    }
-
-    if (isCouponExpired(found)) {
-      setCouponError("This coupon has expired.")
-      return
-    }
-
-    const percent = getCouponDiscount(found)
-
-    if (percent <= 0 || percent > 100) {
-      setCouponError("This coupon discount is not valid.")
-      return
-    }
-
-    setDiscount(percent)
-    setAppliedCoupon(found)
-    setCouponSuccess(
-      `Coupon applied! You got ${percent}% off. Expiry: ${formatCouponExpiry(found)}.`
-    )
+    setDiscount(result.percent)
+    setAppliedCoupon({
+      id: result.coupon.id || "",
+      code: result.code,
+      discountPercent: result.percent,
+      expiresAt: getCouponExpiryDate(result.coupon),
+    })
+    setCouponSuccess(result.message)
   }
 
   const reduceProductStock = (orderedItems) => {
@@ -405,11 +561,7 @@ export default function PaymentPage() {
   const handlePlaceOrder = (event) => {
     event.preventDefault()
 
-    if (
-      !formData.fullName.trim() ||
-      !formData.mobileNumber.trim() ||
-      !formData.address.trim()
-    ) {
+    if (!formData.fullName.trim() || !formData.mobileNumber.trim() || !formData.address.trim()) {
       alert("Please fill out your name, mobile number, and delivery address.")
       return
     }
@@ -424,28 +576,37 @@ export default function PaymentPage() {
       return
     }
 
-    if (appliedCoupon) {
-      if (!isCouponActive(appliedCoupon)) {
-        alert("Applied coupon is inactive. Please remove or apply another coupon.")
+    let finalCoupon = appliedCoupon
+    let finalDiscountPercent = discount
+
+    if (discount > 0) {
+      const couponResult = validateCouponCode(appliedCoupon?.code || formData.couponCode)
+
+      if (!couponResult.valid) {
+        setCouponError(couponResult.message)
         setDiscount(0)
         setAppliedCoupon(null)
-        setCouponError("Applied coupon is inactive.")
-        setCouponSuccess("")
+        alert(couponResult.message)
         return
       }
 
-      if (isCouponExpired(appliedCoupon)) {
-        alert("Applied coupon has expired. Please remove or apply another coupon.")
-        setDiscount(0)
-        setAppliedCoupon(null)
-        setCouponError("Applied coupon has expired.")
-        setCouponSuccess("")
-        return
+      finalCoupon = {
+        id: couponResult.coupon.id || "",
+        code: couponResult.code,
+        discountPercent: couponResult.percent,
+        expiresAt: getCouponExpiryDate(couponResult.coupon),
       }
+      finalDiscountPercent = couponResult.percent
     }
+
+    const finalCouponDiscountAmount = Math.round((basePrice * finalDiscountPercent) / 100)
+    const payableAmount = Math.max(basePrice - finalCouponDiscountAmount, 0)
 
     const orderProducts = checkoutItems.map((item) => ({
       ...item,
+      unitPrice: Number(item.price || 0),
+      originalUnitPrice: Number(item.originalPrice ?? item.price ?? 0),
+      itemTotal: Number(item.price || 0) * Number(item.quantity || 1),
       availableStockBeforeOrder: item.stockQty,
     }))
 
@@ -455,22 +616,21 @@ export default function PaymentPage() {
       mobileNumber: formData.mobileNumber.trim(),
       address: formData.address.trim(),
       date: new Date().toISOString(),
-      total: finalPrice,
+      subTotal: basePrice,
+      originalItemsTotal,
+      saleDiscountAmount: saleSavingsAmount,
+      couponCode: finalCoupon?.code || "",
+      couponDiscountPercent: finalDiscountPercent,
+      couponDiscountAmount: finalCouponDiscountAmount,
+      total: payableAmount,
       status: "Processing",
-      items: orderProducts.reduce(
-        (sum, item) => sum + Number(item.quantity || 1),
-        0
-      ),
+      items: orderProducts.reduce((sum, item) => sum + Number(item.quantity || 1), 0),
       products: orderProducts,
-      couponCode: appliedCoupon ? getCouponCode(appliedCoupon) : "",
-      discountPercent: discount,
-      discountAmount,
+      discountPercent: finalDiscountPercent,
     }
 
     const existingOrders = safeJson(ORDERS_STORAGE_KEY, [])
-    const nextOrders = Array.isArray(existingOrders)
-      ? [order, ...existingOrders]
-      : [order]
+    const nextOrders = Array.isArray(existingOrders) ? [order, ...existingOrders] : [order]
 
     localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(nextOrders))
 
@@ -505,9 +665,7 @@ export default function PaymentPage() {
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
           <div className="mb-4 text-5xl">🛒</div>
 
-          <p className="text-xl font-black text-slate-950">
-            No product selected
-          </p>
+          <p className="text-xl font-black text-slate-950">No product selected</p>
 
           <p className="mt-2 text-sm font-bold text-slate-500">
             Select a product or checkout from cart.
@@ -536,26 +694,27 @@ export default function PaymentPage() {
           <h1 className="mt-4 text-2xl font-black">Order Placed!</h1>
 
           <p className="mt-2 text-sm font-bold text-emerald-700">
-            Thank you, {formData.fullName}. Your order {lastOrder?.id} has been
-            received.
+            Thank you, {formData.fullName}. Your order {lastOrder?.id} has been received.
           </p>
 
           <div className="mt-5 rounded-2xl bg-white/70 p-4 text-left text-xs font-bold text-emerald-900">
             <p>Order ID: {lastOrder?.id}</p>
 
-            <p className="mt-1">
-              Total: ₹{Number(lastOrder?.total || 0).toLocaleString()}
-            </p>
-
-            {lastOrder?.couponCode ? (
+            {Number(lastOrder?.saleDiscountAmount || 0) > 0 && (
               <p className="mt-1">
-                Coupon: {lastOrder.couponCode} ({lastOrder.discountPercent}% off)
+                Festival Sale Saving: ₹{Number(lastOrder?.saleDiscountAmount || 0).toLocaleString()}
               </p>
-            ) : null}
+            )}
 
-            <p className="mt-1">
-              Stock updated automatically after order confirmation.
-            </p>
+            {Number(lastOrder?.couponDiscountAmount || 0) > 0 && (
+              <p className="mt-1">
+                Coupon Saving: ₹{Number(lastOrder?.couponDiscountAmount || 0).toLocaleString()}
+              </p>
+            )}
+
+            <p className="mt-1">Total: ₹{Number(lastOrder?.total || 0).toLocaleString()}</p>
+
+            <p className="mt-1">Stock updated automatically after order confirmation.</p>
           </div>
 
           <button
@@ -583,15 +742,12 @@ export default function PaymentPage() {
           </h1>
 
           <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
-            Fill delivery details carefully. This demo checkout uses Cash on
-            Delivery.
+            Fill delivery details carefully. This demo checkout uses Cash on Delivery.
           </p>
 
           {stockValidation.hasIssue && (
             <div className="mt-5 rounded-[1.5rem] border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700">
-              <p className="font-black uppercase tracking-wider">
-                Stock issue found
-              </p>
+              <p className="font-black uppercase tracking-wider">Stock issue found</p>
 
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {stockValidation.issues.map((issue) => (
@@ -608,9 +764,7 @@ export default function PaymentPage() {
               <input
                 type="text"
                 value={formData.fullName}
-                onChange={(event) =>
-                  handleInputChange("fullName", event.target.value)
-                }
+                onChange={(event) => handleInputChange("fullName", event.target.value)}
                 className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-slate-400"
                 placeholder="Receiver name"
               />
@@ -622,9 +776,7 @@ export default function PaymentPage() {
               <input
                 type="tel"
                 value={formData.mobileNumber}
-                onChange={(event) =>
-                  handleInputChange("mobileNumber", event.target.value)
-                }
+                onChange={(event) => handleInputChange("mobileNumber", event.target.value)}
                 className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-slate-400"
                 placeholder="10-digit delivery contact"
               />
@@ -635,9 +787,7 @@ export default function PaymentPage() {
 
               <textarea
                 value={formData.address}
-                onChange={(event) =>
-                  handleInputChange("address", event.target.value)
-                }
+                onChange={(event) => handleInputChange("address", event.target.value)}
                 className="h-24 w-full resize-none rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-slate-400"
                 placeholder="Complete street address, landmarks, pincode"
               />
@@ -647,8 +797,7 @@ export default function PaymentPage() {
               <p className="mb-1 font-black uppercase tracking-wider text-slate-800">
                 Cash on Delivery Available
               </p>
-              By placing this order, you agree to pay the final amount upon hand
-              delivery by our store representative.
+              By placing this order, you agree to pay the final amount upon hand delivery by our store representative.
             </div>
 
             <button
@@ -660,31 +809,27 @@ export default function PaymentPage() {
                   : "bg-emerald-600 text-white hover:bg-emerald-700"
               }`}
             >
-              {stockValidation.hasIssue
-                ? "Cannot Place Order"
-                : "Confirm & Place Order"}
+              {stockValidation.hasIssue ? "Cannot Place Order" : "Confirm & Place Order"}
             </button>
           </form>
         </div>
 
         <aside className="space-y-6">
           <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:rounded-[2rem] sm:p-8">
-            <h2 className="text-xl font-black text-slate-950">
-              Order Summary
-            </h2>
+            <h2 className="text-xl font-black text-slate-950">Order Summary</h2>
 
             <div className="mt-4 space-y-3">
               {checkoutItems.map((item, index) => {
                 const quantity = Number(item.quantity || 1)
                 const price = Number(item.price || 0)
+                const originalUnitPrice = Number(item.originalPrice ?? item.price ?? 0)
                 const itemTotal = price * quantity
+                const originalItemTotal = Math.max(originalUnitPrice, price) * quantity
+                const hasSale = originalUnitPrice > price
                 const image = item.image || "/images/IPhone 16 Pro Max.png"
                 const stockQty = getStockQuantity(item)
                 const minStockAlert = getMinimumStockAlert(item)
-                const stockStatus = getStockStatusFromNumbers(
-                  stockQty,
-                  minStockAlert
-                )
+                const stockStatus = getStockStatusFromNumbers(stockQty, minStockAlert)
 
                 return (
                   <div
@@ -707,28 +852,41 @@ export default function PaymentPage() {
                           {item.brand || "Mobisphere"}
                         </p>
 
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider ${stockStatus.className}`}
-                        >
+                        <span className={`rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider ${stockStatus.className}`}>
                           {stockStatus.label}
                         </span>
+
+                        {hasSale && (
+                          <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-orange-700">
+                            {item.saleDiscountLabel || "Sale Offer"}
+                          </span>
+                        )}
                       </div>
 
                       <h3 className="line-clamp-2 text-sm font-black leading-5 text-slate-950">
                         {item.title || "Mobisphere Product"}
                       </h3>
 
-                      <p className="mt-1 text-xs font-bold text-slate-500">
-                        Qty: {quantity} Unit
-                      </p>
+                      {hasSale && (
+                        <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-orange-600">
+                          {item.saleCampaignTitle || "Festival Sale"}
+                          {item.saleEndsAt ? ` • Ends ${formatDateLabel(item.saleEndsAt)}` : ""}
+                        </p>
+                      )}
 
-                      <p className="mt-1 text-xs font-bold text-slate-500">
-                        Available Stock: {stockQty} Unit
-                      </p>
+                      <p className="mt-1 text-xs font-bold text-slate-500">Qty: {quantity} Unit</p>
 
-                      <p className="mt-1 text-sm font-black text-slate-900">
-                        ₹{itemTotal.toLocaleString()}
-                      </p>
+                      <p className="mt-1 text-xs font-bold text-slate-500">Available Stock: {stockQty} Unit</p>
+
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-black text-slate-900">₹{itemTotal.toLocaleString()}</p>
+
+                        {hasSale && (
+                          <p className="text-xs font-black text-slate-400 line-through">
+                            ₹{originalItemTotal.toLocaleString()}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )
@@ -737,7 +895,19 @@ export default function PaymentPage() {
 
             <div className="mt-6 space-y-3 border-b border-slate-100 pb-4 text-sm font-bold">
               <div className="flex justify-between gap-4 text-slate-600">
-                <span>Items total</span>
+                <span>MRP total</span>
+                <span>₹{originalItemsTotal.toLocaleString()}</span>
+              </div>
+
+              {saleSavingsAmount > 0 && (
+                <div className="flex justify-between gap-4 text-orange-600">
+                  <span>Festival sale savings</span>
+                  <span>-₹{saleSavingsAmount.toLocaleString()}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between gap-4 text-slate-600">
+                <span>Items subtotal</span>
                 <span>₹{basePrice.toLocaleString()}</span>
               </div>
 
@@ -748,10 +918,7 @@ export default function PaymentPage() {
 
               {discount > 0 && (
                 <div className="flex justify-between gap-4 text-red-600">
-                  <span>
-                    Coupon discount
-                    {appliedCoupon ? ` (${getCouponCode(appliedCoupon)})` : ""}
-                  </span>
+                  <span>Coupon discount {appliedCoupon?.code ? `(${appliedCoupon.code})` : ""}</span>
                   <span>-₹{discountAmount.toLocaleString()}</span>
                 </div>
               )}
@@ -772,9 +939,7 @@ export default function PaymentPage() {
               <input
                 type="text"
                 value={formData.couponCode}
-                onChange={(event) =>
-                  handleInputChange("couponCode", event.target.value)
-                }
+                onChange={(event) => handleInputChange("couponCode", event.target.value)}
                 className="w-full min-w-0 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-900 outline-none focus:border-slate-400"
                 placeholder="PROMO20"
               />
@@ -788,21 +953,9 @@ export default function PaymentPage() {
               </button>
             </div>
 
-            {couponError && (
-              <p className="mt-2 pl-2 text-xs font-bold text-red-600">
-                {couponError}
-              </p>
-            )}
+            {couponError && <p className="mt-2 pl-2 text-xs font-bold text-red-600">{couponError}</p>}
 
-            {couponSuccess && (
-              <p className="mt-2 pl-2 text-xs font-bold text-emerald-600">
-                {couponSuccess}
-              </p>
-            )}
-
-            <p className="mt-3 pl-2 text-[10px] font-bold leading-4 text-slate-400">
-              Expired or inactive coupons cannot be applied at checkout.
-            </p>
+            {couponSuccess && <p className="mt-2 pl-2 text-xs font-bold text-emerald-600">{couponSuccess}</p>}
           </div>
         </aside>
       </div>

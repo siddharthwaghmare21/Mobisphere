@@ -8,6 +8,7 @@ import { useProductContext } from '@/app/context/ProductContext'
 // Storage Keys
 const ADMIN_SESSION_KEY = 'mobisphereAdminSession'
 const COUPON_STORAGE_KEY = 'mobisphereCoupons'
+const SALE_CAMPAIGNS_STORAGE_KEY = 'mobisphereSaleCampaigns'
 const ADMIN_USERS_KEY = 'mobisphereAdminUsers'
 const CART_STORAGE_KEY = 'mobisphereCart'
 const ORDERS_STORAGE_KEY = 'mobisphereOrders'
@@ -186,6 +187,67 @@ function buildInvoiceText(order, orderProducts = []) {
   return lines.join('\n')
 }
 
+function getTodayDateString() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function isDateBeforeToday(dateText) {
+  if (!dateText) return false
+  const today = new Date(new Date().toDateString())
+  const target = new Date(dateText)
+  return !Number.isNaN(target.getTime()) && target < today
+}
+
+function isDateAfterToday(dateText) {
+  if (!dateText) return false
+  const today = new Date(new Date().toDateString())
+  const target = new Date(dateText)
+  return !Number.isNaN(target.getTime()) && target > today
+}
+
+function getCampaignStatus(campaign) {
+  if (!campaign || campaign.active === false) {
+    return {
+      label: 'Inactive',
+      className: 'bg-slate-200 text-slate-600'
+    }
+  }
+
+  if (isDateAfterToday(campaign.startDate)) {
+    return {
+      label: 'Scheduled',
+      className: 'bg-blue-100 text-blue-700'
+    }
+  }
+
+  if (isDateBeforeToday(campaign.endDate)) {
+    return {
+      label: 'Expired',
+      className: 'bg-rose-100 text-rose-700'
+    }
+  }
+
+  return {
+    label: 'Live',
+    className: 'bg-emerald-100 text-emerald-700'
+  }
+}
+
+function formatCampaignDiscount(campaign) {
+  if (!campaign) return '—'
+  const value = Number(campaign.discountValue || 0)
+  return campaign.discountType === 'flat'
+    ? `₹${value.toLocaleString()} OFF`
+    : `${value}% OFF`
+}
+
+function getCampaignScopeLabel(campaign) {
+  if (!campaign) return '—'
+  if (campaign.scope === 'brand') return `Brand: ${campaign.brand || 'Not selected'}`
+  if (campaign.scope === 'product') return `Product: ${campaign.productTitle || campaign.productId || 'Not selected'}`
+  return 'All products'
+}
+
 export default function IntegratedAdminPanelDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
@@ -221,6 +283,16 @@ export default function IntegratedAdminPanelDashboard() {
   const [newCouponCode, setNewCouponCode] = useState('')
   const [newDiscountPercent, setNewDiscountPercent] = useState('')
   const [newCouponExpiryDate, setNewCouponExpiryDate] = useState('')
+
+  const [saleCampaigns, setSaleCampaigns] = useState([])
+  const [newCampaignTitle, setNewCampaignTitle] = useState('')
+  const [newCampaignDiscountType, setNewCampaignDiscountType] = useState('percent')
+  const [newCampaignDiscountValue, setNewCampaignDiscountValue] = useState('')
+  const [newCampaignScope, setNewCampaignScope] = useState('all')
+  const [newCampaignBrand, setNewCampaignBrand] = useState('')
+  const [newCampaignProductId, setNewCampaignProductId] = useState('')
+  const [newCampaignStartDate, setNewCampaignStartDate] = useState(getTodayDateString())
+  const [newCampaignEndDate, setNewCampaignEndDate] = useState('')
 
   const [orders, setOrders] = useState([
     { id: 'ORD-8X91', customer: 'Rahul Sharma', date: '2024-05-12', total: 125000, status: 'Processing', items: 2 },
@@ -268,6 +340,7 @@ export default function IntegratedAdminPanelDashboard() {
     const session = loadJson(ADMIN_SESSION_KEY)
     const storedAdmins = loadJson(ADMIN_USERS_KEY)
     const storedCoupons = loadJson(COUPON_STORAGE_KEY) || []
+    const storedSaleCampaigns = loadJson(SALE_CAMPAIGNS_STORAGE_KEY) || []
     const storedOrders = loadJson(ORDERS_STORAGE_KEY)
 
     queueMicrotask(() => {
@@ -277,6 +350,7 @@ export default function IntegratedAdminPanelDashboard() {
       }
       setAdminUsers(Array.isArray(storedAdmins) ? storedAdmins : [])
       setCoupons(Array.isArray(storedCoupons) ? storedCoupons.map((coupon) => ({ active: coupon.active !== false, expiresAt: coupon.expiresAt || coupon.expiryDate || '', ...coupon })) : [])
+      setSaleCampaigns(Array.isArray(storedSaleCampaigns) ? storedSaleCampaigns.map((campaign) => ({ active: campaign.active !== false, scope: campaign.scope || 'all', discountType: campaign.discountType || 'percent', ...campaign })) : [])
       if (Array.isArray(storedOrders) && storedOrders.length > 0) {
         setOrders(storedOrders)
       }
@@ -718,6 +792,89 @@ export default function IntegratedAdminPanelDashboard() {
     const next = coupons.filter(c => c.id !== id)
     setCoupons(next)
     saveJson(COUPON_STORAGE_KEY, next)
+  }
+
+  const resetSaleCampaignForm = () => {
+    setNewCampaignTitle('')
+    setNewCampaignDiscountType('percent')
+    setNewCampaignDiscountValue('')
+    setNewCampaignScope('all')
+    setNewCampaignBrand('')
+    setNewCampaignProductId('')
+    setNewCampaignStartDate(getTodayDateString())
+    setNewCampaignEndDate('')
+  }
+
+  const handleCreateSaleCampaign = (e) => {
+    e.preventDefault()
+
+    const title = newCampaignTitle.trim()
+    const discountValue = Number(newCampaignDiscountValue)
+
+    if (!title) {
+      setMessage('Please enter sale campaign title.')
+      return
+    }
+
+    if (!Number.isFinite(discountValue) || discountValue <= 0) {
+      setMessage('Please enter a valid discount value.')
+      return
+    }
+
+    if (newCampaignDiscountType === 'percent' && discountValue > 100) {
+      setMessage('Percentage discount cannot be more than 100%.')
+      return
+    }
+
+    if (newCampaignScope === 'brand' && !newCampaignBrand) {
+      setMessage('Please select a brand for this campaign.')
+      return
+    }
+
+    if (newCampaignScope === 'product' && !newCampaignProductId) {
+      setMessage('Please select a product for this campaign.')
+      return
+    }
+
+    const selectedProduct = Array.isArray(localProducts)
+      ? localProducts.find((product) => String(product.id) === String(newCampaignProductId))
+      : null
+
+    const newCampaign = {
+      id: `SALE-${Date.now().toString(36).toUpperCase()}`,
+      title,
+      discountType: newCampaignDiscountType,
+      discountValue,
+      scope: newCampaignScope,
+      brand: newCampaignScope === 'brand' ? newCampaignBrand : '',
+      productId: newCampaignScope === 'product' ? newCampaignProductId : '',
+      productTitle: newCampaignScope === 'product' ? selectedProduct?.title || '' : '',
+      startDate: newCampaignStartDate || getTodayDateString(),
+      endDate: newCampaignEndDate || '',
+      active: true,
+      createdAt: new Date().toISOString()
+    }
+
+    const next = [newCampaign, ...saleCampaigns]
+    setSaleCampaigns(next)
+    saveJson(SALE_CAMPAIGNS_STORAGE_KEY, next)
+    resetSaleCampaignForm()
+    setMessage('Festival sale campaign created successfully!')
+  }
+
+  const handleToggleSaleCampaign = (id) => {
+    const next = saleCampaigns.map((campaign) =>
+      campaign.id === id ? { ...campaign, active: campaign.active === false ? true : false } : campaign
+    )
+    setSaleCampaigns(next)
+    saveJson(SALE_CAMPAIGNS_STORAGE_KEY, next)
+  }
+
+  const handleDeleteSaleCampaign = (id) => {
+    const next = saleCampaigns.filter((campaign) => campaign.id !== id)
+    setSaleCampaigns(next)
+    saveJson(SALE_CAMPAIGNS_STORAGE_KEY, next)
+    setMessage('Sale campaign removed.')
   }
 
   const handleExportStockReport = () => {
@@ -1628,47 +1785,247 @@ export default function IntegratedAdminPanelDashboard() {
 
           {/* 🎫 TAB 5: Coupons & Offers */}
           {activeTab === 5 && (
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
-                <h3 className="font-black text-slate-900 text-sm mb-4">Create System Coupon</h3>
-                <form onSubmit={handleCreateCoupon} className="space-y-3">
-                  <input type="text" value={newCouponCode} onChange={(e) => setNewCouponCode(e.target.value)} placeholder="COUPON CODE (e.g. IPHONE10)" className="w-full border p-3 text-xs uppercase font-bold rounded-xl text-slate-900 outline-none focus:border-slate-900" />
-                  <input type="number" value={newDiscountPercent} onChange={(e) => setNewDiscountPercent(e.target.value)} placeholder="Discount Percentage %" className="w-full border p-3 text-xs rounded-xl text-slate-900 outline-none focus:border-slate-900" />
+            <div className="space-y-6">
+              <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl sm:p-8">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
-                    <label className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-400">Expiry Date</label>
-                    <input type="date" value={newCouponExpiryDate} onChange={(e) => setNewCouponExpiryDate(e.target.value)} className="w-full border p-3 text-xs rounded-xl text-slate-900 outline-none focus:border-slate-900" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600">
+                      Coupons & Offers
+                    </p>
+                    <h2 className="mt-2 text-3xl font-black text-slate-950">
+                      Festival sale manager
+                    </h2>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                      Create coupon codes and automatic festival sale campaigns for all products, selected brands, or selected models.
+                    </p>
                   </div>
-                  <button type="submit" className="w-full bg-slate-900 text-white py-3 text-xs font-bold rounded-xl hover:bg-slate-800">Generate Coupon</button>
-                </form>
-              </div>
-              <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
-                <h3 className="font-black text-slate-900 text-sm mb-4">Active Coupons</h3>
-                <div className="overflow-y-auto max-h-[320px] divide-y">
-                  {coupons.length === 0 ? <p className="text-xs text-slate-400 py-4">No active coupon parameters saved.</p> : coupons.map((coupon) => {
-                    const expiryDate = coupon.expiresAt || coupon.expiryDate || ''
-                    const isExpired = expiryDate ? new Date(expiryDate) < new Date(new Date().toDateString()) : false
-                    const isActive = coupon.active !== false && !isExpired
 
-                    return (
-                      <div key={coupon.id} className="flex flex-col gap-2 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <span className="font-mono font-black text-slate-900 uppercase bg-slate-100 px-2 py-1 rounded-md">{coupon.code}</span>
-                          <p className="mt-2 font-black text-emerald-700">{coupon.discountPercent}% OFF</p>
-                          <p className="mt-1 text-[10px] font-bold text-slate-400">Expiry: {expiryDate || 'No expiry date'}</p>
+                  <div className="grid grid-cols-2 gap-2 sm:min-w-[260px]">
+                    <div className="rounded-2xl bg-emerald-50 p-4 text-center">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">Coupons</p>
+                      <p className="mt-1 text-2xl font-black text-emerald-800">{coupons.length}</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-950 p-4 text-center text-white">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">Sales</p>
+                      <p className="mt-1 text-2xl font-black">{saleCampaigns.length}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+                  <h3 className="font-black text-slate-900 text-sm mb-4">Create System Coupon</h3>
+                  <form onSubmit={handleCreateCoupon} className="space-y-3">
+                    <input type="text" value={newCouponCode} onChange={(e) => setNewCouponCode(e.target.value)} placeholder="COUPON CODE (e.g. IPHONE10)" className="w-full border p-3 text-xs uppercase font-bold rounded-xl text-slate-900 outline-none focus:border-slate-900" />
+                    <input type="number" value={newDiscountPercent} onChange={(e) => setNewDiscountPercent(e.target.value)} placeholder="Discount Percentage %" className="w-full border p-3 text-xs rounded-xl text-slate-900 outline-none focus:border-slate-900" />
+                    <div>
+                      <label className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-400">Expiry Date</label>
+                      <input type="date" value={newCouponExpiryDate} onChange={(e) => setNewCouponExpiryDate(e.target.value)} className="w-full border p-3 text-xs rounded-xl text-slate-900 outline-none focus:border-slate-900" />
+                    </div>
+                    <button type="submit" className="w-full bg-slate-900 text-white py-3 text-xs font-bold rounded-xl hover:bg-slate-800">Generate Coupon</button>
+                  </form>
+                </div>
+
+                <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+                  <h3 className="font-black text-slate-900 text-sm mb-4">Coupon Codes</h3>
+                  <div className="overflow-y-auto max-h-[320px] divide-y">
+                    {coupons.length === 0 ? <p className="text-xs text-slate-400 py-4">No active coupon parameters saved.</p> : coupons.map((coupon) => {
+                      const expiryDate = coupon.expiresAt || coupon.expiryDate || ''
+                      const isExpired = expiryDate ? new Date(expiryDate) < new Date(new Date().toDateString()) : false
+                      const isActive = coupon.active !== false && !isExpired
+
+                      return (
+                        <div key={coupon.id} className="flex flex-col gap-2 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <span className="font-mono font-black text-slate-900 uppercase bg-slate-100 px-2 py-1 rounded-md">{coupon.code}</span>
+                            <p className="mt-2 font-black text-emerald-700">{coupon.discountPercent}% OFF</p>
+                            <p className="mt-1 text-[10px] font-bold text-slate-400">Expiry: {expiryDate || 'No expiry date'}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleCouponActive(coupon.id)}
+                              className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wider ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}
+                            >
+                              {isActive ? 'Active' : isExpired ? 'Expired' : 'Inactive'}
+                            </button>
+                            <button onClick={() => handleDeleteCoupon(coupon.id)} className="rounded-full bg-rose-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700 hover:bg-rose-600 hover:text-white">Remove</button>
+                          </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleCouponActive(coupon.id)}
-                            className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wider ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}
-                          >
-                            {isActive ? 'Active' : isExpired ? 'Expired' : 'Inactive'}
-                          </button>
-                          <button onClick={() => handleDeleteCoupon(coupon.id)} className="rounded-full bg-rose-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700 hover:bg-rose-600 hover:text-white">Remove</button>
-                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+                <div className="rounded-[2rem] border border-slate-100 bg-slate-950 p-6 text-white shadow-xl">
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-300">
+                    Automatic Sale Campaign
+                  </p>
+                  <h3 className="mt-2 text-2xl font-black">Create festival sale</h3>
+                  <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">
+                    Use this for Diwali, New Year, Ganpati, shop anniversary, or limited time mobile offers.
+                  </p>
+
+                  <form onSubmit={handleCreateSaleCampaign} className="mt-5 space-y-3">
+                    <input
+                      value={newCampaignTitle}
+                      onChange={(e) => setNewCampaignTitle(e.target.value)}
+                      placeholder="Offer title e.g. Diwali Mega Sale"
+                      className="w-full rounded-2xl border border-white/10 bg-white/10 p-3 text-xs font-bold text-white outline-none placeholder:text-slate-500 focus:border-emerald-300"
+                    />
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <select
+                        value={newCampaignDiscountType}
+                        onChange={(e) => setNewCampaignDiscountType(e.target.value)}
+                        className="rounded-2xl border border-white/10 bg-slate-900 p-3 text-xs font-bold text-white outline-none focus:border-emerald-300"
+                      >
+                        <option value="percent">Percentage %</option>
+                        <option value="flat">Flat ₹ OFF</option>
+                      </select>
+
+                      <input
+                        type="number"
+                        min="1"
+                        value={newCampaignDiscountValue}
+                        onChange={(e) => setNewCampaignDiscountValue(e.target.value)}
+                        placeholder="Discount value"
+                        className="rounded-2xl border border-white/10 bg-white/10 p-3 text-xs font-bold text-white outline-none placeholder:text-slate-500 focus:border-emerald-300"
+                      />
+                    </div>
+
+                    <select
+                      value={newCampaignScope}
+                      onChange={(e) => {
+                        setNewCampaignScope(e.target.value)
+                        setNewCampaignBrand('')
+                        setNewCampaignProductId('')
+                      }}
+                      className="w-full rounded-2xl border border-white/10 bg-slate-900 p-3 text-xs font-bold text-white outline-none focus:border-emerald-300"
+                    >
+                      <option value="all">Apply on all products</option>
+                      <option value="brand">Apply on selected brand</option>
+                      <option value="product">Apply on selected product</option>
+                    </select>
+
+                    {newCampaignScope === 'brand' && (
+                      <select
+                        value={newCampaignBrand}
+                        onChange={(e) => setNewCampaignBrand(e.target.value)}
+                        className="w-full rounded-2xl border border-white/10 bg-slate-900 p-3 text-xs font-bold text-white outline-none focus:border-emerald-300"
+                      >
+                        <option value="">Select brand</option>
+                        {uniqueBrands.map((brand) => (
+                          <option key={brand} value={brand}>{brand}</option>
+                        ))}
+                      </select>
+                    )}
+
+                    {newCampaignScope === 'product' && (
+                      <select
+                        value={newCampaignProductId}
+                        onChange={(e) => setNewCampaignProductId(e.target.value)}
+                        className="w-full rounded-2xl border border-white/10 bg-slate-900 p-3 text-xs font-bold text-white outline-none focus:border-emerald-300"
+                      >
+                        <option value="">Select product</option>
+                        {localProducts.map((product) => (
+                          <option key={product.id} value={product.id}>{product.brand || 'Other'} — {product.title}</option>
+                        ))}
+                      </select>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-400">Start Date</label>
+                        <input
+                          type="date"
+                          value={newCampaignStartDate}
+                          onChange={(e) => setNewCampaignStartDate(e.target.value)}
+                          className="w-full rounded-2xl border border-white/10 bg-white/10 p-3 text-xs font-bold text-white outline-none focus:border-emerald-300"
+                        />
                       </div>
-                    )
-                  })}
+                      <div>
+                        <label className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-400">End Date</label>
+                        <input
+                          type="date"
+                          value={newCampaignEndDate}
+                          onChange={(e) => setNewCampaignEndDate(e.target.value)}
+                          className="w-full rounded-2xl border border-white/10 bg-white/10 p-3 text-xs font-bold text-white outline-none focus:border-emerald-300"
+                        />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="w-full rounded-2xl bg-emerald-400 py-3 text-xs font-black uppercase tracking-wider text-slate-950 shadow-lg transition hover:bg-emerald-300">
+                      Create Sale Campaign
+                    </button>
+                  </form>
+                </div>
+
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl">
+                  <div className="mb-5 flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900">Sale Campaigns</h3>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">
+                        Automatic offer rules saved for customer side and checkout.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">
+                      {saleCampaigns.length} Total
+                    </span>
+                  </div>
+
+                  {saleCampaigns.length === 0 ? (
+                    <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                      <p className="text-sm font-black text-slate-900">No sale campaign created yet.</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">Create one for festival, seasonal, or shop anniversary offers.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {saleCampaigns.map((campaign) => {
+                        const status = getCampaignStatus(campaign)
+
+                        return (
+                          <article key={campaign.id} className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h4 className="text-sm font-black text-slate-950">{campaign.title}</h4>
+                                  <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider ${status.className}`}>
+                                    {status.label}
+                                  </span>
+                                </div>
+                                <p className="mt-2 text-xl font-black text-emerald-600">{formatCampaignDiscount(campaign)}</p>
+                                <p className="mt-1 text-xs font-bold text-slate-500">{getCampaignScopeLabel(campaign)}</p>
+                                <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                  {campaign.startDate || 'No start'} → {campaign.endDate || 'No end date'}
+                                </p>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleSaleCampaign(campaign.id)}
+                                  className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wider ${campaign.active === false ? 'bg-slate-200 text-slate-600' : 'bg-emerald-100 text-emerald-700'}`}
+                                >
+                                  {campaign.active === false ? 'Activate' : 'Disable'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSaleCampaign(campaign.id)}
+                                  className="rounded-full bg-rose-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700 hover:bg-rose-600 hover:text-white"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          </article>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
