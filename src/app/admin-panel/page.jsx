@@ -40,6 +40,41 @@ function fileToDataUrl(file) {
   })
 }
 
+function getStockQuantity(product) {
+  return Math.max(Number(product?.stockQty ?? product?.stock ?? 0), 0)
+}
+
+function getMinStockAlert(product) {
+  return Math.max(Number(product?.minStockAlert ?? 3), 0)
+}
+
+function getStockStatusDetails(product) {
+  const stockQty = getStockQuantity(product)
+  const minStockAlert = getMinStockAlert(product)
+
+  if (stockQty <= 0) {
+    return {
+      label: 'Out of Stock',
+      className: 'bg-rose-100 text-rose-800 border border-rose-200',
+      dotClassName: 'bg-rose-500'
+    }
+  }
+
+  if (stockQty <= minStockAlert) {
+    return {
+      label: 'Low Stock',
+      className: 'bg-amber-100 text-amber-800 border border-amber-200',
+      dotClassName: 'bg-amber-500'
+    }
+  }
+
+  return {
+    label: 'In Stock',
+    className: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+    dotClassName: 'bg-emerald-500'
+  }
+}
+
 export default function IntegratedAdminPanelDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
@@ -65,6 +100,11 @@ export default function IntegratedAdminPanelDashboard() {
   const [inventoryView, setInventoryView] = useState('brands') // 'brands', 'products', 'form'
   const [selectedBrand, setSelectedBrand] = useState('')
   const [editingProduct, setEditingProduct] = useState(null)
+  const [stockProduct, setStockProduct] = useState(null)
+  const [stockAddQty, setStockAddQty] = useState('')
+  const [stockSupplier, setStockSupplier] = useState('')
+  const [stockNote, setStockNote] = useState('')
+  const [stockPurchasePrice, setStockPurchasePrice] = useState('')
 
   const [coupons, setCoupons] = useState([])
   const [newCouponCode, setNewCouponCode] = useState('')
@@ -146,6 +186,9 @@ export default function IntegratedAdminPanelDashboard() {
         shippedOrders: 0,
         totalProducts: 0,
         totalBrands: 0,
+        totalStockUnits: 0,
+        lowStockProducts: 0,
+        outOfStockProducts: 0,
         cartItems: 0,
         topProducts: [],
         kpiCards: [],
@@ -220,6 +263,12 @@ export default function IntegratedAdminPanelDashboard() {
     const cancelledOrders = countStatus('Cancelled')
 
     const totalBrands = new Set(safeProducts.map((product) => product.brand || 'Other Models')).size
+    const totalStockUnits = safeProducts.reduce((sum, product) => sum + getStockQuantity(product), 0)
+    const lowStockProducts = safeProducts.filter((product) => {
+      const stockQty = getStockQuantity(product)
+      return stockQty > 0 && stockQty <= getMinStockAlert(product)
+    }).length
+    const outOfStockProducts = safeProducts.filter((product) => getStockQuantity(product) <= 0).length
 
     const recentOrders = [...safeOrders]
       .sort((a, b) => {
@@ -265,6 +314,9 @@ export default function IntegratedAdminPanelDashboard() {
       shippedOrders,
       totalProducts: safeProducts.length,
       totalBrands,
+      totalStockUnits,
+      lowStockProducts,
+      outOfStockProducts,
       cartItems: safeCart.length,
       topProducts,
       statusSummary,
@@ -293,7 +345,7 @@ export default function IntegratedAdminPanelDashboard() {
         {
           label: 'Total Products',
           value: safeProducts.length.toLocaleString(),
-          helper: `${totalBrands} active brands`,
+          helper: `${totalStockUnits} stock units • ${totalBrands} brands`,
           icon: '📦',
           accent: 'text-blue-600'
         },
@@ -312,25 +364,25 @@ export default function IntegratedAdminPanelDashboard() {
           accent: 'text-emerald-600'
         },
         {
-          label: 'Pending',
-          value: processingOrders.toLocaleString(),
-          helper: 'Needs attention',
-          icon: '⏳',
+          label: 'Low Stock',
+          value: lowStockProducts.toLocaleString(),
+          helper: 'Products need refill',
+          icon: '⚠️',
           accent: 'text-amber-600'
+        },
+        {
+          label: 'Out of Stock',
+          value: outOfStockProducts.toLocaleString(),
+          helper: 'Products unavailable',
+          icon: '⛔',
+          accent: 'text-rose-600'
         },
         {
           label: 'Coupons',
           value: coupons.length.toLocaleString(),
-          helper: 'Active offer codes',
+          helper: `${safeCart.length} local cart records`,
           icon: '🎫',
           accent: 'text-pink-600'
-        },
-        {
-          label: 'Cart Activity',
-          value: safeCart.length.toLocaleString(),
-          helper: 'Local cart records',
-          icon: '🧾',
-          accent: 'text-cyan-600'
         }
       ]
     }
@@ -493,6 +545,66 @@ export default function IntegratedAdminPanelDashboard() {
   // --- Product Inventory Logic ---
   const uniqueBrands = [...new Set(localProducts.map(p => p.brand || 'Other Models'))]
 
+  const handleOpenStockModal = (product) => {
+    setStockProduct(product)
+    setStockAddQty('')
+    setStockSupplier(product?.supplierName || '')
+    setStockNote('')
+    setStockPurchasePrice(product?.purchasePrice ? String(product.purchasePrice) : '')
+  }
+
+  const handleCloseStockModal = () => {
+    setStockProduct(null)
+    setStockAddQty('')
+    setStockSupplier('')
+    setStockNote('')
+    setStockPurchasePrice('')
+  }
+
+  const handleAddStock = (e) => {
+    e.preventDefault()
+
+    if (!stockProduct) return
+
+    const quantityToAdd = Number(stockAddQty)
+    const purchasePrice = Number(stockPurchasePrice || stockProduct.purchasePrice || 0)
+
+    if (!Number.isFinite(quantityToAdd) || quantityToAdd <= 0) {
+      setMessage('Please enter a valid stock quantity.')
+      return
+    }
+
+    const stockEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      date: new Date().toISOString(),
+      quantity: quantityToAdd,
+      supplier: stockSupplier.trim() || 'Not specified',
+      note: stockNote.trim() || 'New stock added',
+      purchasePrice
+    }
+
+    setLocalProducts((prev) =>
+      prev.map((product) => {
+        if (String(product.id) !== String(stockProduct.id)) return product
+
+        const currentStock = getStockQuantity(product)
+        const nextStock = currentStock + quantityToAdd
+
+        return {
+          ...product,
+          stockQty: nextStock,
+          purchasePrice,
+          supplierName: stockSupplier.trim() || product.supplierName || '',
+          stockHistory: [...(Array.isArray(product.stockHistory) ? product.stockHistory : []), stockEntry],
+          lastStockUpdatedAt: new Date().toISOString()
+        }
+      })
+    )
+
+    setMessage(`✅ ${quantityToAdd} units added to ${stockProduct.title}.`)
+    handleCloseStockModal()
+  }
+
   const handleSaveProduct = async (e) => {
     e.preventDefault()
     const formData = new FormData(e.target)
@@ -501,12 +613,22 @@ export default function IntegratedAdminPanelDashboard() {
     const imageUrl = uploadedImage || editingProduct?.image || '/images/IPhone 16 Pro Max.png'
     const brand = String(formData.get('brand') || 'Other Models').trim()
     const title = String(formData.get('title') || 'Untitled Product').trim()
+    const stockQty = Math.max(Number(formData.get('stockQty') || editingProduct?.stockQty || 0), 0)
+    const minStockAlert = Math.max(Number(formData.get('minStockAlert') || editingProduct?.minStockAlert || 3), 0)
+    const purchasePrice = Math.max(Number(formData.get('purchasePrice') || editingProduct?.purchasePrice || 0), 0)
+    const supplierName = String(formData.get('supplierName') || editingProduct?.supplierName || '').trim()
 
     const newProd = {
       id: editingProduct ? editingProduct.id : Date.now().toString(),
       title,
       brand,
       price: Number(formData.get('price')),
+      purchasePrice,
+      stockQty,
+      minStockAlert,
+      supplierName,
+      stockHistory: editingProduct?.stockHistory || [],
+      lastStockUpdatedAt: editingProduct?.lastStockUpdatedAt || new Date().toISOString(),
       description: String(formData.get('description') || '').trim(),
       image: imageUrl,
       alt: title,
@@ -529,6 +651,9 @@ export default function IntegratedAdminPanelDashboard() {
 
   const handleDeleteProduct = (id) => {
     setLocalProducts(prev => prev.filter(p => p.id !== id))
+    if (stockProduct && String(stockProduct.id) === String(id)) {
+      handleCloseStockModal()
+    }
     setMessage('Product deleted successfully.')
   }
 
@@ -743,7 +868,7 @@ export default function IntegratedAdminPanelDashboard() {
           <p className="text-[10px] font-black uppercase text-slate-400 px-4 mb-4 tracking-wider">Navigation Menu</p>
           {[
             { id: 1, icon: '📊', name: 'Dashboard & Analytics' },
-            { id: 2, icon: '📦', name: 'Product Inventory' },
+            { id: 2, icon: '📦', name: 'Inventory & Stock' },
             { id: 3, icon: '🛒', name: 'Orders & Tracking' },
             { id: 4, icon: '👥', name: 'Customer Accounts' },
             { id: 5, icon: '🎫', name: 'Coupons & Offers' },
@@ -1084,17 +1209,17 @@ export default function IntegratedAdminPanelDashboard() {
             </div>
           )}
 
-          {/* 📦 TAB 2: Product Inventory */}
+          {/* 📦 TAB 2: Inventory & Stock */}
           {activeTab === 2 && (
             <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                 <div>
                   <h2 className="text-2xl font-black text-slate-900">
-                    {inventoryView === 'brands' ? 'Brands Inventory' : 
-                     inventoryView === 'form' ? (editingProduct ? 'Edit Product' : 'Add New Product') :
+                    {inventoryView === 'brands' ? 'Inventory & Stock' : 
+                     inventoryView === 'form' ? (editingProduct ? 'Edit Product & Stock' : 'Add New Product With Stock') :
                      `${selectedBrand} Products`}
                   </h2>
-                  <p className="text-sm text-slate-500 mt-1">Manage your store products, pricing, and stock status.</p>
+                  <p className="text-sm text-slate-500 mt-1">Manage products, pricing, stock quantity, supplier details, and low-stock alerts.</p>
                 </div>
                 {inventoryView !== 'form' && (
                   <button onClick={() => { setEditingProduct(null); setInventoryView('form'); }} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs flex items-center gap-2">
@@ -1105,13 +1230,27 @@ export default function IntegratedAdminPanelDashboard() {
 
               {inventoryView === 'brands' && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {uniqueBrands.map(brand => (
-                    <button key={brand} onClick={() => { setSelectedBrand(brand); setInventoryView('products'); }} className="p-6 bg-slate-50 border border-slate-200 rounded-3xl hover:bg-slate-900 hover:text-white transition group text-left shadow-sm">
-                      <div className="text-3xl mb-3 opacity-80 group-hover:opacity-100">🏷️</div>
-                      <h3 className="font-black text-lg">{brand}</h3>
-                      <p className="text-xs mt-1 opacity-60">{localProducts.filter(p => (p.brand || 'Other Models') === brand).length} Products</p>
-                    </button>
-                  ))}
+                  {uniqueBrands.map(brand => {
+                    const brandProducts = localProducts.filter(p => (p.brand || 'Other Models') === brand)
+                    const brandStock = brandProducts.reduce((sum, product) => sum + getStockQuantity(product), 0)
+                    const brandLowStock = brandProducts.filter((product) => {
+                      const qty = getStockQuantity(product)
+                      return qty > 0 && qty <= getMinStockAlert(product)
+                    }).length
+
+                    return (
+                      <button key={brand} onClick={() => { setSelectedBrand(brand); setInventoryView('products'); }} className="p-6 bg-slate-50 border border-slate-200 rounded-3xl hover:bg-slate-900 hover:text-white transition group text-left shadow-sm">
+                        <div className="text-3xl mb-3 opacity-80 group-hover:opacity-100">🏷️</div>
+                        <h3 className="font-black text-lg">{brand}</h3>
+                        <p className="text-xs mt-1 opacity-60">{brandProducts.length} Products • {brandStock} Units</p>
+                        {brandLowStock > 0 && (
+                          <p className="mt-2 w-fit rounded-full bg-amber-100 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-amber-700 group-hover:bg-amber-300 group-hover:text-slate-950">
+                            {brandLowStock} Low Stock
+                          </p>
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
               )}
 
@@ -1119,36 +1258,60 @@ export default function IntegratedAdminPanelDashboard() {
                 <div className="space-y-4">
                   <button onClick={() => setInventoryView('brands')} className="text-xs font-bold text-slate-500 hover:text-slate-900 flex items-center gap-1">← Back to Brands</button>
                   <div className="overflow-x-auto rounded-2xl border border-slate-100">
-                    <table className="w-full text-left border-collapse min-w-[600px]">
+                    <table className="w-full text-left border-collapse min-w-[900px]">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500">
                           <th className="p-4 font-black">ID</th>
                           <th className="p-4 font-black">Model Name</th>
-                          <th className="p-4 font-black">Base Price</th>
+                          <th className="p-4 font-black">Selling Price</th>
+                          <th className="p-4 font-black text-center">Stock</th>
                           <th className="p-4 font-black text-center">Status</th>
                           <th className="p-4 font-black text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {localProducts.filter(p => (p.brand || 'Other Models') === selectedBrand).map((product) => (
-                          <tr key={product.id} className="hover:bg-slate-50/80 transition group">
-                            <td className="p-4 text-xs font-mono font-bold text-slate-400">#{product.id}</td>
-                            <td className="p-4 text-sm font-bold text-slate-900 flex items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 via-white to-slate-200 p-1 shadow-inner">
-                                {product.image ? <img src={product.image} alt={product.title} className="h-full max-h-full w-full max-w-full object-contain" /> : '📱'}
-                              </div>
-                              {product.title}
-                            </td>
-                            <td className="p-4 text-sm font-black text-emerald-600">₹{(Number(product.price) || 0).toLocaleString()}</td>
-                            <td className="p-4 text-center">
-                              <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-black text-[9px] uppercase tracking-wider shadow-sm">In Stock</span>
-                            </td>
-                            <td className="p-4 text-right space-x-3 opacity-80 group-hover:opacity-100 transition">
-                              <button onClick={() => { setEditingProduct(product); setInventoryView('form'); }} className="text-blue-600 font-bold hover:underline text-[11px] uppercase tracking-wide">Edit</button>
-                              <button onClick={() => handleDeleteProduct(product.id)} className="text-rose-600 font-bold hover:underline text-[11px] uppercase tracking-wide">Delete</button>
-                            </td>
-                          </tr>
-                        ))}
+                        {localProducts.filter(p => (p.brand || 'Other Models') === selectedBrand).map((product) => {
+                          const stockQty = getStockQuantity(product)
+                          const minStockAlert = getMinStockAlert(product)
+                          const stockStatus = getStockStatusDetails(product)
+
+                          return (
+                            <tr key={product.id} className="hover:bg-slate-50/80 transition group">
+                              <td className="p-4 text-xs font-mono font-bold text-slate-400">#{product.id}</td>
+                              <td className="p-4 text-sm font-bold text-slate-900">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 via-white to-slate-200 p-1 shadow-inner">
+                                    {product.image ? <img src={product.image} alt={product.title} className="h-full max-h-full w-full max-w-full object-contain" /> : '📱'}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="line-clamp-1">{product.title}</p>
+                                    <p className="mt-0.5 text-[10px] font-black uppercase tracking-wider text-slate-400">{product.supplierName || 'Supplier not set'}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-4 text-sm font-black text-emerald-600">₹{(Number(product.price) || 0).toLocaleString()}</td>
+                              <td className="p-4 text-center">
+                                <div className="inline-flex min-w-[90px] flex-col items-center rounded-2xl bg-slate-50 px-3 py-2">
+                                  <span className="text-base font-black text-slate-950">{stockQty}</span>
+                                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Min {minStockAlert}</span>
+                                </div>
+                              </td>
+                              <td className="p-4 text-center">
+                                <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider shadow-sm ${stockStatus.className}`}>
+                                  <span className={`h-2 w-2 rounded-full ${stockStatus.dotClassName}`} />
+                                  {stockStatus.label}
+                                </span>
+                              </td>
+                              <td className="p-4 text-right opacity-80 group-hover:opacity-100 transition">
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  <button onClick={() => handleOpenStockModal(product)} className="rounded-full bg-emerald-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-emerald-700 hover:bg-emerald-600 hover:text-white">Add Stock</button>
+                                  <button onClick={() => { setEditingProduct(product); setInventoryView('form'); }} className="rounded-full bg-blue-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-blue-700 hover:bg-blue-600 hover:text-white">Edit</button>
+                                  <button onClick={() => handleDeleteProduct(product.id)} className="rounded-full bg-rose-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-rose-700 hover:bg-rose-600 hover:text-white">Delete</button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1169,8 +1332,24 @@ export default function IntegratedAdminPanelDashboard() {
                         <input name="title" required defaultValue={editingProduct?.title || ''} placeholder="e.g. iPhone 16 Pro" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" />
                       </div>
                       <div>
-                        <label className="text-[10px] font-black uppercase text-slate-400">Base Price (₹)</label>
+                        <label className="text-[10px] font-black uppercase text-slate-400">Selling Price (₹)</label>
                         <input type="number" name="price" required defaultValue={editingProduct?.price || ''} placeholder="e.g. 120000" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400">Purchase Price (₹)</label>
+                        <input type="number" name="purchasePrice" defaultValue={editingProduct?.purchasePrice || ''} placeholder="e.g. 78000" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400">Opening Stock Quantity</label>
+                        <input type="number" min="0" name="stockQty" defaultValue={editingProduct?.stockQty || 0} placeholder="e.g. 10" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400">Minimum Stock Alert</label>
+                        <input type="number" min="0" name="minStockAlert" defaultValue={editingProduct?.minStockAlert || 3} placeholder="e.g. 3" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400">Supplier / Dealer Name</label>
+                        <input name="supplierName" defaultValue={editingProduct?.supplierName || ''} placeholder="e.g. Apple Dealer Sangli" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" />
                       </div>
                       <div className="md:col-span-2">
                         <label className="text-[10px] font-black uppercase text-slate-400">Product Description</label>
@@ -1334,6 +1513,128 @@ export default function IntegratedAdminPanelDashboard() {
 
         </div>
       </div>
+
+      {stockProduct && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[2rem] border border-white/10 bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600">
+                  Stock Management
+                </p>
+                <h3 className="mt-2 text-2xl font-black text-slate-950">
+                  Add New Stock
+                </h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  {stockProduct.title}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseStockModal}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-lg font-black text-slate-600 transition hover:bg-slate-200"
+                aria-label="Close stock modal"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mb-5 grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  Current Stock
+                </p>
+                <p className="mt-1 text-2xl font-black text-slate-950">
+                  {getStockQuantity(stockProduct)}
+                </p>
+              </div>
+
+              <div className={`rounded-2xl p-4 ${getStockStatusDetails(stockProduct).className}`}>
+                <p className="text-[10px] font-black uppercase tracking-wider opacity-70">
+                  Status
+                </p>
+                <p className="mt-1 text-lg font-black">
+                  {getStockStatusDetails(stockProduct).label}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleAddStock} className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  Add Stock Quantity
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={stockAddQty}
+                  onChange={(e) => setStockAddQty(e.target.value)}
+                  placeholder="e.g. 5"
+                  className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-black text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  Purchase Price Per Unit
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={stockPurchasePrice}
+                  onChange={(e) => setStockPurchasePrice(e.target.value)}
+                  placeholder="e.g. 78000"
+                  className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  Supplier / Dealer Name
+                </label>
+                <input
+                  value={stockSupplier}
+                  onChange={(e) => setStockSupplier(e.target.value)}
+                  placeholder="e.g. ABC Mobile Dealer"
+                  className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  Stock Note
+                </label>
+                <textarea
+                  rows="3"
+                  value={stockNote}
+                  onChange={(e) => setStockNote(e.target.value)}
+                  placeholder="e.g. New batch received"
+                  className="mt-1 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white"
+                />
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={handleCloseStockModal}
+                  className="rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-lg transition hover:bg-emerald-700"
+                >
+                  Save Stock
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
