@@ -136,39 +136,205 @@ export default function IntegratedAdminPanelDashboard() {
 
   // Analytics Graph Logic
   const chartAnalytics = useMemo(() => {
-    if (!hydrated) return { totalRevenue: 0, topProducts: [] }
+    if (!hydrated) {
+      return {
+        totalRevenue: 0,
+        totalOrders: 0,
+        pendingOrders: 0,
+        deliveredOrders: 0,
+        cancelledOrders: 0,
+        shippedOrders: 0,
+        totalProducts: 0,
+        totalBrands: 0,
+        cartItems: 0,
+        topProducts: [],
+        kpiCards: [],
+        statusSummary: [],
+        recentOrders: [],
+        lastUpdated: ''
+      }
+    }
+
     const cartData = loadJson(CART_STORAGE_KEY) || []
+    const safeCart = Array.isArray(cartData) ? cartData : []
+    const safeOrders = Array.isArray(orders) ? orders : []
+    const safeProducts = Array.isArray(localProducts) ? localProducts : []
+
     const productCount = new Map()
     const productRevenue = new Map()
 
-    const defaultIds = [1, 2, 3, 4, 5, 6]
-    defaultIds.forEach((pid, index) => {
-      productCount.set(pid, 12 - index * 1.5)
-      productRevenue.set(pid, (productData?.[pid]?.price || 45000) * (12 - index * 1.5))
-    })
+    if (safeCart.length > 0) {
+      safeCart.forEach((item) => {
+        const pid = item.productId || item.id || item.title
+        if (!pid) return
 
-    if (Array.isArray(cartData) && cartData.length > 0) {
-      productCount.clear()
-      productRevenue.clear()
-      cartData.forEach(it => {
-        const pid = Number(it.productId)
-        if (!Number.isFinite(pid)) return
-        productCount.set(pid, (productCount.get(pid) || 0) + 1)
-        productRevenue.set(pid, (productRevenue.get(pid) || 0) + (Number(it.price) || 0))
+        const quantity = Number(item.quantity || 1)
+        const price = Number(item.price || 0)
+
+        productCount.set(pid, (productCount.get(pid) || 0) + quantity)
+        productRevenue.set(pid, (productRevenue.get(pid) || 0) + price * quantity)
+      })
+    } else {
+      const fallbackProducts = safeProducts.length > 0
+        ? safeProducts.slice(0, 6)
+        : Object.entries(productData || {}).slice(0, 6).map(([id, product]) => ({ id, ...product }))
+
+      fallbackProducts.forEach((product, index) => {
+        const pid = product.id || index + 1
+        const quantity = Math.max(12 - index * 2, 2)
+        const price = Number(product.price || 45000)
+
+        productCount.set(pid, quantity)
+        productRevenue.set(pid, price * quantity)
       })
     }
 
-    const sortedCount = [...productCount.entries()].sort((a, b) => b[1] - a[1])
+    const sortedProducts = [...productCount.entries()].sort((a, b) => b[1] - a[1])
     const maxCount = Math.max(...[...productCount.values()], 1)
 
+    const topProducts = sortedProducts.slice(0, 6).map(([pid, count]) => {
+      const contextProduct =
+        safeProducts.find((product) => String(product.id) === String(pid)) ||
+        productData?.[pid] ||
+        {}
+
+      return {
+        title: contextProduct?.title?.replace('iPhone ', 'iP ') || String(pid),
+        count,
+        revenue: productRevenue.get(pid) || 0,
+        heightStr: `${Math.min(Math.round((count / maxCount) * 82 + 12), 96)}%`
+      }
+    })
+
+    const orderTotal = (order) => Number(order.total || order.totalAmount || order.amount || 0)
+    const totalRevenue = safeOrders.reduce((sum, order) => sum + orderTotal(order), 0)
+    const fallbackRevenue = [...productRevenue.values()].reduce((sum, value) => sum + value, 0)
+    const finalRevenue = totalRevenue > 0 ? totalRevenue : fallbackRevenue
+
+    const countStatus = (status) =>
+      safeOrders.filter((order) => String(order.status || '').toLowerCase() === status.toLowerCase()).length
+
+    const processingOrders = countStatus('Processing')
+    const shippedOrders = countStatus('Shipped')
+    const deliveredOrders = countStatus('Delivered')
+    const cancelledOrders = countStatus('Cancelled')
+
+    const totalBrands = new Set(safeProducts.map((product) => product.brand || 'Other Models')).size
+
+    const recentOrders = [...safeOrders]
+      .sort((a, b) => {
+        const dateA = new Date(a.date || a.createdAt || a.created_at || 0).getTime()
+        const dateB = new Date(b.date || b.createdAt || b.created_at || 0).getTime()
+        return dateB - dateA
+      })
+      .slice(0, 4)
+
+    const statusSummary = [
+      {
+        status: 'Processing',
+        count: processingOrders,
+        className: 'border-amber-200 bg-amber-50 text-amber-700',
+        icon: '⏳'
+      },
+      {
+        status: 'Shipped',
+        count: shippedOrders,
+        className: 'border-blue-200 bg-blue-50 text-blue-700',
+        icon: '🚚'
+      },
+      {
+        status: 'Delivered',
+        count: deliveredOrders,
+        className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+        icon: '✅'
+      },
+      {
+        status: 'Cancelled',
+        count: cancelledOrders,
+        className: 'border-rose-200 bg-rose-50 text-rose-700',
+        icon: '✕'
+      }
+    ]
+
     return {
-      totalRevenue: [...productRevenue.values()].reduce((a, b) => a + b, 0),
-      topProducts: sortedCount.slice(0, 6).map(([pid]) => ({
-        title: productData?.[pid]?.title?.replace("iPhone ", "iP ") || `Product ${pid}`,
-        heightStr: `${Math.min(Math.round((productCount.get(pid) / maxCount) * 80 + 10), 95)}%`
-      }))
+      totalRevenue: finalRevenue,
+      totalOrders: safeOrders.length,
+      pendingOrders: processingOrders,
+      deliveredOrders,
+      cancelledOrders,
+      shippedOrders,
+      totalProducts: safeProducts.length,
+      totalBrands,
+      cartItems: safeCart.length,
+      topProducts,
+      statusSummary,
+      recentOrders,
+      lastUpdated: new Date().toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
+      kpiCards: [
+        {
+          label: 'Total Revenue',
+          value: `₹${finalRevenue.toLocaleString()}`,
+          helper: 'Based on saved orders',
+          icon: '₹',
+          accent: 'text-emerald-600'
+        },
+        {
+          label: 'Total Orders',
+          value: safeOrders.length.toLocaleString(),
+          helper: `${processingOrders} processing now`,
+          icon: '🛒',
+          accent: 'text-slate-900'
+        },
+        {
+          label: 'Total Products',
+          value: safeProducts.length.toLocaleString(),
+          helper: `${totalBrands} active brands`,
+          icon: '📦',
+          accent: 'text-blue-600'
+        },
+        {
+          label: 'Customers',
+          value: customers.length.toLocaleString(),
+          helper: `${enquiries.length} enquiries tracked`,
+          icon: '👥',
+          accent: 'text-violet-600'
+        },
+        {
+          label: 'Delivered',
+          value: deliveredOrders.toLocaleString(),
+          helper: 'Completed orders',
+          icon: '✅',
+          accent: 'text-emerald-600'
+        },
+        {
+          label: 'Pending',
+          value: processingOrders.toLocaleString(),
+          helper: 'Needs attention',
+          icon: '⏳',
+          accent: 'text-amber-600'
+        },
+        {
+          label: 'Coupons',
+          value: coupons.length.toLocaleString(),
+          helper: 'Active offer codes',
+          icon: '🎫',
+          accent: 'text-pink-600'
+        },
+        {
+          label: 'Cart Activity',
+          value: safeCart.length.toLocaleString(),
+          helper: 'Local cart records',
+          icon: '🧾',
+          accent: 'text-cyan-600'
+        }
+      ]
     }
-  }, [hydrated])
+  }, [hydrated, orders, localProducts, customers.length, enquiries.length, coupons.length])
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours()
@@ -576,13 +742,13 @@ export default function IntegratedAdminPanelDashboard() {
         <aside className="space-y-2">
           <p className="text-[10px] font-black uppercase text-slate-400 px-4 mb-4 tracking-wider">Navigation Menu</p>
           {[
-            { id: 1, icon: '📊', name: 'Dashboard Overview' },
+            { id: 1, icon: '📊', name: 'Dashboard & Analytics' },
             { id: 2, icon: '📦', name: 'Product Inventory' },
-            { id: 3, icon: '🛒', name: 'Order Management' },
-            { id: 4, icon: '👥', name: 'User Accounts' },
+            { id: 3, icon: '🛒', name: 'Orders & Tracking' },
+            { id: 4, icon: '👥', name: 'Customer Accounts' },
             { id: 5, icon: '🎫', name: 'Coupons & Offers' },
             { id: 6, icon: '📈', name: 'Sales Reports' },
-            { id: 7, icon: '📩', name: 'Enquiries Log' },
+            { id: 7, icon: '📩', name: 'Enquiry Center' },
           ].map(tab => (
             <button key={tab.id} onClick={() => { setActiveTab(tab.id); setMessage(''); }} className={`flex w-full items-center gap-3 rounded-2xl px-5 py-4 text-sm font-bold transition-all ${activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg scale-105' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100'}`}>
               <span>{tab.icon}</span> {tab.name}
@@ -601,39 +767,269 @@ export default function IntegratedAdminPanelDashboard() {
         {/* 💻 Active Workspace View */}
         <div className="space-y-8">
           
-          {/* TAB 1: Graphs & Summary Metrics */}
+          {/* TAB 1: Dashboard & Analytics */}
           {activeTab === 1 && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase">Gross Revenue Matrix</p>
-                   <p className="text-2xl font-black mt-1">₹{chartAnalytics.totalRevenue.toLocaleString()}</p>
-                 </div>
-                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase">Tracked Enquiries</p>
-                   <p className="text-2xl font-black mt-1 text-emerald-600">{enquiries.length}</p>
-                 </div>
-                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase">Live Database Users</p>
-                   <p className="text-2xl font-black mt-1 text-blue-600">{customers.length}</p>
-                 </div>
-              </div>
-              <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-lg font-black text-slate-900">Device Sales Bar Graph Analytics</h2>
-                  <button onClick={() => fetchData(true)} disabled={isSyncing} className="text-xs bg-slate-100 px-3 py-1.5 rounded-lg font-bold text-slate-900 hover:bg-slate-200 transition flex items-center gap-1 disabled:opacity-50">
-                    <span className={isSyncing ? "animate-spin inline-block" : "inline-block"}>🔄</span> {isSyncing ? 'Syncing...' : 'Sync Live Server'}
-                  </button>
-                </div>
-                <div className="flex h-56 items-end justify-between gap-2 border-b border-l border-slate-200 pb-2 pl-2 bg-slate-50/60 p-4 rounded-2xl">
-                  {chartAnalytics.topProducts.map((p, i) => (
-                    <div key={i} className="flex h-full flex-col justify-end items-center flex-1 group cursor-pointer">
-                      <div style={{ height: p.heightStr }} className="w-full rounded-t-lg bg-slate-900 group-hover:bg-emerald-500 transition-all relative">
-                        <span className="absolute -top-7 left-1/2 -translate-x-1/2 text-[10px] font-black opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white px-2 py-1 rounded-md shadow-md">{p.heightStr}</span>
-                      </div>
-                      <span className="mt-3 text-[9px] font-black text-slate-500 uppercase truncate w-full text-center">{p.title}</span>
+              <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl sm:p-8">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600">
+                      Dashboard & Analytics
+                    </p>
+                    <h2 className="mt-2 text-3xl font-black text-slate-950 sm:text-4xl">
+                      Store performance overview
+                    </h2>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                      Track revenue, orders, inventory, customers, enquiries, and live store activity from one screen.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        Last Updated
+                      </p>
+                      <p className="mt-1 text-sm font-black text-slate-900">
+                        {chartAnalytics.lastUpdated || 'Just now'}
+                      </p>
                     </div>
-                  ))}
+
+                    <button
+                      type="button"
+                      onClick={() => fetchData(true)}
+                      disabled={isSyncing}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-4 text-xs font-black text-white shadow-lg transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <span className={isSyncing ? 'inline-block animate-spin' : 'inline-block'}>🔄</span>
+                      {isSyncing ? 'Syncing...' : 'Sync Live Server'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+                {chartAnalytics.kpiCards.map((card) => (
+                  <article
+                    key={card.label}
+                    className="rounded-[1.5rem] border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-xl sm:rounded-3xl sm:p-5"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400 sm:text-[10px]">
+                          {card.label}
+                        </p>
+                        <p className={`mt-2 text-xl font-black sm:text-2xl ${card.accent}`}>
+                          {card.value}
+                        </p>
+                      </div>
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-50 text-xl shadow-inner">
+                        {card.icon}
+                      </div>
+                    </div>
+                    <p className="mt-3 line-clamp-1 text-[11px] font-bold text-slate-500">
+                      {card.helper}
+                    </p>
+                  </article>
+                ))}
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
+                  <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900">
+                        Top Product Performance
+                      </h3>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">
+                        Based on cart activity and saved order revenue.
+                      </p>
+                    </div>
+                    <span className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                      Live Analytics
+                    </span>
+                  </div>
+
+                  <div className="flex h-64 items-end justify-between gap-2 rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                    {chartAnalytics.topProducts.map((product, index) => (
+                      <div
+                        key={`${product.title}-${index}`}
+                        className="group flex h-full flex-1 flex-col items-center justify-end"
+                      >
+                        <div
+                          style={{ height: product.heightStr }}
+                          className="relative w-full rounded-t-2xl bg-slate-950 transition-all duration-300 group-hover:bg-emerald-500"
+                        >
+                          <span className="absolute -top-8 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-950 px-2 py-1 text-[10px] font-black text-white shadow-md group-hover:block">
+                            {product.count} units
+                          </span>
+                        </div>
+                        <p className="mt-3 w-full truncate text-center text-[9px] font-black uppercase tracking-wider text-slate-500">
+                          {product.title}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
+                  <div className="mb-5">
+                    <h3 className="text-lg font-black text-slate-900">
+                      Order Status
+                    </h3>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                      Quick view of current delivery pipeline.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    {chartAnalytics.statusSummary.map((status) => (
+                      <div
+                        key={status.status}
+                        className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${status.className}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">{status.icon}</span>
+                          <span className="text-xs font-black uppercase tracking-wider">
+                            {status.status}
+                          </span>
+                        </div>
+                        <span className="text-lg font-black">
+                          {status.count}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
+                  <div className="mb-5 flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900">
+                        Recent Orders
+                      </h3>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">
+                        Latest order activity from your store.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(3)}
+                      className="rounded-full bg-slate-950 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white transition hover:bg-slate-800"
+                    >
+                      View All
+                    </button>
+                  </div>
+
+                  {chartAnalytics.recentOrders.length === 0 ? (
+                    <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                      <p className="text-sm font-black text-slate-900">No recent orders yet.</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">
+                        Orders will appear here after customers complete checkout.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                      <table className="w-full min-w-[620px] text-left">
+                        <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-400">
+                          <tr>
+                            <th className="p-4 font-black">Order ID</th>
+                            <th className="p-4 font-black">Customer</th>
+                            <th className="p-4 font-black">Total</th>
+                            <th className="p-4 font-black text-right">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {chartAnalytics.recentOrders.map((order) => (
+                            <tr key={order.id} className="hover:bg-slate-50/70">
+                              <td className="p-4 text-xs font-black text-slate-900">
+                                {order.id}
+                              </td>
+                              <td className="p-4 text-xs font-bold text-slate-600">
+                                {order.customer || order.customerName || 'Customer'}
+                              </td>
+                              <td className="p-4 text-xs font-black text-emerald-600">
+                                ₹{Number(order.total || order.totalAmount || 0).toLocaleString()}
+                              </td>
+                              <td className="p-4 text-right">
+                                <span
+                                  className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider ${
+                                    order.status === 'Delivered'
+                                      ? 'bg-emerald-50 text-emerald-700'
+                                      : order.status === 'Shipped'
+                                        ? 'bg-blue-50 text-blue-700'
+                                        : order.status === 'Cancelled'
+                                          ? 'bg-rose-50 text-rose-700'
+                                          : 'bg-amber-50 text-amber-700'
+                                  }`}
+                                >
+                                  {order.status || 'Processing'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-[2rem] border border-slate-100 bg-slate-950 p-5 text-white shadow-xl sm:p-7">
+                  <div className="mb-5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-300">
+                      Admin Shortcuts
+                    </p>
+                    <h3 className="mt-2 text-xl font-black">
+                      Quick Actions
+                    </h3>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">
+                      Jump directly to important admin work without searching through tabs.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingProduct(null)
+                        setInventoryView('form')
+                        setActiveTab(2)
+                      }}
+                      className="flex items-center justify-between rounded-2xl bg-white/10 px-4 py-3 text-left text-sm font-black transition hover:bg-white/15"
+                    >
+                      <span>Add New Product</span>
+                      <span>＋</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(3)}
+                      className="flex items-center justify-between rounded-2xl bg-white/10 px-4 py-3 text-left text-sm font-black transition hover:bg-white/15"
+                    >
+                      <span>Manage Orders</span>
+                      <span>→</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(5)}
+                      className="flex items-center justify-between rounded-2xl bg-white/10 px-4 py-3 text-left text-sm font-black transition hover:bg-white/15"
+                    >
+                      <span>Create Coupon</span>
+                      <span>🎫</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => fetchData(true)}
+                      disabled={isSyncing}
+                      className="flex items-center justify-between rounded-2xl bg-emerald-400 px-4 py-3 text-left text-sm font-black text-slate-950 transition hover:bg-emerald-300 disabled:opacity-60"
+                    >
+                      <span>{isSyncing ? 'Syncing...' : 'Sync Live Data'}</span>
+                      <span>🔄</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
