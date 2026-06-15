@@ -117,6 +117,7 @@ export default function IntegratedAdminPanelDashboard() {
     { id: 'ORD-9K33', customer: 'Pooja Joshi', date: '2024-05-09', total: 155000, status: 'Cancelled', items: 2 }
   ])
   const [orderFilter, setOrderFilter] = useState('All')
+  const [selectedOrder, setSelectedOrder] = useState(null)
 
   // 🔄 Supabase Live Data Fetch
   const fetchData = useCallback(async (showFeedback = false) => {
@@ -657,12 +658,99 @@ export default function IntegratedAdminPanelDashboard() {
     setMessage('Product deleted successfully.')
   }
 
+  const getOrderProducts = (order) => {
+    const orderProducts = order?.products || order?.cartItems || order?.itemsList || []
+    return Array.isArray(orderProducts) ? orderProducts : []
+  }
+
+  const restoreStockForCancelledOrder = (order) => {
+    const orderProducts = getOrderProducts(order)
+
+    if (orderProducts.length === 0) return false
+
+    setLocalProducts((prevProducts) => {
+      const safeProducts = Array.isArray(prevProducts) ? prevProducts : []
+
+      return safeProducts.map((product) => {
+        const matchedOrderItems = orderProducts.filter((item) =>
+          String(item.productId || item.id) === String(product.id)
+        )
+
+        if (matchedOrderItems.length === 0) return product
+
+        const restoreQuantity = matchedOrderItems.reduce((sum, item) => {
+          return sum + Math.max(Number(item.quantity || 1), 1)
+        }, 0)
+
+        const nextStock = getStockQuantity(product) + restoreQuantity
+
+        const stockEntry = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          date: new Date().toISOString(),
+          quantity: restoreQuantity,
+          supplier: 'Order Cancellation',
+          note: `Stock restored after order ${order.id} was cancelled.`,
+          purchasePrice: Number(product.purchasePrice || 0),
+          type: 'order-cancel-restock',
+          orderId: order.id
+        }
+
+        return {
+          ...product,
+          stockQty: nextStock,
+          stockHistory: [
+            ...(Array.isArray(product.stockHistory) ? product.stockHistory : []),
+            stockEntry
+          ],
+          lastStockUpdatedAt: new Date().toISOString()
+        }
+      })
+    })
+
+    return true
+  }
+
   const handleOrderStatusChange = (id, status) => {
+    let restoredStock = false
+    let changedOrder = null
+
     setOrders(prev => {
-      const next = prev.map(order => order.id === id ? { ...order, status } : order)
+      const next = prev.map(order => {
+        if (order.id !== id) return order
+
+        const oldStatus = String(order.status || '')
+        const shouldRestoreStock =
+          status === 'Cancelled' &&
+          oldStatus !== 'Cancelled' &&
+          order.stockRestored !== true
+
+        if (shouldRestoreStock) {
+          restoredStock = restoreStockForCancelledOrder(order)
+        }
+
+        changedOrder = {
+          ...order,
+          status,
+          stockRestored: shouldRestoreStock ? restoredStock : order.stockRestored,
+          stockRestoredAt: shouldRestoreStock && restoredStock ? new Date().toISOString() : order.stockRestoredAt
+        }
+
+        return changedOrder
+      })
+
       saveJson(ORDERS_STORAGE_KEY, next)
       return next
     })
+
+    if (selectedOrder && selectedOrder.id === id && changedOrder) {
+      setSelectedOrder(changedOrder)
+    }
+
+    if (status === 'Cancelled') {
+      setMessage(restoredStock ? `Order ${id} cancelled and stock restored automatically!` : `Order ${id} cancelled.`)
+      return
+    }
+
     setMessage(`Order ${id} status updated!`)
   }
 
@@ -957,6 +1045,35 @@ export default function IntegratedAdminPanelDashboard() {
                   </article>
                 ))}
               </div>
+
+              {(chartAnalytics.lowStockProducts > 0 || chartAnalytics.outOfStockProducts > 0) && (
+                <div className="rounded-[2rem] border border-amber-200 bg-amber-50 p-5 shadow-sm sm:p-6">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-amber-700">
+                        Stock Alert
+                      </p>
+                      <h3 className="mt-2 text-xl font-black text-slate-950">
+                        Inventory needs attention
+                      </h3>
+                      <p className="mt-1 text-sm font-bold text-amber-800">
+                        {chartAnalytics.lowStockProducts} low stock products and {chartAnalytics.outOfStockProducts} out of stock products found.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab(2)
+                        setInventoryView('brands')
+                      }}
+                      className="rounded-full bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg transition hover:bg-slate-800"
+                    >
+                      Open Inventory
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
                 <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
@@ -1447,7 +1564,15 @@ export default function IntegratedAdminPanelDashboard() {
                             <option value="Cancelled">Cancelled</option>
                           </select>
                         </td>
-                        <td className="p-4 text-right opacity-80 group-hover:opacity-100 transition"><button className="text-slate-600 font-bold hover:text-slate-900 text-[11px] uppercase tracking-wide">View Details</button></td>
+                        <td className="p-4 text-right opacity-80 group-hover:opacity-100 transition">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOrder(order)}
+                            className="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-slate-700 transition hover:bg-slate-950 hover:text-white"
+                          >
+                            View Details
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1502,17 +1627,212 @@ export default function IntegratedAdminPanelDashboard() {
             </div>
           )}
 
-          {/* Placeholders */}
-          {([6].includes(activeTab)) && (
-            <div className="bg-white p-20 rounded-[2rem] border border-slate-100 shadow-xl text-center">
-              <p className="text-4xl">🚧</p>
-              <h2 className="text-xl font-black mt-4">Module Integration Pending</h2>
-              <p className="text-sm text-slate-400 mt-2">This dashboard slice is ready for dynamic backend routing hooks.</p>
+          {/* 📈 TAB 6: Sales Reports */}
+          {activeTab === 6 && (
+            <div className="space-y-6">
+              <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl sm:p-8">
+                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600">
+                  Sales Reports
+                </p>
+                <h2 className="mt-2 text-3xl font-black text-slate-950">
+                  Business summary
+                </h2>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                  Revenue, order status, top products, and stock health in one reporting view.
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  ['Revenue', `₹${chartAnalytics.totalRevenue.toLocaleString()}`, 'Total saved order value', 'text-emerald-600'],
+                  ['Orders', chartAnalytics.totalOrders.toLocaleString(), 'All saved customer orders', 'text-slate-900'],
+                  ['Stock Units', chartAnalytics.totalStockUnits.toLocaleString(), 'Total available inventory', 'text-blue-600'],
+                  ['Unavailable', chartAnalytics.outOfStockProducts.toLocaleString(), 'Out of stock products', 'text-rose-600']
+                ].map(([label, value, helper, color]) => (
+                  <div key={label} className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p>
+                    <p className={`mt-2 text-2xl font-black ${color}`}>{value}</p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">{helper}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-2">
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl">
+                  <h3 className="text-lg font-black text-slate-900">Top product activity</h3>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    Based on cart/order activity available in local storage.
+                  </p>
+
+                  <div className="mt-5 space-y-3">
+                    {chartAnalytics.topProducts.length === 0 ? (
+                      <p className="rounded-2xl bg-slate-50 p-5 text-sm font-bold text-slate-500">No product activity yet.</p>
+                    ) : chartAnalytics.topProducts.map((product, index) => (
+                      <div key={`${product.title}-${index}`} className="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
+                        <div>
+                          <p className="text-sm font-black text-slate-900">{product.title}</p>
+                          <p className="text-xs font-bold text-slate-500">{product.count} units activity</p>
+                        </div>
+                        <p className="text-sm font-black text-emerald-600">₹{Number(product.revenue || 0).toLocaleString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl">
+                  <h3 className="text-lg font-black text-slate-900">Stock health report</h3>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    Products that need refill or are unavailable.
+                  </p>
+
+                  <div className="mt-5 space-y-3">
+                    {localProducts
+                      .filter((product) => getStockQuantity(product) <= getMinStockAlert(product))
+                      .slice(0, 8)
+                      .map((product) => {
+                        const stockStatus = getStockStatusDetails(product)
+
+                        return (
+                          <div key={product.id} className="flex items-center justify-between gap-4 rounded-2xl bg-slate-50 p-4">
+                            <div className="min-w-0">
+                              <p className="line-clamp-1 text-sm font-black text-slate-900">{product.title}</p>
+                              <p className="text-xs font-bold text-slate-500">{product.brand || 'Other Models'} • {getStockQuantity(product)} units left</p>
+                            </div>
+                            <span className={`shrink-0 rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider ${stockStatus.className}`}>
+                              {stockStatus.label}
+                            </span>
+                          </div>
+                        )
+                      })}
+
+                    {localProducts.filter((product) => getStockQuantity(product) <= getMinStockAlert(product)).length === 0 && (
+                      <p className="rounded-2xl bg-emerald-50 p-5 text-sm font-bold text-emerald-700">
+                        All products have healthy stock levels.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
         </div>
       </div>
+
+      {selectedOrder && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] border border-white/10 bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600">
+                  Order Details
+                </p>
+                <h3 className="mt-2 text-2xl font-black text-slate-950">
+                  {selectedOrder.id}
+                </h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  {selectedOrder.customer || selectedOrder.customerName || 'Customer'} • {selectedOrder.date ? new Date(selectedOrder.date).toLocaleString() : 'No date'}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedOrder(null)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-lg font-black text-slate-600 transition hover:bg-slate-200"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Amount</p>
+                <p className="mt-1 text-xl font-black text-emerald-600">₹{Number(selectedOrder.total || selectedOrder.totalAmount || 0).toLocaleString()}</p>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Items</p>
+                <p className="mt-1 text-xl font-black text-slate-950">{selectedOrder.items || getOrderProducts(selectedOrder).length}</p>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Status</p>
+                <p className="mt-1 text-xl font-black text-slate-950">{selectedOrder.status || 'Processing'}</p>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Stock Restore</p>
+                <p className={`mt-1 text-sm font-black ${selectedOrder.stockRestored ? 'text-emerald-600' : 'text-slate-500'}`}>
+                  {selectedOrder.stockRestored ? 'Done' : 'Not applied'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-5">
+              <h4 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                Customer Information
+              </h4>
+              <div className="mt-3 grid gap-3 text-sm font-bold text-slate-700 sm:grid-cols-2">
+                <p>Name: {selectedOrder.customer || selectedOrder.customerName || '—'}</p>
+                <p>Mobile: {selectedOrder.mobileNumber || selectedOrder.mobile || '—'}</p>
+                <p className="sm:col-span-2">Address: {selectedOrder.address || '—'}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-[1.5rem] border border-slate-100 bg-white p-5">
+              <h4 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                Ordered Products
+              </h4>
+
+              {getOrderProducts(selectedOrder).length === 0 ? (
+                <p className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm font-bold text-slate-500">
+                  Product list is not available for this older/demo order.
+                </p>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {getOrderProducts(selectedOrder).map((item, index) => (
+                    <div key={`${item.productId || item.id || index}-${index}`} className="grid grid-cols-[64px_1fr] gap-4 rounded-2xl bg-slate-50 p-3">
+                      <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-white p-2 shadow-inner">
+                        {item.image ? (
+                          <img src={item.image} alt={item.title || 'Product'} className="h-full w-full object-contain" />
+                        ) : (
+                          <span>📱</span>
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="line-clamp-1 text-sm font-black text-slate-950">{item.title || 'Mobisphere Product'}</p>
+                        <p className="text-xs font-bold text-slate-500">{item.brand || 'Mobisphere'} • Qty: {item.quantity || 1}</p>
+                        <p className="mt-1 text-sm font-black text-emerald-600">₹{Number(item.price || 0).toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedOrder(null)}
+                className="rounded-2xl border border-slate-200 px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                Close
+              </button>
+
+              {selectedOrder.status !== 'Cancelled' && (
+                <button
+                  type="button"
+                  onClick={() => handleOrderStatusChange(selectedOrder.id, 'Cancelled')}
+                  className="rounded-2xl bg-rose-600 px-6 py-3 text-sm font-black text-white shadow-lg transition hover:bg-rose-700"
+                >
+                  Cancel Order & Restore Stock
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {stockProduct && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm">
