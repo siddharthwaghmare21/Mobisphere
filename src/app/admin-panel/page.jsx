@@ -738,8 +738,8 @@ export default function IntegratedAdminPanelDashboard() {
                           <tr key={product.id} className="hover:bg-slate-50/80 transition group">
                             <td className="p-4 text-xs font-mono font-bold text-slate-400">#{product.id}</td>
                             <td className="p-4 text-sm font-bold text-slate-900 flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-lg shadow-inner overflow-hidden">
-                                {product.image ? <img src={product.image} alt={product.title} className="w-full h-full object-cover" /> : '📱'}
+                              <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 via-white to-slate-200 p-1 shadow-inner">
+                                {product.image ? <img src={product.image} alt={product.title} className="h-full max-h-full w-full max-w-full object-contain" /> : '📱'}
                               </div>
                               {product.title}
                             </td>
@@ -784,7 +784,7 @@ export default function IntegratedAdminPanelDashboard() {
                         <label className="text-[10px] font-black uppercase text-slate-400">Product Image (Local File)</label>
                         <div className="mt-1 flex items-center gap-4">
                           {editingProduct?.image && (
-                            <img src={editingProduct.image} alt="Preview" className="w-12 h-12 object-cover rounded-lg border border-slate-200 shadow-sm" />
+                            <img src={editingProduct.image} alt="Preview" className="h-12 w-12 rounded-lg border border-slate-200 bg-slate-50 object-contain p-1 shadow-sm" />
                           )}
                           <input type="file" name="image" accept="image/*" className="w-full p-2 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 bg-white cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 transition" />
                         </div>
