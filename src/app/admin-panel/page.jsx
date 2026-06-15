@@ -1429,298 +1429,292 @@ export default function IntegratedAdminPanelDashboard() {
           
           {/* TAB 1: Dashboard & Analytics */}
           {activeTab === 1 && (
-            <div className="space-y-6">
-              <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl sm:p-8">
-                <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600">
-                      Dashboard & Analytics
-                    </p>
-                    <h2 className="mt-2 text-3xl font-black text-slate-950 sm:text-4xl">
-                      Store performance overview
-                    </h2>
-                    <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                      Track revenue, orders, inventory, customers, enquiries, and live store activity from one screen.
-                    </p>
-                  </div>
+            <div className="space-y-7">
+              <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 text-white shadow-2xl">
+                <div className="relative p-6 sm:p-8 lg:p-10">
+                  <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-emerald-400/20 blur-3xl" />
+                  <div className="pointer-events-none absolute -bottom-24 left-1/3 h-64 w-64 rounded-full bg-blue-400/10 blur-3xl" />
 
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                        Last Updated
-                      </p>
-                      <p className="mt-1 text-sm font-black text-slate-900">
-                        {chartAnalytics.lastUpdated || 'Just now'}
+                  <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+                    <div className="max-w-2xl">
+                      <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.25em] text-emerald-300">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                        Dashboard & Analytics
+                      </div>
+
+                      <h2 className="text-3xl font-black leading-tight tracking-tight sm:text-4xl lg:text-5xl">
+                        Store command center
+                      </h2>
+
+                      <p className="mt-3 max-w-xl text-sm font-semibold leading-6 text-slate-300">
+                        Revenue, orders, stock alerts, customers, and quick actions in one clean admin view.
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => fetchData(true)}
-                      disabled={isSyncing}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-4 text-xs font-black text-white shadow-lg transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <span className={isSyncing ? 'inline-block animate-spin' : 'inline-block'}>🔄</span>
-                      {isSyncing ? 'Syncing...' : 'Sync Live Server'}
-                    </button>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[380px]">
+                      <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Today Revenue</p>
+                        <p className="mt-2 text-2xl font-black text-emerald-300">₹{Number(chartAnalytics.todayRevenue || 0).toLocaleString()}</p>
+                        <p className="mt-1 text-[11px] font-bold text-slate-400">{chartAnalytics.todayOrders} orders today</p>
+                      </div>
+
+                      <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Last Sync</p>
+                        <p className="mt-2 text-lg font-black text-white">{chartAnalytics.lastUpdated || 'Just now'}</p>
+                        <button
+                          type="button"
+                          onClick={() => fetchData(true)}
+                          disabled={isSyncing}
+                          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-400 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <span className={isSyncing ? 'inline-block animate-spin' : 'inline-block'}>🔄</span>
+                          {isSyncing ? 'Syncing...' : 'Sync Data'}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-                {chartAnalytics.kpiCards.map((card) => (
+              <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-6">
+                {[
+                  { label: 'Total Revenue', value: `₹${Number(chartAnalytics.totalRevenue || 0).toLocaleString()}`, helper: 'Saved orders', icon: '₹', className: 'xl:col-span-2 bg-emerald-50 border-emerald-100 text-emerald-700' },
+                  { label: 'Total Orders', value: chartAnalytics.totalOrders, helper: `${chartAnalytics.pendingOrders} processing`, icon: '🛒', className: 'bg-white border-slate-100 text-slate-900' },
+                  { label: 'Products', value: chartAnalytics.totalProducts, helper: `${chartAnalytics.totalStockUnits} units`, icon: '📦', className: 'bg-white border-slate-100 text-blue-700' },
+                  { label: 'Customers', value: customers.length, helper: `${enquiries.length} enquiries`, icon: '👥', className: 'bg-white border-slate-100 text-violet-700' },
+                  { label: 'Live Sales', value: (Array.isArray(saleCampaigns) ? saleCampaigns.filter((campaign) => getCampaignStatus(campaign).label === 'Live').length : 0), helper: `${saleCampaigns.length} campaigns`, icon: '🔥', className: 'bg-orange-50 border-orange-100 text-orange-700' }
+                ].map((card) => (
                   <article
                     key={card.label}
-                    className="rounded-[1.5rem] border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-xl sm:rounded-3xl sm:p-5"
+                    className={`rounded-[1.5rem] border p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-xl sm:rounded-3xl sm:p-5 ${card.className}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400 sm:text-[10px]">
-                          {card.label}
-                        </p>
-                        <p className={`mt-2 text-xl font-black sm:text-2xl ${card.accent}`}>
-                          {card.value}
-                        </p>
+                        <p className="text-[9px] font-black uppercase tracking-[0.18em] opacity-70 sm:text-[10px]">{card.label}</p>
+                        <p className="mt-2 text-xl font-black sm:text-2xl">{card.value}</p>
                       </div>
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-50 text-xl shadow-inner">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/70 text-xl shadow-inner">
                         {card.icon}
                       </div>
                     </div>
-                    <p className="mt-3 line-clamp-1 text-[11px] font-bold text-slate-500">
-                      {card.helper}
-                    </p>
+                    <p className="mt-3 line-clamp-1 text-[11px] font-bold opacity-70">{card.helper}</p>
                   </article>
                 ))}
-              </div>
+              </section>
 
               {(chartAnalytics.lowStockProducts > 0 || chartAnalytics.outOfStockProducts > 0) && (
-                <div className="rounded-[2rem] border border-amber-200 bg-amber-50 p-5 shadow-sm sm:p-6">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <section className="rounded-[2rem] border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-5 shadow-sm sm:p-6">
+                  <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-amber-700">
-                        Stock Alert
-                      </p>
-                      <h3 className="mt-2 text-xl font-black text-slate-950">
-                        Inventory needs attention
-                      </h3>
+                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-amber-700">Inventory Attention</p>
+                      <h3 className="mt-2 text-2xl font-black text-slate-950">Stock needs review</h3>
                       <p className="mt-1 text-sm font-bold text-amber-800">
-                        {chartAnalytics.lowStockProducts} low stock products and {chartAnalytics.outOfStockProducts} out of stock products found.
+                        {chartAnalytics.lowStockProducts} low stock products • {chartAnalytics.outOfStockProducts} out of stock products
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveTab(2)
-                        setInventoryView('brands')
-                      }}
-                      className="rounded-full bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg transition hover:bg-slate-800"
-                    >
-                      Open Inventory
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      {(Array.isArray(localProducts) ? localProducts : [])
+                        .filter((product) => getStockQuantity(product) <= 0 || (getStockQuantity(product) > 0 && getStockQuantity(product) <= getMinStockAlert(product)))
+                        .slice(0, 3)
+                        .map((product) => (
+                          <span key={product.id} className="rounded-full bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-700 shadow-sm">
+                            {product.title || 'Product'}
+                          </span>
+                        ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab(2)
+                          setInventoryView('brands')
+                        }}
+                        className="rounded-full bg-slate-950 px-5 py-2.5 text-[10px] font-black uppercase tracking-wider text-white shadow-lg transition hover:bg-slate-800"
+                      >
+                        Open Inventory
+                      </button>
+                    </div>
                   </div>
-                </div>
+                </section>
               )}
 
-              <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+              <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
                 <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
                   <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h3 className="text-lg font-black text-slate-900">
-                        Top Product Performance
-                      </h3>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">
-                        Based on cart activity and saved order revenue.
-                      </p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-600">Performance</p>
+                      <h3 className="mt-1 text-xl font-black text-slate-950">Top Product Activity</h3>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">Based on cart activity and saved order revenue.</p>
                     </div>
-                    <span className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                    <span className="w-fit rounded-full bg-slate-950 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white">
                       Live Analytics
                     </span>
                   </div>
 
-                  <div className="flex h-64 items-end justify-between gap-2 rounded-3xl border border-slate-100 bg-slate-50 p-4">
-                    {chartAnalytics.topProducts.map((product, index) => (
-                      <div
-                        key={`${product.title}-${index}`}
-                        className="group flex h-full flex-1 flex-col items-center justify-end"
-                      >
-                        <div
-                          style={{ height: product.heightStr }}
-                          className="relative w-full rounded-t-2xl bg-slate-950 transition-all duration-300 group-hover:bg-emerald-500"
-                        >
-                          <span className="absolute -top-8 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-950 px-2 py-1 text-[10px] font-black text-white shadow-md group-hover:block">
-                            {product.count} units
-                          </span>
+                  <div className="space-y-4">
+                    {chartAnalytics.topProducts.length === 0 ? (
+                      <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                        <p className="text-sm font-black text-slate-900">No product activity yet.</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">Cart and order activity will appear here.</p>
+                      </div>
+                    ) : chartAnalytics.topProducts.map((product, index) => (
+                      <div key={`${product.title}-${index}`} className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                        <div className="mb-2 flex items-center justify-between gap-4">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-slate-900">{product.title}</p>
+                            <p className="text-[11px] font-bold text-slate-500">{product.count} units activity</p>
+                          </div>
+                          <p className="text-xs font-black text-emerald-600">₹{Number(product.revenue || 0).toLocaleString()}</p>
                         </div>
-                        <p className="mt-3 w-full truncate text-center text-[9px] font-black uppercase tracking-wider text-slate-500">
-                          {product.title}
-                        </p>
+                        <div className="h-2 rounded-full bg-white">
+                          <div className="h-2 rounded-full bg-slate-950" style={{ width: product.heightStr }} />
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
-                  <div className="mb-5">
-                    <h3 className="text-lg font-black text-slate-900">
-                      Order Status
-                    </h3>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">
-                      Quick view of current delivery pipeline.
-                    </p>
+                <div className="space-y-6">
+                  <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
+                    <div className="mb-5">
+                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-blue-600">Orders</p>
+                      <h3 className="mt-1 text-xl font-black text-slate-950">Status Pipeline</h3>
+                    </div>
+
+                    <div className="grid gap-3">
+                      {chartAnalytics.statusSummary.map((status) => {
+                        const percent = chartAnalytics.totalOrders > 0 ? Math.round((status.count / chartAnalytics.totalOrders) * 100) : 0
+
+                        return (
+                          <div key={status.status} className={`rounded-2xl border p-4 ${status.className}`}>
+                            <div className="mb-2 flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-3">
+                                <span className="text-lg">{status.icon}</span>
+                                <span className="text-xs font-black uppercase tracking-wider">{status.status}</span>
+                              </div>
+                              <span className="text-lg font-black">{status.count}</span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-white/70">
+                              <div className="h-1.5 rounded-full bg-current" style={{ width: `${percent}%` }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
 
-                  <div className="space-y-3">
-                    {chartAnalytics.statusSummary.map((status) => (
-                      <div
-                        key={status.status}
-                        className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${status.className}`}
+                  <div className="rounded-[2rem] border border-slate-100 bg-slate-950 p-5 text-white shadow-xl sm:p-7">
+                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-300">Quick Actions</p>
+                    <h3 className="mt-2 text-xl font-black">Admin shortcuts</h3>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">Jump directly into the most used admin tasks.</p>
+
+                    <div className="mt-5 grid gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingProduct(null)
+                          setInventoryView('form')
+                          setActiveTab(2)
+                        }}
+                        className="flex items-center justify-between rounded-2xl bg-white/10 px-4 py-3 text-left text-sm font-black transition hover:bg-white/15"
                       >
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg">{status.icon}</span>
-                          <span className="text-xs font-black uppercase tracking-wider">
-                            {status.status}
-                          </span>
-                        </div>
-                        <span className="text-lg font-black">
-                          {status.count}
-                        </span>
-                      </div>
-                    ))}
+                        <span>Add new product</span>
+                        <span>＋</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab(3)}
+                        className="flex items-center justify-between rounded-2xl bg-white/10 px-4 py-3 text-left text-sm font-black transition hover:bg-white/15"
+                      >
+                        <span>Manage orders</span>
+                        <span>→</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab(5)}
+                        className="flex items-center justify-between rounded-2xl bg-white/10 px-4 py-3 text-left text-sm font-black transition hover:bg-white/15"
+                      >
+                        <span>Create festival sale</span>
+                        <span>🔥</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => fetchData(true)}
+                        disabled={isSyncing}
+                        className="flex items-center justify-between rounded-2xl bg-emerald-400 px-4 py-3 text-left text-sm font-black text-slate-950 transition hover:bg-emerald-300 disabled:opacity-60"
+                      >
+                        <span>{isSyncing ? 'Syncing...' : 'Sync live data'}</span>
+                        <span>🔄</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
-                  <div className="mb-5 flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="text-lg font-black text-slate-900">
-                        Recent Orders
-                      </h3>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">
-                        Latest order activity from your store.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab(3)}
-                      className="rounded-full bg-slate-950 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white transition hover:bg-slate-800"
-                    >
-                      View All
-                    </button>
+              <section className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
+                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Orders</p>
+                    <h3 className="mt-1 text-xl font-black text-slate-950">Recent Orders</h3>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">Latest customer checkout activity.</p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab(3)}
+                    className="w-fit rounded-full bg-slate-950 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white transition hover:bg-slate-800"
+                  >
+                    View All Orders
+                  </button>
+                </div>
 
-                  {chartAnalytics.recentOrders.length === 0 ? (
-                    <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
-                      <p className="text-sm font-black text-slate-900">No recent orders yet.</p>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">
-                        Orders will appear here after customers complete checkout.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto rounded-2xl border border-slate-100">
-                      <table className="w-full min-w-[620px] text-left">
-                        <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-400">
-                          <tr>
-                            <th className="p-4 font-black">Order ID</th>
-                            <th className="p-4 font-black">Customer</th>
-                            <th className="p-4 font-black">Total</th>
-                            <th className="p-4 font-black text-right">Status</th>
+                {chartAnalytics.recentOrders.length === 0 ? (
+                  <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                    <p className="text-sm font-black text-slate-900">No recent orders yet.</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">Orders will appear here after customers complete checkout.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-3xl border border-slate-100">
+                    <table className="w-full min-w-[700px] text-left">
+                      <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-400">
+                        <tr>
+                          <th className="p-4 font-black">Order ID</th>
+                          <th className="p-4 font-black">Customer</th>
+                          <th className="p-4 font-black">Date</th>
+                          <th className="p-4 font-black">Total</th>
+                          <th className="p-4 font-black text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {chartAnalytics.recentOrders.map((order) => (
+                          <tr key={order.id} className="hover:bg-slate-50/70">
+                            <td className="p-4 text-xs font-black text-slate-900">{order.id}</td>
+                            <td className="p-4 text-xs font-bold text-slate-600">{getOrderCustomerName(order)}</td>
+                            <td className="p-4 text-xs font-bold text-slate-500">{getOrderDate(order) ? getOrderDate(order).toLocaleDateString('en-IN') : '—'}</td>
+                            <td className="p-4 text-xs font-black text-emerald-600">₹{getOrderTotal(order).toLocaleString()}</td>
+                            <td className="p-4 text-right">
+                              <span
+                                className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider ${
+                                  order.status === 'Delivered'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : order.status === 'Shipped'
+                                      ? 'bg-blue-50 text-blue-700'
+                                      : order.status === 'Cancelled'
+                                        ? 'bg-rose-50 text-rose-700'
+                                        : 'bg-amber-50 text-amber-700'
+                                }`}
+                              >
+                                {order.status || 'Processing'}
+                              </span>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {chartAnalytics.recentOrders.map((order) => (
-                            <tr key={order.id} className="hover:bg-slate-50/70">
-                              <td className="p-4 text-xs font-black text-slate-900">
-                                {order.id}
-                              </td>
-                              <td className="p-4 text-xs font-bold text-slate-600">
-                                {order.customer || order.customerName || 'Customer'}
-                              </td>
-                              <td className="p-4 text-xs font-black text-emerald-600">
-                                ₹{Number(order.total || order.totalAmount || 0).toLocaleString()}
-                              </td>
-                              <td className="p-4 text-right">
-                                <span
-                                  className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider ${
-                                    order.status === 'Delivered'
-                                      ? 'bg-emerald-50 text-emerald-700'
-                                      : order.status === 'Shipped'
-                                        ? 'bg-blue-50 text-blue-700'
-                                        : order.status === 'Cancelled'
-                                          ? 'bg-rose-50 text-rose-700'
-                                          : 'bg-amber-50 text-amber-700'
-                                  }`}
-                                >
-                                  {order.status || 'Processing'}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-[2rem] border border-slate-100 bg-slate-950 p-5 text-white shadow-xl sm:p-7">
-                  <div className="mb-5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-300">
-                      Admin Shortcuts
-                    </p>
-                    <h3 className="mt-2 text-xl font-black">
-                      Quick Actions
-                    </h3>
-                    <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">
-                      Jump directly to important admin work without searching through tabs.
-                    </p>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-
-                  <div className="grid gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingProduct(null)
-                        setInventoryView('form')
-                        setActiveTab(2)
-                      }}
-                      className="flex items-center justify-between rounded-2xl bg-white/10 px-4 py-3 text-left text-sm font-black transition hover:bg-white/15"
-                    >
-                      <span>Add New Product</span>
-                      <span>＋</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab(3)}
-                      className="flex items-center justify-between rounded-2xl bg-white/10 px-4 py-3 text-left text-sm font-black transition hover:bg-white/15"
-                    >
-                      <span>Manage Orders</span>
-                      <span>→</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab(5)}
-                      className="flex items-center justify-between rounded-2xl bg-white/10 px-4 py-3 text-left text-sm font-black transition hover:bg-white/15"
-                    >
-                      <span>Create Coupon</span>
-                      <span>🎫</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => fetchData(true)}
-                      disabled={isSyncing}
-                      className="flex items-center justify-between rounded-2xl bg-emerald-400 px-4 py-3 text-left text-sm font-black text-slate-950 transition hover:bg-emerald-300 disabled:opacity-60"
-                    >
-                      <span>{isSyncing ? 'Syncing...' : 'Sync Live Data'}</span>
-                      <span>🔄</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
+                )}
+              </section>
             </div>
           )}
 
