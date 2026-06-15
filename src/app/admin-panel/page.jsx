@@ -10,7 +10,8 @@ import { useProductContext } from '@/app/context/ProductContext'
 const ADMIN_SESSION_KEY = 'mobisphereAdminSession'
 const COUPON_STORAGE_KEY = 'mobisphereCoupons'
 const ADMIN_USERS_KEY = 'mobisphereAdminUsers'
-const CART_STORAGE_KEY = 'cart'
+const CART_STORAGE_KEY = 'mobisphereCart'
+const ORDERS_STORAGE_KEY = 'mobisphereOrders'
 
 function loadJson(key) {
   if (typeof window === 'undefined') return null
@@ -24,6 +25,19 @@ function loadJson(key) {
 function saveJson(key, val) {
   if (typeof window === 'undefined') return
   localStorage.setItem(key, JSON.stringify(val))
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve) => {
+    if (!file || file.size === 0) {
+      resolve('')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
+    reader.onerror = () => resolve('')
+    reader.readAsDataURL(file)
+  })
 }
 
 export default function IntegratedAdminPanelDashboard() {
@@ -97,21 +111,30 @@ export default function IntegratedAdminPanelDashboard() {
 
   useEffect(() => {
     const session = loadJson(ADMIN_SESSION_KEY)
-    if (session) {
-      setIsLoggedIn(true)
-      setUsername(session.username || 'Admin')
-      fetchData()
-    }
     const storedAdmins = loadJson(ADMIN_USERS_KEY)
-    if (storedAdmins && storedAdmins.length > 0) {
-      setAdminUsers(storedAdmins)
-    } else {
+    const storedCoupons = loadJson(COUPON_STORAGE_KEY) || []
+    const storedOrders = loadJson(ORDERS_STORAGE_KEY)
+
+    if (!storedAdmins || storedAdmins.length === 0) {
       saveJson(ADMIN_USERS_KEY, [{ username: 'admin', password: 'admin' }])
     }
-    const storedCoupons = loadJson(COUPON_STORAGE_KEY) || []
-    setCoupons(storedCoupons)
 
-    setHydrated(true)
+    queueMicrotask(() => {
+      if (session) {
+        setIsLoggedIn(true)
+        setUsername(session.username || 'Admin')
+      }
+      setAdminUsers(storedAdmins && storedAdmins.length > 0 ? storedAdmins : [{ username: 'admin', password: 'admin' }])
+      setCoupons(storedCoupons)
+      if (Array.isArray(storedOrders) && storedOrders.length > 0) {
+        setOrders(storedOrders)
+      }
+      setHydrated(true)
+    })
+
+    if (session) {
+      queueMicrotask(() => fetchData())
+    }
   }, [fetchData])
 
   // Analytics Graph Logic
@@ -261,22 +284,23 @@ export default function IntegratedAdminPanelDashboard() {
   // --- Product Inventory Logic ---
   const uniqueBrands = [...new Set(localProducts.map(p => p.brand || 'Other Models'))]
 
-  const handleSaveProduct = (e) => {
+  const handleSaveProduct = async (e) => {
     e.preventDefault()
     const formData = new FormData(e.target)
     const imageFile = formData.get('image')
-    let imageUrl = editingProduct?.image || ''
-    if (imageFile && imageFile.size > 0) {
-      imageUrl = URL.createObjectURL(imageFile)
-    }
+    const uploadedImage = imageFile && imageFile.size > 0 ? await fileToDataUrl(imageFile) : ''
+    const imageUrl = uploadedImage || editingProduct?.image || '/images/IPhone 16 Pro Max.png'
+    const brand = String(formData.get('brand') || 'Other Models').trim()
+    const title = String(formData.get('title') || 'Untitled Product').trim()
 
     const newProd = {
       id: editingProduct ? editingProduct.id : Date.now().toString(),
-      title: formData.get('title'),
-      brand: formData.get('brand'),
+      title,
+      brand,
       price: Number(formData.get('price')),
-      description: formData.get('description'),
+      description: String(formData.get('description') || '').trim(),
       image: imageUrl,
+      alt: title,
       specs: {
         RAM: formData.get('ram'),
         Storage: formData.get('storage'),
@@ -288,7 +312,8 @@ export default function IntegratedAdminPanelDashboard() {
       }
     }
     setLocalProducts(prev => editingProduct ? prev.map(p => p.id === newProd.id ? newProd : p) : [...prev, newProd])
-    setInventoryView(selectedBrand ? 'products' : 'brands')
+    setSelectedBrand(brand)
+    setInventoryView('products')
     setEditingProduct(null)
     setMessage(`Product ${editingProduct ? 'updated' : 'added'} successfully!`)
   }
@@ -296,6 +321,15 @@ export default function IntegratedAdminPanelDashboard() {
   const handleDeleteProduct = (id) => {
     setLocalProducts(prev => prev.filter(p => p.id !== id))
     setMessage('Product deleted successfully.')
+  }
+
+  const handleOrderStatusChange = (id, status) => {
+    setOrders(prev => {
+      const next = prev.map(order => order.id === id ? { ...order, status } : order)
+      saveJson(ORDERS_STORAGE_KEY, next)
+      return next
+    })
+    setMessage(`Order ${id} status updated!`)
   }
 
   if (!hydrated) return null
@@ -491,7 +525,7 @@ export default function IntegratedAdminPanelDashboard() {
                      inventoryView === 'form' ? (editingProduct ? 'Edit Product' : 'Add New Product') :
                      `${selectedBrand} Products`}
                   </h2>
-                  <p className="text-sm text-slate-500 mt-1">Manage your store's products, pricing, and stock status.</p>
+                  <p className="text-sm text-slate-500 mt-1">Manage your store products, pricing, and stock status.</p>
                 </div>
                 {inventoryView !== 'form' && (
                   <button onClick={() => { setEditingProduct(null); setInventoryView('form'); }} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs flex items-center gap-2">
@@ -658,7 +692,7 @@ export default function IntegratedAdminPanelDashboard() {
                         <td className="p-4 text-sm font-bold text-slate-700 text-center">{order.items}</td>
                         <td className="p-4 text-sm font-black text-emerald-600">₹{order.total.toLocaleString()}</td>
                         <td className="p-4 text-center">
-                          <select value={order.status} onChange={(e) => { setOrders(orders.map(o => o.id === order.id ? { ...o, status: e.target.value } : o)); setMessage(`Order ${order.id} status updated!`); }} className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full outline-none cursor-pointer border-2 ${order.status === 'Processing' ? 'bg-amber-50 text-amber-700 border-amber-200' : order.status === 'Shipped' ? 'bg-blue-50 text-blue-700 border-blue-200' : order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+                          <select value={order.status} onChange={(e) => { handleOrderStatusChange(order.id, e.target.value); }} className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full outline-none cursor-pointer border-2 ${order.status === 'Processing' ? 'bg-amber-50 text-amber-700 border-amber-200' : order.status === 'Shipped' ? 'bg-blue-50 text-blue-700 border-blue-200' : order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
                             <option value="Processing">Processing</option>
                             <option value="Shipped">Shipped</option>
                             <option value="Delivered">Delivered</option>
@@ -691,7 +725,7 @@ export default function IntegratedAdminPanelDashboard() {
                            <span className="text-xs font-black bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full uppercase tracking-wider">{e.subject || 'iPhone Enquiry'}</span>
                            <h3 className="text-lg font-black text-slate-900 mt-2">{e.full_name || 'Visitor'} — <span className="font-mono font-medium text-slate-600 text-base">{e.mobile_number || '—'}</span></h3>
                            <p className="text-xs text-slate-500 font-mono mt-0.5">Email: {e.email || '—'} | Received: {e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</p>
-                           <p className="text-sm text-slate-900 font-medium italic mt-3 bg-white p-3 rounded-xl border border-slate-100">"{e.message || '—'}"</p>
+                           <p className="text-sm text-slate-900 font-medium italic mt-3 bg-white p-3 rounded-xl border border-slate-100">{e.message || '—'}</p>
                          </div>
                          <div className="flex gap-2 self-end sm:self-start">
                            <button onClick={() => handleSaveEnquiry(e.id)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 transition font-bold text-xs">Save Changes</button>

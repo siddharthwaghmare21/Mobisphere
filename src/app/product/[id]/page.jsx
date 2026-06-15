@@ -1,8 +1,9 @@
 "use client"
 
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import ProductCart, { productData } from '@/app/components/common/ProductCart'
+import ProductCart from '@/app/components/common/ProductCart'
+import { useProductContext } from '@/app/context/ProductContext'
 
 function formatINR(value) {
   const n = Number(value)
@@ -10,14 +11,30 @@ function formatINR(value) {
   return `₹${n.toLocaleString()}`
 }
 
+function addProductToCart(product) {
+  const currentCart = JSON.parse(localStorage.getItem('mobisphereCart') || '[]')
+  currentCart.push({
+    cartItemId: Date.now().toString() + Math.random().toString(36).slice(2, 9),
+    productId: product.id,
+    title: product.title,
+    image: product.image,
+    description: product.description,
+    price: product.price,
+    quantity: 1,
+  })
+  localStorage.setItem('mobisphereCart', JSON.stringify(currentCart))
+}
+
 export default function ProductDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const productId = Number(params?.id)
-
-  const product = productId ? productData[productId] : null
-
+  const { products, hydrated } = useProductContext()
+  const productId = params?.id
   const [cartMessage, setCartMessage] = useState('')
+
+  const product = useMemo(() => {
+    return products.find((item) => String(item.id) === String(productId)) || null
+  }, [products, productId])
 
   const specs = useMemo(() => {
     const s = product?.specs || {}
@@ -28,25 +45,24 @@ export default function ProductDetailPage() {
       Display: s.Display,
       Battery: s.Battery,
       Processor: s.Processor,
+      Charger: s.Charger,
+      Tools: s.Tools,
     }
   }, [product])
 
+  const recommendedProducts = useMemo(() => {
+    return products.filter((item) => String(item.id) !== String(productId)).slice(0, 3)
+  }, [products, productId])
+
   const addToCart = () => {
     if (!product) return
-    const currentCart = JSON.parse(localStorage.getItem('mobisphereCart') || '[]')
-    currentCart.push({
-      cartItemId: Date.now().toString() + Math.random().toString(36).substring(2, 9),
-      productId: productId || null,
-      title: product.title,
-      image: product.image,
-      description: product.description,
-      price: product.price,
-    })
-    localStorage.setItem('mobisphereCart', JSON.stringify(currentCart))
+    addProductToCart(product)
     setCartMessage(`${product.title} added to cart!`)
-    queueMicrotask(() => {
-      setTimeout(() => setCartMessage(''), 1500)
-    })
+    window.setTimeout(() => setCartMessage(''), 1500)
+  }
+
+  if (!hydrated) {
+    return <main className="px-4 py-20 text-center font-bold text-slate-500">Loading product...</main>
   }
 
   if (!product) {
@@ -55,6 +71,7 @@ export default function ProductDetailPage() {
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
           <h1 className="text-2xl font-bold text-slate-950">Product not found</h1>
           <button
+            type="button"
             onClick={() => router.push('/product')}
             className="mt-6 rounded-full bg-slate-950 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-800"
           >
@@ -71,7 +88,7 @@ export default function ProductDetailPage() {
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
           <div className="w-full lg:w-1/2">
             <div className="overflow-hidden rounded-[2rem] bg-slate-100">
-              <img src={product.image} alt={product.title} className="h-[320px] w-full object-cover sm:h-[420px]" />
+              <img src={product.image} alt={product.alt || product.title} className="h-[320px] w-full object-cover sm:h-[420px]" />
             </div>
           </div>
 
@@ -102,10 +119,7 @@ export default function ProductDetailPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    // थेट कूपन बॉक्स आणि प्रॉडक्ट आयडीसह पेमेंट पेजवर पाठवणे
-                    router.push(`/buy?productId=${productId}`)
-                  }}
+                  onClick={() => router.push(`/payment?productId=${product.id}`)}
                   className="inline-flex w-full items-center justify-center rounded-full border border-emerald-600 bg-emerald-600 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-500 sm:w-auto"
                 >
                   Buy now
@@ -115,10 +129,10 @@ export default function ProductDetailPage() {
               <div className="mt-2 rounded-[1.75rem] border border-slate-200 bg-white p-5">
                 <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Specifications</p>
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {Object.entries(specs).map(([k, v]) => (
-                    <div key={k} className="rounded-2xl bg-slate-50 p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{k}</p>
-                      <p className="mt-2 text-sm font-semibold text-slate-900">{v || '—'}</p>
+                  {Object.entries(specs).filter(([, value]) => Boolean(value)).map(([key, value]) => (
+                    <div key={key} className="rounded-2xl bg-slate-50 p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{key}</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-900">{value}</p>
                     </div>
                   ))}
                 </div>
@@ -137,24 +151,21 @@ export default function ProductDetailPage() {
       </div>
 
       <div className="mt-10">
-        <h2 className="mb-4 text-2xl font-bold text-slate-950">
-          Customers who bought this also viewed
-        </h2>
+        <h2 className="mb-4 text-2xl font-bold text-slate-950">Customers who bought this also viewed</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3, 4, 5, 6]
-            .filter((x) => x !== productId)
-            .slice(0, 3)
-            .map((pid) => (
-              <div key={pid} className="text-left">
-                <ProductCart
-                  productId={pid}
-                  onBuyNow={() => {
-                    // रेकमेंडेड प्रॉडक्टच्या बाय बटनावरून देखील अचूक आयडी पेमेंट पेजला पाठवला
-                    router.push(`/buy?productId=${pid}`)
-                  }}
-                />
-              </div>
-            ))}
+          {recommendedProducts.map((item) => (
+            <div key={item.id} className="text-left">
+              <ProductCart
+                productId={item.id}
+                image={item.image}
+                alt={item.alt || item.title}
+                title={item.title}
+                description={item.description}
+                price={item.price}
+                onBuyNow={() => router.push(`/payment?productId=${item.id}`)}
+              />
+            </div>
+          ))}
         </div>
       </div>
     </main>

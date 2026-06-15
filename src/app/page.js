@@ -18,7 +18,7 @@ function LightDarkToggle() {
     const stored = typeof window !== 'undefined' ? localStorage.getItem('mobisphereTheme') : null
     const prefersDark = typeof window !== 'undefined' ? window.matchMedia?.('(prefers-color-scheme: dark)')?.matches : false
     const next = stored || (prefersDark ? 'dark' : 'light')
-    setMode(next)
+    queueMicrotask(() => setMode(next))
     document.documentElement.classList.toggle('dark', next === 'dark')
   }, [])
 

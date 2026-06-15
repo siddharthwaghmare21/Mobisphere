@@ -33,7 +33,7 @@ export default function OwnerDashboardPage() {
 
     const storedSession = loadJson(ADMIN_SESSION_KEY)
     if (!storedSession) {
-      router.replace('/admin')
+      router.replace('/admin-panel')
       return
     }
 
@@ -139,7 +139,7 @@ export default function OwnerDashboardPage() {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => router.push('/admin')}
+              onClick={() => router.push('/admin-panel')}
               className="rounded-full bg-slate-950 px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800"
             >
               Back to Admin Panel

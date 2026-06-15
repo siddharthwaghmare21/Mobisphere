@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import React from 'react'
 import { useRouter } from 'next/navigation'
@@ -132,7 +132,8 @@ export default function ProductCart({ productId, image, alt, title, description,
             title: cardTitle,
             image: cardImage,
             description: cardDescription,
-            price: cardPrice
+            price: cardPrice,
+            quantity: 1
         })
         localStorage.setItem('mobisphereCart', JSON.stringify(currentCart))
         alert(`${cardTitle} has been added to your cart!`)
@@ -185,6 +186,10 @@ export default function ProductCart({ productId, image, alt, title, description,
                         e.preventDefault()
                         if (onBuyNow) {
                             onBuyNow()
+                            return
+                        }
+                        if (productId) {
+                            router.push(`/payment?productId=${productId}`)
                         }
                     }}
                     className="inline-flex w-full items-center justify-center rounded-full border border-emerald-600 bg-emerald-600 px-2 py-1.5 text-[10px] font-semibold text-slate-950 transition hover:bg-emerald-500 sm:w-auto sm:px-4 sm:py-2 sm:text-sm"

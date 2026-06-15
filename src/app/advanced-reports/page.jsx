@@ -12,12 +12,12 @@ export default function AdvancedReportsPage() {
     try {
       const stored = JSON.parse(localStorage.getItem("mobisphereAdminSession") || "null")
       if (!stored) {
-        router.replace("/admin")
+        router.replace("/admin-panel")
         return
       }
-      setSession(stored)
+      queueMicrotask(() => setSession(stored))
     } catch {
-      router.replace("/admin")
+      router.replace("/admin-panel")
     }
   }, [router])
 

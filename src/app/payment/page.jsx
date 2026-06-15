@@ -1,8 +1,8 @@
 "use client"
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { productData } from '@/app/components/common/ProductCart'
+import { useProductContext } from '@/app/context/ProductContext'
 
 const initialForm = {
   fullName: '',
@@ -11,42 +11,81 @@ const initialForm = {
   couponCode: '',
 }
 
-export default function BuyPage() {
+function safeJson(key, fallback) {
+  if (typeof window === 'undefined') return fallback
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || 'null')
+    return parsed ?? fallback
+  } catch {
+    return fallback
+  }
+}
+
+function normalizeCartItem(item) {
+  return {
+    productId: item.productId,
+    title: item.title || 'Product',
+    image: item.image || '/images/IPhone 16 Pro Max.png',
+    description: item.description || '',
+    price: Number(item.price) || 0,
+    quantity: Number(item.quantity) || 1,
+  }
+}
+
+function makeOrderId() {
+  return `ORD-${Date.now().toString(36).toUpperCase().slice(-5)}`
+}
+
+export default function PaymentPage() {
   const router = useRouter()
+  const { products, hydrated: productsHydrated } = useProductContext()
   const [formData, setFormData] = useState(initialForm)
-  const [product, setProduct] = useState(null)
+  const [checkoutMode, setCheckoutMode] = useState({ cart: false, productId: null })
+  const [cartItems, setCartItems] = useState([])
   const [discount, setDiscount] = useState(0)
   const [couponError, setCouponError] = useState('')
   const [couponSuccess, setCouponSuccess] = useState('')
   const [orderPlaced, setOrderPlaced] = useState(false)
+  const [lastOrder, setLastOrder] = useState(null)
+  const [isHydrated, setIsHydrated] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
     const queryParams = new URLSearchParams(window.location.search)
     const rawPid = queryParams.get('productId')
-    
-    if (rawPid && productData) {
-      // ऑब्जेक्टमधील की (Key) मॅच करण्यासाठी नंबर आणि स्ट्रिंग दोन्ही स्वरूपात चेक केले
-      const pidNum = Number(rawPid)
-      const foundProduct = productData[pidNum] || productData[rawPid]
+    const cartMode = queryParams.get('cart') === '1'
+    const loggedInUser = safeJson('mobisphereLoggedIn', null)
+    const storedCart = safeJson('mobisphereCart', [])
 
-      if (foundProduct) {
-        setProduct(foundProduct)
+    queueMicrotask(() => {
+      setCheckoutMode({ cart: cartMode, productId: rawPid })
+      setCartItems(Array.isArray(storedCart) ? storedCart.map(normalizeCartItem) : [])
+      if (loggedInUser) {
+        setFormData((prev) => ({
+          ...prev,
+          fullName: loggedInUser.fullName || '',
+          mobileNumber: loggedInUser.mobileNumber || '',
+          address: loggedInUser.address || '',
+        }))
       }
-    }
-
-    // युझर लॉगिन असेल तर डेटा ऑटो-फिल करणे
-    const loggedInUser = JSON.parse(localStorage.getItem('mobisphereLoggedIn') || 'null')
-    if (loggedInUser) {
-      setFormData((prev) => ({
-        ...prev,
-        fullName: loggedInUser.fullName || '',
-        mobileNumber: loggedInUser.mobileNumber || '',
-        address: loggedInUser.address || '',
-      }))
-    }
+      setIsHydrated(true)
+    })
   }, [])
+
+  const selectedProduct = useMemo(() => {
+    if (!checkoutMode.productId) return null
+    return products.find((item) => String(item.id) === String(checkoutMode.productId)) || null
+  }, [checkoutMode.productId, products])
+
+  const checkoutItems = useMemo(() => {
+    if (checkoutMode.cart) return cartItems
+    return selectedProduct ? [normalizeCartItem(selectedProduct)] : []
+  }, [cartItems, checkoutMode.cart, selectedProduct])
+
+  const basePrice = checkoutItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 1), 0)
+  const discountAmount = Math.round((basePrice * discount) / 100)
+  const finalPrice = Math.max(basePrice - discountAmount, 0)
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -62,8 +101,8 @@ export default function BuyPage() {
       return
     }
 
-    const storedCoupons = JSON.parse(localStorage.getItem('mobisphereCoupons') || '[]')
-    const found = storedCoupons.find((c) => c.code.toUpperCase() === code)
+    const storedCoupons = safeJson('mobisphereCoupons', [])
+    const found = Array.isArray(storedCoupons) ? storedCoupons.find((c) => String(c.code).toUpperCase() === code) : null
 
     if (!found) {
       setCouponError('Invalid coupon code. Try another one.')
@@ -84,15 +123,48 @@ export default function BuyPage() {
       return
     }
 
+    if (checkoutItems.length === 0) {
+      alert('No product selected for checkout.')
+      return
+    }
+
+    const order = {
+      id: makeOrderId(),
+      customer: formData.fullName.trim(),
+      mobileNumber: formData.mobileNumber.trim(),
+      address: formData.address.trim(),
+      date: new Date().toISOString(),
+      total: finalPrice,
+      status: 'Processing',
+      items: checkoutItems.length,
+      products: checkoutItems,
+      discountPercent: discount,
+    }
+
+    const existingOrders = safeJson('mobisphereOrders', [])
+    const nextOrders = Array.isArray(existingOrders) ? [order, ...existingOrders] : [order]
+    localStorage.setItem('mobisphereOrders', JSON.stringify(nextOrders))
+
+    if (checkoutMode.cart) {
+      localStorage.setItem('mobisphereCart', JSON.stringify([]))
+      setCartItems([])
+    }
+
+    setLastOrder(order)
     setOrderPlaced(true)
   }
 
-  if (!product) {
+  if (!isHydrated || !productsHydrated) {
+    return <main className="px-4 py-20 text-center font-bold text-slate-500">Loading checkout...</main>
+  }
+
+  if (checkoutItems.length === 0) {
     return (
       <main className="mx-auto max-w-md px-4 py-20 pt-32 text-center">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
           <p className="text-sm font-semibold text-slate-500">No product selected</p>
           <button
+            type="button"
             onClick={() => router.push('/product')}
             className="mt-4 rounded-full bg-slate-950 px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800"
           >
@@ -103,22 +175,19 @@ export default function BuyPage() {
     )
   }
 
-  const basePrice = Number(product.price) || 0
-  const discountAmount = (basePrice * discount) / 100
-  const finalPrice = basePrice - discountAmount
-
   if (orderPlaced) {
     return (
       <main className="mx-auto max-w-md px-4 py-20 pt-32 text-center">
-        <div className="rounded-[2rem] border border-emerald-200 bg-emerald-50 p-8 shadow-sm text-emerald-900">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-xl font-bold">
+        <div className="rounded-[2rem] border border-emerald-200 bg-emerald-50 p-8 text-emerald-900 shadow-sm">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-xl font-bold text-emerald-600">
             ✓
           </div>
           <h1 className="mt-4 text-2xl font-bold">Order Placed!</h1>
           <p className="mt-2 text-sm text-emerald-700">
-            Thank you, {formData.fullName}. Your order for {product.title} has been received and is being processed.
+            Thank you, {formData.fullName}. Your order {lastOrder?.id} has been received.
           </p>
           <button
+            type="button"
             onClick={() => router.push('/')}
             className="mt-6 rounded-full bg-slate-950 px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800"
           >
@@ -144,7 +213,7 @@ export default function BuyPage() {
                 value={formData.fullName}
                 onChange={(e) => handleInputChange('fullName', e.target.value)}
                 className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
-                placeholder="Receiver's name"
+                placeholder="Receiver name"
               />
             </label>
 
@@ -169,9 +238,9 @@ export default function BuyPage() {
               />
             </label>
 
-            <div className="rounded-[1.5rem] bg-slate-50 p-5 text-xs text-slate-500 leading-5">
-              <p className="font-semibold text-slate-800 uppercase tracking-wider mb-1">Cash on Delivery Available</p>
-              By placing this order, you agree to pay the final amount upon hand-delivery by our store representative.
+            <div className="rounded-[1.5rem] bg-slate-50 p-5 text-xs leading-5 text-slate-500">
+              <p className="mb-1 font-semibold uppercase tracking-wider text-slate-800">Cash on Delivery Available</p>
+              By placing this order, you agree to pay the final amount upon hand delivery by our store representative.
             </div>
 
             <button
@@ -186,13 +255,17 @@ export default function BuyPage() {
         <aside className="space-y-6">
           <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <h2 className="text-xl font-bold text-slate-950">Order Summary</h2>
-            
-            <div className="mt-4 flex items-center gap-4 rounded-2xl bg-slate-50 p-4">
-              <img src={product.image} alt={product.title} className="h-16 w-16 rounded-xl object-cover bg-white" />
-              <div>
-                <h3 className="text-sm font-bold text-slate-950">{product.title}</h3>
-                <p className="mt-1 text-xs text-slate-500">Qty: 1 Unit</p>
-              </div>
+
+            <div className="mt-4 space-y-3">
+              {checkoutItems.map((item, index) => (
+                <div key={`${item.productId}-${index}`} className="flex items-center gap-4 rounded-2xl bg-slate-50 p-4">
+                  <img src={item.image} alt={item.title} className="h-16 w-16 rounded-xl bg-white object-cover" />
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-950">{item.title}</h3>
+                    <p className="mt-1 text-xs text-slate-500">Qty: {item.quantity || 1} Unit</p>
+                  </div>
+                </div>
+              ))}
             </div>
 
             <div className="mt-6 space-y-3 border-b border-slate-100 pb-4 text-sm font-medium">
@@ -219,13 +292,13 @@ export default function BuyPage() {
           </div>
 
           <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 mb-3">Apply Store Coupon</h3>
+            <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-900">Apply Store Coupon</h3>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={formData.couponCode}
                 onChange={(e) => handleInputChange('couponCode', e.target.value)}
-                className="w-full rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs uppercase font-semibold tracking-wider text-slate-900 outline-none focus:border-slate-400"
+                className="w-full rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-900 outline-none focus:border-slate-400"
                 placeholder="PROMO20"
               />
               <button
@@ -237,8 +310,8 @@ export default function BuyPage() {
               </button>
             </div>
 
-            {couponError && <p className="mt-2 text-xs font-medium text-red-600 pl-2">{couponError}</p>}
-            {couponSuccess && <p className="mt-2 text-xs font-medium text-emerald-600 pl-2">{couponSuccess}</p>}
+            {couponError && <p className="mt-2 pl-2 text-xs font-medium text-red-600">{couponError}</p>}
+            {couponSuccess && <p className="mt-2 pl-2 text-xs font-medium text-emerald-600">{couponSuccess}</p>}
           </div>
         </aside>
       </div>

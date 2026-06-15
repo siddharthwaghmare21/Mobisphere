@@ -34,18 +34,21 @@ export default function DiscountCouponsPage() {
 
   const [form, setForm] = useState(initialCoupon)
   const [message, setMessage] = useState('')
+  const [nowMs, setNowMs] = useState(0)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     const storedSession = loadJson(ADMIN_SESSION_KEY)
     if (!storedSession) {
-      router.replace('/admin')
+      router.replace('/admin-panel')
       return
     }
-    setSession(storedSession)
-
     const storedCoupons = loadJson(COUPONS_KEY)
-    setCoupons(Array.isArray(storedCoupons) ? storedCoupons : [])
+    queueMicrotask(() => {
+      setSession(storedSession)
+      setCoupons(Array.isArray(storedCoupons) ? storedCoupons : [])
+      setNowMs(Date.now())
+    })
   }, [router])
 
   const normalizedCode = useMemo(() => form.code.trim().toUpperCase(), [form.code])
@@ -187,7 +190,7 @@ export default function DiscountCouponsPage() {
             ) : (
               coupons.map((c) => {
                 const expiry = new Date(c.expiresAt)
-                const isExpired = expiry.getTime() < Date.now()
+                const isExpired = nowMs > 0 && expiry.getTime() < nowMs
                 return (
                   <div key={c.id} className="rounded-3xl border border-slate-200 bg-white p-5">
                     <div className="flex items-start justify-between gap-4">
