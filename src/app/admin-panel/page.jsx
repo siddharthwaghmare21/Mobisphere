@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { productData } from '@/app/components/common/ProductCart'
 import { supabase } from '@/lib/supabase'
 import { useProductContext } from '@/app/context/ProductContext'
@@ -12,6 +11,7 @@ const COUPON_STORAGE_KEY = 'mobisphereCoupons'
 const ADMIN_USERS_KEY = 'mobisphereAdminUsers'
 const CART_STORAGE_KEY = 'mobisphereCart'
 const ORDERS_STORAGE_KEY = 'mobisphereOrders'
+const ADMIN_ACCESS_KEY = 'ALT+SHIFT+A'
 
 function loadJson(key) {
   if (typeof window === 'undefined') return null
@@ -41,16 +41,17 @@ function fileToDataUrl(file) {
 }
 
 export default function IntegratedAdminPanelDashboard() {
-  const router = useRouter()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
-  const [adminUsers, setAdminUsers] = useState([{ username: 'admin', password: 'admin' }])
-  
-  // 🎯 साईन-अप फॉर्मसाठी आवश्यक स्टेट्स
+  const [adminUsers, setAdminUsers] = useState([])
+
+  // Admin Login / Signup states
   const [regName, setRegName] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [adminAccessKey, setAdminAccessKey] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   
   const [customers, setCustomers] = useState([])
   const [enquiries, setEnquiries] = useState([])
@@ -115,16 +116,12 @@ export default function IntegratedAdminPanelDashboard() {
     const storedCoupons = loadJson(COUPON_STORAGE_KEY) || []
     const storedOrders = loadJson(ORDERS_STORAGE_KEY)
 
-    if (!storedAdmins || storedAdmins.length === 0) {
-      saveJson(ADMIN_USERS_KEY, [{ username: 'admin', password: 'admin' }])
-    }
-
     queueMicrotask(() => {
       if (session) {
         setIsLoggedIn(true)
         setUsername(session.username || 'Admin')
       }
-      setAdminUsers(storedAdmins && storedAdmins.length > 0 ? storedAdmins : [{ username: 'admin', password: 'admin' }])
+      setAdminUsers(Array.isArray(storedAdmins) ? storedAdmins : [])
       setCoupons(storedCoupons)
       if (Array.isArray(storedOrders) && storedOrders.length > 0) {
         setOrders(storedOrders)
@@ -180,58 +177,104 @@ export default function IntegratedAdminPanelDashboard() {
     return 'Good Evening'
   }, [])
 
-  // 🎯 दुरुस्त केलेले साईन-अप आणि लॉगिन मॅनेजमेंट लॉजिक
+  // Admin Sign Up / Login Logic
+  const resetAuthForm = () => {
+    setRegName('')
+    setUsername('')
+    setPassword('')
+    setConfirmPassword('')
+    setAdminAccessKey('')
+    setShowPassword(false)
+    setMessage('')
+  }
+
+  const switchAuthMode = (mode) => {
+    setIsRegistering(mode === 'signup')
+    resetAuthForm()
+  }
+
   const handleAuthSubmit = (e) => {
     e.preventDefault()
     const uname = username.trim()
-    
+    const cleanName = regName.trim()
+    const cleanAccessKey = adminAccessKey.trim().toUpperCase()
+
     if (!uname || !password) {
-      setMessage("Please fill in all fields!")
+      setMessage('Please enter username and password.')
       return
     }
 
     if (isRegistering) {
-      // 📝 SIGN UP PROCESS
-      if (password !== confirmPassword) {
-        setMessage("❌ Passwords do not match!")
-        return
-      }
-      if (!regName.trim()) {
-        setMessage("❌ Please enter your name!")
+      if (!cleanName) {
+        setMessage('Please enter admin full name.')
         return
       }
 
-      const exists = adminUsers.find(a => a.username.toLowerCase() === uname.toLowerCase())
+      if (password.length < 6) {
+        setMessage('Password must be at least 6 characters.')
+        return
+      }
+
+      if (password !== confirmPassword) {
+        setMessage('Passwords do not match.')
+        return
+      }
+
+      if (cleanAccessKey !== ADMIN_ACCESS_KEY) {
+        setMessage('Invalid admin access code.')
+        return
+      }
+
+      const exists = adminUsers.some((admin) => String(admin.username || '').toLowerCase() === uname.toLowerCase())
       if (exists) {
-        setMessage("❌ Username already exists. Choose another.")
-      } else {
-        const updatedAdmins = [...adminUsers, { name: regName, username: uname, password }]
-        setAdminUsers(updatedAdmins)
-        saveJson(ADMIN_USERS_KEY, updatedAdmins)
-        saveJson(ADMIN_SESSION_KEY, { username: uname })
-        setIsLoggedIn(true)
-        fetchData()
-        setMessage('')
-        setRegName('')
-        setConfirmPassword('')
+        setMessage('This username already exists. Use another username.')
+        return
       }
-    } else {
-      // 🔐 SIGN IN PROCESS
-      const validAdmin = adminUsers.find(a => a.username.toLowerCase() === uname.toLowerCase() && a.password === password)
-      if (validAdmin) {
-        saveJson(ADMIN_SESSION_KEY, { username: validAdmin.username })
-        setIsLoggedIn(true)
-        fetchData()
-        setMessage('')
-      } else {
-        setMessage("❌ Invalid Username or Password!")
+
+      const newAdmin = {
+        id: Date.now().toString(),
+        name: cleanName,
+        username: uname,
+        password,
+        createdAt: new Date().toISOString()
       }
+      const updatedAdmins = [...adminUsers, newAdmin]
+
+      setAdminUsers(updatedAdmins)
+      saveJson(ADMIN_USERS_KEY, updatedAdmins)
+      saveJson(ADMIN_SESSION_KEY, { username: uname, name: cleanName })
+      setIsLoggedIn(true)
+      setUsername(uname)
+      setMessage('')
+      fetchData()
+      return
     }
+
+    if (!Array.isArray(adminUsers) || adminUsers.length === 0) {
+      setMessage('No admin account found. Create admin account using Sign Up.')
+      return
+    }
+
+    const validAdmin = adminUsers.find(
+      (admin) => String(admin.username || '').toLowerCase() === uname.toLowerCase() && admin.password === password
+    )
+
+    if (!validAdmin) {
+      setMessage('Invalid username or password.')
+      return
+    }
+
+    saveJson(ADMIN_SESSION_KEY, { username: validAdmin.username, name: validAdmin.name || validAdmin.username })
+    setIsLoggedIn(true)
+    setUsername(validAdmin.username)
+    setMessage('')
+    fetchData()
   }
 
   const handleLogout = () => {
     localStorage.removeItem(ADMIN_SESSION_KEY)
     setIsLoggedIn(false)
+    resetAuthForm()
   }
 
   const handleCustomerDelete = async (id) => {
@@ -334,40 +377,170 @@ export default function IntegratedAdminPanelDashboard() {
 
   if (!hydrated) return null
 
-  // 🔒 AUTH INTERFACE (SIGN IN / SIGN UP FIXED)
+  // Auth Interface
   if (!isLoggedIn) {
     return (
-      <main className="mx-auto max-w-md px-4 py-24 font-sans">
-        <div className="rounded-[2.5rem] border border-slate-200 bg-white p-10 shadow-2xl">
-          <h1 className="text-center text-2xl font-black text-slate-900">
-            {isRegistering ? 'Admin Sign Up' : 'Admin Login'}
-          </h1>
-          
-          <div className="flex bg-slate-100 p-1 rounded-2xl mt-6 mb-2">
-            <button type="button" onClick={() => { setIsRegistering(false); setMessage(''); }} className={`flex-1 py-3 text-xs font-bold rounded-xl transition ${!isRegistering ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}>Login</button>
-            <button type="button" onClick={() => { setIsRegistering(true); setMessage(''); }} className={`flex-1 py-3 text-xs font-bold rounded-xl transition ${isRegistering ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}>Sign Up</button>
+      <main className="relative min-h-screen overflow-hidden bg-slate-950 px-4 pb-12 pt-24 font-sans text-white sm:px-6 lg:px-8">
+        <div className="pointer-events-none absolute -left-24 top-20 h-72 w-72 rounded-full bg-emerald-500/20 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-blue-500/20 blur-3xl" />
+
+        <section className="relative mx-auto grid min-h-[calc(100vh-7rem)] w-full max-w-6xl items-center gap-8 lg:grid-cols-[1fr_460px]">
+          <div className="hidden lg:block">
+            <div className="mb-5 inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black uppercase tracking-[0.28em] text-emerald-300 shadow-2xl backdrop-blur">
+              Mobisphere Admin Control
+            </div>
+            <h1 className="max-w-2xl text-5xl font-black leading-tight tracking-tight xl:text-6xl">
+              Manage your mobile store like a premium brand.
+            </h1>
+            <p className="mt-5 max-w-xl text-sm font-semibold leading-7 text-slate-300">
+              Product inventory, orders, customers, enquiries, coupons, and reports stay inside one hidden admin workspace.
+            </p>
+
+            <div className="mt-8 grid max-w-2xl grid-cols-3 gap-3">
+              {[
+                ['📦', 'Inventory'],
+                ['🛒', 'Orders'],
+                ['📩', 'Enquiries']
+              ].map(([icon, label]) => (
+                <div key={label} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5 shadow-2xl backdrop-blur">
+                  <p className="text-3xl">{icon}</p>
+                  <p className="mt-3 text-xs font-black uppercase tracking-widest text-slate-300">{label}</p>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {message && <div className="mt-4 text-xs text-center text-red-600 bg-red-50 p-2.5 rounded-xl font-bold">{message}</div>}
-          
-          <form onSubmit={handleAuthSubmit} className="mt-6 space-y-4">
-            {isRegistering && (
-              <input type="text" value={regName} onChange={e => setRegName(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder="Name" required />
-            )}
-            
-            <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder="Username" required />
-            
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder="Password" required />
-            
-            {isRegistering && (
-              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 outline-none text-slate-900 text-sm font-bold focus:border-slate-900" placeholder="Confirm Password" required />
-            )}
-            
-            <button type="submit" className="w-full rounded-full bg-slate-900 py-4 font-bold text-white hover:bg-slate-800 transition mt-2 shadow-md">
-              {isRegistering ? 'Sign Up' : 'Login'}
-            </button>
-          </form>
-        </div>
+          <div className="w-full">
+            <div className="mx-auto w-full max-w-md rounded-[2rem] border border-white/10 bg-white/[0.08] p-5 shadow-2xl backdrop-blur-2xl sm:p-7 md:rounded-[2.5rem]">
+              <div className="mb-6 text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl border border-white/10 bg-white/10 text-3xl shadow-xl">
+                  🔐
+                </div>
+                <p className="text-[10px] font-black uppercase tracking-[0.32em] text-emerald-300">Hidden Dashboard</p>
+                <h1 className="mt-2 text-2xl font-black text-white sm:text-3xl">
+                  {isRegistering ? 'Create Admin Account' : 'Admin Login'}
+                </h1>
+                <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">
+                  Access shortcut remains <span className="font-black text-slate-200">Alt + Shift + A</span>.
+                </p>
+              </div>
+
+              <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-slate-950/70 p-1.5">
+                <button
+                  type="button"
+                  onClick={() => switchAuthMode('login')}
+                  className={`rounded-xl px-4 py-3 text-xs font-black transition ${!isRegistering ? 'bg-white text-slate-950 shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                >
+                  Login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchAuthMode('signup')}
+                  className={`rounded-xl px-4 py-3 text-xs font-black transition ${isRegistering ? 'bg-white text-slate-950 shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                >
+                  Sign Up
+                </button>
+              </div>
+
+              {message && (
+                <div className="mb-5 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-3 text-center text-xs font-black text-rose-200">
+                  {message}
+                </div>
+              )}
+
+              <form onSubmit={handleAuthSubmit} className="space-y-4">
+                {isRegistering && (
+                  <div>
+                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Admin Name</label>
+                    <input
+                      type="text"
+                      value={regName}
+                      onChange={(e) => setRegName(e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm font-bold text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10"
+                      placeholder="Enter full name"
+                      required
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Username</label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm font-bold text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10"
+                    placeholder="Enter admin username"
+                    autoComplete="username"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Password</label>
+                  <div className="flex rounded-2xl border border-white/10 bg-slate-950/70 focus-within:border-emerald-400 focus-within:ring-4 focus-within:ring-emerald-400/10">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="min-w-0 flex-1 bg-transparent p-4 text-sm font-bold text-white outline-none placeholder:text-slate-600"
+                      placeholder="Enter password"
+                      autoComplete={isRegistering ? 'new-password' : 'current-password'}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="px-4 text-xs font-black text-slate-400 hover:text-white"
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+
+                {isRegistering && (
+                  <>
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Confirm Password</label>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm font-bold text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10"
+                        placeholder="Repeat password"
+                        autoComplete="new-password"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Admin Access Code</label>
+                      <input
+                        type="password"
+                        value={adminAccessKey}
+                        onChange={(e) => setAdminAccessKey(e.target.value)}
+                        className="w-full rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm font-bold uppercase tracking-widest text-white outline-none transition placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-600 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10"
+                        placeholder="Enter admin shortcut code"
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full rounded-2xl bg-white py-4 text-sm font-black text-slate-950 shadow-xl transition hover:-translate-y-0.5 hover:bg-emerald-300 active:translate-y-0"
+                >
+                  {isRegistering ? 'Create Admin Account' : 'Login to Dashboard'}
+                </button>
+              </form>
+
+              <p className="mt-5 text-center text-[11px] font-semibold leading-5 text-slate-500">
+                This is a local admin login system. For real production security, connect proper backend authentication later.
+              </p>
+            </div>
+          </div>
+        </section>
       </main>
     )
   }
