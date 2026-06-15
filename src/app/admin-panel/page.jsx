@@ -13,6 +13,8 @@ const ADMIN_USERS_KEY = 'mobisphereAdminUsers'
 const CART_STORAGE_KEY = 'mobisphereCart'
 const ORDERS_STORAGE_KEY = 'mobisphereOrders'
 const ORDERS_TABLE_NAME = 'mobisphere_orders'
+const COUPONS_TABLE_NAME = 'mobisphere_coupons'
+const SALE_CAMPAIGNS_TABLE_NAME = 'mobisphere_sale_campaigns'
 const ADMIN_ACCESS_KEY = 'ALT+SHIFT+A'
 
 function loadJson(key) {
@@ -327,6 +329,65 @@ function orderToSupabase(order) {
   }
 }
 
+function couponFromSupabase(row) {
+  return {
+    id: String(row?.id || Date.now().toString()),
+    code: String(row?.code || '').toUpperCase(),
+    discountPercent: Number(row?.discount_percent ?? row?.discountPercent ?? 0),
+    active: row?.active !== false,
+    expiresAt: row?.expires_at || row?.expiresAt || '',
+    expiryDate: row?.expires_at || row?.expiryDate || '',
+    createdAt: row?.created_at || row?.createdAt || new Date().toISOString(),
+    updatedAt: row?.updated_at || row?.updatedAt || '',
+  }
+}
+
+function couponToSupabase(coupon) {
+  return {
+    id: String(coupon?.id || Date.now().toString()),
+    code: String(coupon?.code || '').toUpperCase(),
+    discount_percent: Number(coupon?.discountPercent ?? coupon?.discount_percent ?? 0),
+    active: coupon?.active !== false,
+    expires_at: coupon?.expiresAt || coupon?.expiryDate || coupon?.expires_at || null,
+    updated_at: new Date().toISOString(),
+  }
+}
+
+function campaignFromSupabase(row) {
+  return {
+    id: String(row?.id || `SALE-${Date.now().toString(36).toUpperCase()}`),
+    title: row?.title || 'Mobisphere Sale',
+    discountType: row?.discount_type || row?.discountType || 'percent',
+    discountValue: Number(row?.discount_value ?? row?.discountValue ?? 0),
+    scope: row?.scope || 'all',
+    brand: row?.brand || '',
+    productId: row?.product_id || row?.productId || '',
+    productTitle: row?.product_title || row?.productTitle || '',
+    startDate: row?.start_date || row?.startDate || getTodayDateString(),
+    endDate: row?.end_date || row?.endDate || '',
+    active: row?.active !== false,
+    createdAt: row?.created_at || row?.createdAt || new Date().toISOString(),
+    updatedAt: row?.updated_at || row?.updatedAt || '',
+  }
+}
+
+function campaignToSupabase(campaign) {
+  return {
+    id: String(campaign?.id || `SALE-${Date.now().toString(36).toUpperCase()}`),
+    title: campaign?.title || 'Mobisphere Sale',
+    discount_type: campaign?.discountType || campaign?.discount_type || 'percent',
+    discount_value: Number(campaign?.discountValue ?? campaign?.discount_value ?? 0),
+    scope: campaign?.scope || 'all',
+    brand: campaign?.brand || '',
+    product_id: campaign?.productId || campaign?.product_id || '',
+    product_title: campaign?.productTitle || campaign?.product_title || '',
+    start_date: campaign?.startDate || campaign?.start_date || getTodayDateString(),
+    end_date: campaign?.endDate || campaign?.end_date || null,
+    active: campaign?.active !== false,
+    updated_at: new Date().toISOString(),
+  }
+}
+
 export default function IntegratedAdminPanelDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
@@ -410,25 +471,59 @@ export default function IntegratedAdminPanelDashboard() {
 
       if (oError) throw oError
 
+      const { data: couponData, error: couponError } = await supabase
+        .from(COUPONS_TABLE_NAME)
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (couponError) throw couponError
+
+      const { data: campaignData, error: campaignError } = await supabase
+        .from(SALE_CAMPAIGNS_TABLE_NAME)
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (campaignError) throw campaignError
+
       const serverOrders = Array.isArray(oData) ? oData.map(orderFromSupabase) : []
       const storedOrders = loadJson(ORDERS_STORAGE_KEY)
       const localOrders = Array.isArray(storedOrders) ? storedOrders : []
       const nextOrders = serverOrders.length > 0 ? serverOrders : localOrders
 
+      const serverCoupons = Array.isArray(couponData) ? couponData.map(couponFromSupabase) : []
+      const storedCoupons = loadJson(COUPON_STORAGE_KEY)
+      const localCoupons = Array.isArray(storedCoupons) ? storedCoupons : []
+      const nextCoupons = serverCoupons.length > 0 ? serverCoupons : localCoupons
+
+      const serverCampaigns = Array.isArray(campaignData) ? campaignData.map(campaignFromSupabase) : []
+      const storedSaleCampaigns = loadJson(SALE_CAMPAIGNS_STORAGE_KEY)
+      const localSaleCampaigns = Array.isArray(storedSaleCampaigns) ? storedSaleCampaigns : []
+      const nextCampaigns = serverCampaigns.length > 0 ? serverCampaigns : localSaleCampaigns
+
       setCustomers(cData || [])
       setEnquiries(eData || [])
       setOrders(nextOrders)
+      setCoupons(nextCoupons)
+      setSaleCampaigns(nextCampaigns)
+
       saveJson(ORDERS_STORAGE_KEY, nextOrders)
+      saveJson(COUPON_STORAGE_KEY, nextCoupons)
+      saveJson(SALE_CAMPAIGNS_STORAGE_KEY, nextCampaigns)
 
       if (showFeedback === true) {
-        setMessage('✅ Customers, enquiries, and orders synced successfully!')
+        setMessage('✅ Customers, enquiries, orders, coupons, and sale campaigns synced successfully!')
       }
     } catch (err) {
       console.error('Supabase fetch error:', err)
+
       const storedOrders = loadJson(ORDERS_STORAGE_KEY)
-      if (Array.isArray(storedOrders)) {
-        setOrders(storedOrders)
-      }
+      const storedCoupons = loadJson(COUPON_STORAGE_KEY)
+      const storedSaleCampaigns = loadJson(SALE_CAMPAIGNS_STORAGE_KEY)
+
+      if (Array.isArray(storedOrders)) setOrders(storedOrders)
+      if (Array.isArray(storedCoupons)) setCoupons(storedCoupons)
+      if (Array.isArray(storedSaleCampaigns)) setSaleCampaigns(storedSaleCampaigns)
+
       if (showFeedback === true) {
         setMessage('❌ Failed to sync live data. Check Supabase tables and policies.')
       }
@@ -451,7 +546,7 @@ export default function IntegratedAdminPanelDashboard() {
       }
 
       if (showFeedback === true) {
-        setMessage('✅ Customers, enquiries, orders, and products synced successfully!')
+        setMessage('✅ Customers, enquiries, orders, products, coupons, and sale campaigns synced successfully!')
       }
     } catch (err) {
       console.error('Mobisphere full sync error:', err)
@@ -886,11 +981,14 @@ export default function IntegratedAdminPanelDashboard() {
     setMessage('Enquiry removed.')
   }
 
-  const handleCreateCoupon = (e) => {
+  const handleCreateCoupon = async (e) => {
     e.preventDefault()
     const code = newCouponCode.trim().toUpperCase()
     const percent = Number(newDiscountPercent)
-    if (!code || percent <= 0 || percent > 100) return
+    if (!code || percent <= 0 || percent > 100) {
+      setMessage('Please enter a valid coupon code and discount percent.')
+      return
+    }
 
     const newCoupon = {
       id: Date.now().toString(),
@@ -898,30 +996,75 @@ export default function IntegratedAdminPanelDashboard() {
       discountPercent: percent,
       active: true,
       expiresAt: newCouponExpiryDate || '',
+      expiryDate: newCouponExpiryDate || '',
       createdAt: new Date().toISOString()
     }
 
-    const next = [...coupons, newCoupon]
+    const next = [newCoupon, ...coupons.filter((coupon) => String(coupon.code || '').toUpperCase() !== code)]
     setCoupons(next)
     saveJson(COUPON_STORAGE_KEY, next)
+
+    try {
+      const { error } = await supabase
+        .from(COUPONS_TABLE_NAME)
+        .upsert(couponToSupabase(newCoupon), { onConflict: 'id' })
+
+      if (error) throw error
+      setMessage('Coupon code saved to Supabase!')
+    } catch (error) {
+      console.error('Coupon save error:', error)
+      setMessage('Coupon saved locally, but Supabase sync failed.')
+    }
+
     setNewCouponCode('')
     setNewDiscountPercent('')
     setNewCouponExpiryDate('')
-    setMessage('Coupon code activated!')
   }
 
-  const handleToggleCouponActive = (id) => {
-    const next = coupons.map((coupon) =>
-      coupon.id === id ? { ...coupon, active: coupon.active === false ? true : false } : coupon
-    )
+  const handleToggleCouponActive = async (id) => {
+    let updatedCoupon = null
+    const next = coupons.map((coupon) => {
+      if (coupon.id !== id) return coupon
+      updatedCoupon = { ...coupon, active: coupon.active === false ? true : false }
+      return updatedCoupon
+    })
+
     setCoupons(next)
     saveJson(COUPON_STORAGE_KEY, next)
+
+    if (!updatedCoupon) return
+
+    try {
+      const { error } = await supabase
+        .from(COUPONS_TABLE_NAME)
+        .update({ active: updatedCoupon.active, updated_at: new Date().toISOString() })
+        .eq('id', id)
+
+      if (error) throw error
+      setMessage('Coupon status updated on Supabase.')
+    } catch (error) {
+      console.error('Coupon status update error:', error)
+      setMessage('Coupon status changed locally, but Supabase sync failed.')
+    }
   }
 
-  const handleDeleteCoupon = (id) => {
+  const handleDeleteCoupon = async (id) => {
     const next = coupons.filter(c => c.id !== id)
     setCoupons(next)
     saveJson(COUPON_STORAGE_KEY, next)
+
+    try {
+      const { error } = await supabase
+        .from(COUPONS_TABLE_NAME)
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      setMessage('Coupon removed from Supabase.')
+    } catch (error) {
+      console.error('Coupon delete error:', error)
+      setMessage('Coupon removed locally, but Supabase sync failed.')
+    }
   }
 
   const resetSaleCampaignForm = () => {
@@ -935,7 +1078,7 @@ export default function IntegratedAdminPanelDashboard() {
     setNewCampaignEndDate('')
   }
 
-  const handleCreateSaleCampaign = (e) => {
+  const handleCreateSaleCampaign = async (e) => {
     e.preventDefault()
 
     const title = newCampaignTitle.trim()
@@ -988,23 +1131,66 @@ export default function IntegratedAdminPanelDashboard() {
     const next = [newCampaign, ...saleCampaigns]
     setSaleCampaigns(next)
     saveJson(SALE_CAMPAIGNS_STORAGE_KEY, next)
+
+    try {
+      const { error } = await supabase
+        .from(SALE_CAMPAIGNS_TABLE_NAME)
+        .upsert(campaignToSupabase(newCampaign), { onConflict: 'id' })
+
+      if (error) throw error
+      setMessage('Festival sale campaign saved to Supabase!')
+    } catch (error) {
+      console.error('Sale campaign save error:', error)
+      setMessage('Sale campaign saved locally, but Supabase sync failed.')
+    }
+
     resetSaleCampaignForm()
-    setMessage('Festival sale campaign created successfully!')
   }
 
-  const handleToggleSaleCampaign = (id) => {
-    const next = saleCampaigns.map((campaign) =>
-      campaign.id === id ? { ...campaign, active: campaign.active === false ? true : false } : campaign
-    )
+  const handleToggleSaleCampaign = async (id) => {
+    let updatedCampaign = null
+    const next = saleCampaigns.map((campaign) => {
+      if (campaign.id !== id) return campaign
+      updatedCampaign = { ...campaign, active: campaign.active === false ? true : false }
+      return updatedCampaign
+    })
+
     setSaleCampaigns(next)
     saveJson(SALE_CAMPAIGNS_STORAGE_KEY, next)
+
+    if (!updatedCampaign) return
+
+    try {
+      const { error } = await supabase
+        .from(SALE_CAMPAIGNS_TABLE_NAME)
+        .update({ active: updatedCampaign.active, updated_at: new Date().toISOString() })
+        .eq('id', id)
+
+      if (error) throw error
+      setMessage('Sale campaign status updated on Supabase.')
+    } catch (error) {
+      console.error('Sale campaign status update error:', error)
+      setMessage('Sale campaign status changed locally, but Supabase sync failed.')
+    }
   }
 
-  const handleDeleteSaleCampaign = (id) => {
+  const handleDeleteSaleCampaign = async (id) => {
     const next = saleCampaigns.filter((campaign) => campaign.id !== id)
     setSaleCampaigns(next)
     saveJson(SALE_CAMPAIGNS_STORAGE_KEY, next)
-    setMessage('Sale campaign removed.')
+
+    try {
+      const { error } = await supabase
+        .from(SALE_CAMPAIGNS_TABLE_NAME)
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      setMessage('Sale campaign removed from Supabase.')
+    } catch (error) {
+      console.error('Sale campaign delete error:', error)
+      setMessage('Sale campaign removed locally, but Supabase sync failed.')
+    }
   }
 
   const handleExportStockReport = () => {
