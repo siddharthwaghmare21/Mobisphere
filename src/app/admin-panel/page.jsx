@@ -260,16 +260,22 @@ export default function IntegratedAdminPanelDashboard() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [adminAccessKey, setAdminAccessKey] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  
+
   const [customers, setCustomers] = useState([])
   const [enquiries, setEnquiries] = useState([])
   const [activeTab, setActiveTab] = useState(1)
   const [message, setMessage] = useState('')
   const [hydrated, setHydrated] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
-  
+
   // Product Inventory States (from global context)
-  const { products: localProducts, setProducts: setLocalProducts } = useProductContext()
+  const {
+    products: localProducts,
+    setProducts: setLocalProducts,
+    refreshProductsFromSupabase,
+    isSyncingProducts,
+    syncError: productSyncError,
+  } = useProductContext()
   const [inventoryView, setInventoryView] = useState('brands') // 'brands', 'products', 'form'
   const [selectedBrand, setSelectedBrand] = useState('')
   const [editingProduct, setEditingProduct] = useState(null)
@@ -321,20 +327,46 @@ export default function IntegratedAdminPanelDashboard() {
       setCustomers(cData || [])
       setEnquiries(eData || [])
       if (showFeedback === true) {
-         setMessage('✅ Live server data synced successfully!')
+        setMessage('✅ Live server data synced successfully!')
       }
     } catch (err) {
       console.error("Supabase fetch error:", err)
       if (showFeedback === true) {
-         setMessage('❌ Failed to sync data with server.')
+        setMessage('❌ Failed to sync data with server.')
       }
     } finally {
       if (showFeedback === true) {
-         setIsSyncing(false)
-         setTimeout(() => setMessage(''), 3000)
+        setIsSyncing(false)
+        setTimeout(() => setMessage(''), 3000)
       }
     }
   }, [])
+
+  const handleSyncAllData = useCallback(async (showFeedback = true) => {
+    if (showFeedback === true) setIsSyncing(true)
+
+    try {
+      await fetchData(false)
+
+      if (typeof refreshProductsFromSupabase === 'function') {
+        await refreshProductsFromSupabase()
+      }
+
+      if (showFeedback === true) {
+        setMessage('✅ Customers, enquiries, and products synced successfully!')
+      }
+    } catch (err) {
+      console.error('Mobisphere full sync error:', err)
+      if (showFeedback === true) {
+        setMessage('❌ Failed to sync complete admin data. Check Supabase connection.')
+      }
+    } finally {
+      if (showFeedback === true) {
+        setIsSyncing(false)
+        setTimeout(() => setMessage(''), 3000)
+      }
+    }
+  }, [fetchData, refreshProductsFromSupabase])
 
   useEffect(() => {
     const session = loadJson(ADMIN_SESSION_KEY)
@@ -1373,7 +1405,7 @@ export default function IntegratedAdminPanelDashboard() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 pt-28 sm:px-6 font-sans text-slate-900">
-      
+
       {/* 👑 Welcome Header Banner */}
       <div className="mb-8 rounded-[2rem] bg-white p-8 shadow-xl border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
         <div>
@@ -1395,9 +1427,15 @@ export default function IntegratedAdminPanelDashboard() {
         </div>
       )}
 
+      {productSyncError && (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-bold text-amber-800">
+          ⚠️ Product sync warning: {productSyncError}
+        </div>
+      )}
+
       {/* Main Layout Divided into Sidebar & Dashboard Panels */}
       <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
-        
+
         {/* 📋 Sidebar Links (7 Tabs System) */}
         <aside className="space-y-2">
           <p className="text-[10px] font-black uppercase text-slate-400 px-4 mb-4 tracking-wider">Navigation Menu</p>
@@ -1417,16 +1455,16 @@ export default function IntegratedAdminPanelDashboard() {
 
           {/* Dark Quick Actions Info Box */}
           <div className="mt-8 rounded-3xl bg-slate-950 p-6 text-white shadow-xl">
-             <h3 className="text-sm font-bold border-b border-slate-800 pb-2 mb-3 flex justify-between items-center">
-               Quick Actions <span className="text-[9px] text-emerald-400 font-mono bg-emerald-400/10 px-2 py-0.5 rounded-full">v2.3</span>
-             </h3>
-             <p className="text-[11px] leading-relaxed text-slate-400">Control panel for adding devices, inventory analytics sync, and customer resolution pathways.</p>
+            <h3 className="text-sm font-bold border-b border-slate-800 pb-2 mb-3 flex justify-between items-center">
+              Quick Actions <span className="text-[9px] text-emerald-400 font-mono bg-emerald-400/10 px-2 py-0.5 rounded-full">v2.3</span>
+            </h3>
+            <p className="text-[11px] leading-relaxed text-slate-400">Control panel for adding devices, inventory analytics sync, and customer resolution pathways.</p>
           </div>
         </aside>
 
         {/* 💻 Active Workspace View */}
         <div className="space-y-8">
-          
+
           {/* TAB 1: Dashboard & Analytics */}
           {activeTab === 1 && (
             <div className="space-y-7">
@@ -1463,12 +1501,12 @@ export default function IntegratedAdminPanelDashboard() {
                         <p className="mt-2 text-lg font-black text-white">{chartAnalytics.lastUpdated || 'Just now'}</p>
                         <button
                           type="button"
-                          onClick={() => fetchData(true)}
-                          disabled={isSyncing}
+                          onClick={() => handleSyncAllData(true)}
+                          disabled={isSyncing || isSyncingProducts}
                           className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-400 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          <span className={isSyncing ? 'inline-block animate-spin' : 'inline-block'}>🔄</span>
-                          {isSyncing ? 'Syncing...' : 'Sync Data'}
+                          <span className={isSyncing || isSyncingProducts ? 'inline-block animate-spin' : 'inline-block'}>🔄</span>
+                          {isSyncing || isSyncingProducts ? 'Syncing...' : 'Sync Data'}
                         </button>
                       </div>
                     </div>
@@ -1641,11 +1679,11 @@ export default function IntegratedAdminPanelDashboard() {
 
                       <button
                         type="button"
-                        onClick={() => fetchData(true)}
-                        disabled={isSyncing}
+                        onClick={() => handleSyncAllData(true)}
+                        disabled={isSyncing || isSyncingProducts}
                         className="flex items-center justify-between rounded-2xl bg-emerald-400 px-4 py-3 text-left text-sm font-black text-slate-950 transition hover:bg-emerald-300 disabled:opacity-60"
                       >
-                        <span>{isSyncing ? 'Syncing...' : 'Sync live data'}</span>
+                        <span>{isSyncing || isSyncingProducts ? 'Syncing...' : 'Sync live data'}</span>
                         <span>🔄</span>
                       </button>
                     </div>
@@ -1695,15 +1733,14 @@ export default function IntegratedAdminPanelDashboard() {
                             <td className="p-4 text-xs font-black text-emerald-600">₹{getOrderTotal(order).toLocaleString()}</td>
                             <td className="p-4 text-right">
                               <span
-                                className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider ${
-                                  order.status === 'Delivered'
+                                className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider ${order.status === 'Delivered'
                                     ? 'bg-emerald-50 text-emerald-700'
                                     : order.status === 'Shipped'
                                       ? 'bg-blue-50 text-blue-700'
                                       : order.status === 'Cancelled'
                                         ? 'bg-rose-50 text-rose-700'
                                         : 'bg-amber-50 text-amber-700'
-                                }`}
+                                  }`}
                               >
                                 {order.status || 'Processing'}
                               </span>
@@ -2031,9 +2068,9 @@ export default function IntegratedAdminPanelDashboard() {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                 <div>
                   <h2 className="text-2xl font-black text-slate-900">
-                    {inventoryView === 'brands' ? 'Inventory & Stock' : 
-                     inventoryView === 'form' ? (editingProduct ? 'Edit Product & Stock' : 'Add New Product With Stock') :
-                     `${selectedBrand} Products`}
+                    {inventoryView === 'brands' ? 'Inventory & Stock' :
+                      inventoryView === 'form' ? (editingProduct ? 'Edit Product & Stock' : 'Add New Product With Stock') :
+                        `${selectedBrand} Products`}
                   </h2>
                   <p className="text-sm text-slate-500 mt-1">Manage products, pricing, stock quantity, supplier details, and low-stock alerts.</p>
                 </div>
@@ -2186,7 +2223,7 @@ export default function IntegratedAdminPanelDashboard() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -2204,7 +2241,7 @@ export default function IntegratedAdminPanelDashboard() {
                       <div><label className="text-[10px] font-black uppercase text-slate-400">Charger Info</label><input name="charger" defaultValue={editingProduct?.specs?.Charger || ''} placeholder="e.g. 30W Fast Charging" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" /></div>
                       <div><label className="text-[10px] font-black uppercase text-slate-400">Additional Tools (In Box)</label><input name="tools" defaultValue={editingProduct?.specs?.Tools || ''} placeholder="e.g. Type-C Cable, SIM Tool" className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white" /></div>
                     </div>
-                    
+
                     <div className="md:col-span-2 flex justify-end mt-4 pt-4 border-t border-slate-200">
                       <button type="submit" className="px-8 py-3 bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 transition font-black text-sm">{editingProduct ? 'Save Changes' : 'Add Product'}</button>
                     </div>
@@ -2223,8 +2260,8 @@ export default function IntegratedAdminPanelDashboard() {
                   <p className="text-sm text-slate-500 mt-1">Track, update, and manage customer orders.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <select 
-                    value={orderFilter} 
+                  <select
+                    value={orderFilter}
                     onChange={(e) => setOrderFilter(e.target.value)}
                     className="px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs outline-none focus:border-slate-900 cursor-pointer"
                   >
@@ -2254,31 +2291,31 @@ export default function IntegratedAdminPanelDashboard() {
                     {orders
                       .filter(order => orderFilter === 'All' || order.status === orderFilter)
                       .map((order) => (
-                      <tr key={order.id} className="hover:bg-slate-50/80 transition group">
-                        <td className="p-4 text-xs font-mono font-bold text-slate-900">{order.id}</td>
-                        <td className="p-4 text-sm font-bold text-slate-700">{order.customer}</td>
-                        <td className="p-4 text-xs font-semibold text-slate-500">{order.date}</td>
-                        <td className="p-4 text-sm font-bold text-slate-700 text-center">{order.items}</td>
-                        <td className="p-4 text-sm font-black text-emerald-600">₹{order.total.toLocaleString()}</td>
-                        <td className="p-4 text-center">
-                          <select value={order.status} onChange={(e) => { handleOrderStatusChange(order.id, e.target.value); }} className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full outline-none cursor-pointer border-2 ${order.status === 'Processing' ? 'bg-amber-50 text-amber-700 border-amber-200' : order.status === 'Shipped' ? 'bg-blue-50 text-blue-700 border-blue-200' : order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
-                            <option value="Processing">Processing</option>
-                            <option value="Shipped">Shipped</option>
-                            <option value="Delivered">Delivered</option>
-                            <option value="Cancelled">Cancelled</option>
-                          </select>
-                        </td>
-                        <td className="p-4 text-right opacity-80 group-hover:opacity-100 transition">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedOrder(order)}
-                            className="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-slate-700 transition hover:bg-slate-950 hover:text-white"
-                          >
-                            View Details
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                        <tr key={order.id} className="hover:bg-slate-50/80 transition group">
+                          <td className="p-4 text-xs font-mono font-bold text-slate-900">{order.id}</td>
+                          <td className="p-4 text-sm font-bold text-slate-700">{order.customer}</td>
+                          <td className="p-4 text-xs font-semibold text-slate-500">{order.date}</td>
+                          <td className="p-4 text-sm font-bold text-slate-700 text-center">{order.items}</td>
+                          <td className="p-4 text-sm font-black text-emerald-600">₹{order.total.toLocaleString()}</td>
+                          <td className="p-4 text-center">
+                            <select value={order.status} onChange={(e) => { handleOrderStatusChange(order.id, e.target.value); }} className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full outline-none cursor-pointer border-2 ${order.status === 'Processing' ? 'bg-amber-50 text-amber-700 border-amber-200' : order.status === 'Shipped' ? 'bg-blue-50 text-blue-700 border-blue-200' : order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+                              <option value="Processing">Processing</option>
+                              <option value="Shipped">Shipped</option>
+                              <option value="Delivered">Delivered</option>
+                              <option value="Cancelled">Cancelled</option>
+                            </select>
+                          </td>
+                          <td className="p-4 text-right opacity-80 group-hover:opacity-100 transition">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedOrder(order)}
+                              className="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-slate-700 transition hover:bg-slate-950 hover:text-white"
+                            >
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -2290,7 +2327,7 @@ export default function IntegratedAdminPanelDashboard() {
             <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
               <h2 className="text-2xl font-black mb-2">Enquiry Management</h2>
               <p className="text-sm text-slate-500 mb-6">Review input logs, modify resolution states and save internal records.</p>
-              
+
               {enquiries.length === 0 ? (
                 <p className="text-sm text-slate-400 py-6 text-center">No user enquiries tracked inside system logs.</p>
               ) : (
@@ -2298,33 +2335,33 @@ export default function IntegratedAdminPanelDashboard() {
                   {enquiries.map(e => (
                     <div key={e.id} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200">
                       <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
-                         <div>
-                           <span className="text-xs font-black bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full uppercase tracking-wider">{e.subject || 'iPhone Enquiry'}</span>
-                           <h3 className="text-lg font-black text-slate-900 mt-2">{e.full_name || 'Visitor'} — <span className="font-mono font-medium text-slate-600 text-base">{e.mobile_number || '—'}</span></h3>
-                           <p className="text-xs text-slate-500 font-mono mt-0.5">Email: {e.email || '—'} | Received: {e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</p>
-                           <p className="text-sm text-slate-900 font-medium italic mt-3 bg-white p-3 rounded-xl border border-slate-100">{e.message || '—'}</p>
-                         </div>
-                         <div className="flex gap-2 self-end sm:self-start">
-                           <button onClick={() => handleSaveEnquiry(e.id)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 transition font-bold text-xs">Save Changes</button>
-                           <button onClick={() => handleConvertEnquiryToCustomer(e)} className="px-4 py-2 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 transition font-bold text-xs">Convert Customer</button>
-                           <button onClick={() => handleCreateOrderFromEnquiry(e)} className="px-4 py-2 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs">Create Order</button>
-                           <button onClick={() => handleEnquiryDelete(e.id)} className="px-4 py-2 bg-rose-600 text-white rounded-xl shadow-md hover:bg-rose-700 transition font-bold text-xs">Delete</button>
-                         </div>
+                        <div>
+                          <span className="text-xs font-black bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full uppercase tracking-wider">{e.subject || 'iPhone Enquiry'}</span>
+                          <h3 className="text-lg font-black text-slate-900 mt-2">{e.full_name || 'Visitor'} — <span className="font-mono font-medium text-slate-600 text-base">{e.mobile_number || '—'}</span></h3>
+                          <p className="text-xs text-slate-500 font-mono mt-0.5">Email: {e.email || '—'} | Received: {e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</p>
+                          <p className="text-sm text-slate-900 font-medium italic mt-3 bg-white p-3 rounded-xl border border-slate-100">{e.message || '—'}</p>
+                        </div>
+                        <div className="flex gap-2 self-end sm:self-start">
+                          <button onClick={() => handleSaveEnquiry(e.id)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 transition font-bold text-xs">Save Changes</button>
+                          <button onClick={() => handleConvertEnquiryToCustomer(e)} className="px-4 py-2 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 transition font-bold text-xs">Convert Customer</button>
+                          <button onClick={() => handleCreateOrderFromEnquiry(e)} className="px-4 py-2 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs">Create Order</button>
+                          <button onClick={() => handleEnquiryDelete(e.id)} className="px-4 py-2 bg-rose-600 text-white rounded-xl shadow-md hover:bg-rose-700 transition font-bold text-xs">Delete</button>
+                        </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-200/80">
-                         <div className="flex flex-col gap-1.5">
-                           <label className="text-[10px] font-black uppercase text-slate-400">Status Selector</label>
-                           <select value={e.status || 'New'} onChange={(el) => handleEnquiryFieldChange(e.id, 'status', el.target.value)} className="p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none bg-white text-slate-900">
-                             <option value="New">New</option>
-                             <option value="In progress">In progress</option>
-                             <option value="Completed">Completed</option>
-                             <option value="Closed">Closed</option>
-                           </select>
-                         </div>
-                         <div className="flex flex-col gap-1.5">
-                           <label className="text-[10px] font-black uppercase text-slate-400">Admin Response Note</label>
-                           <input type="text" value={e.admin_note || ''} onChange={(el) => handleEnquiryFieldChange(e.id, 'admin_note', el.target.value)} className="p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none bg-white text-slate-900" placeholder="Add internal database comment..." />
-                         </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-black uppercase text-slate-400">Status Selector</label>
+                          <select value={e.status || 'New'} onChange={(el) => handleEnquiryFieldChange(e.id, 'status', el.target.value)} className="p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none bg-white text-slate-900">
+                            <option value="New">New</option>
+                            <option value="In progress">In progress</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Closed">Closed</option>
+                          </select>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-black uppercase text-slate-400">Admin Response Note</label>
+                          <input type="text" value={e.admin_note || ''} onChange={(el) => handleEnquiryFieldChange(e.id, 'admin_note', el.target.value)} className="p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none bg-white text-slate-900" placeholder="Add internal database comment..." />
+                        </div>
                       </div>
                     </div>
                   ))}
