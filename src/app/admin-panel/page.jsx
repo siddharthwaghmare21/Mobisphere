@@ -12,6 +12,7 @@ const SALE_CAMPAIGNS_STORAGE_KEY = 'mobisphereSaleCampaigns'
 const ADMIN_USERS_KEY = 'mobisphereAdminUsers'
 const CART_STORAGE_KEY = 'mobisphereCart'
 const ORDERS_STORAGE_KEY = 'mobisphereOrders'
+const ORDERS_TABLE_NAME = 'mobisphere_orders'
 const ADMIN_ACCESS_KEY = 'ALT+SHIFT+A'
 
 function loadJson(key) {
@@ -248,6 +249,84 @@ function getCampaignScopeLabel(campaign) {
   return 'All products'
 }
 
+
+function getOrderProductArray(order) {
+  const products = order?.products || order?.cartItems || order?.itemsList || []
+  return Array.isArray(products) ? products : []
+}
+
+function getOrderItemsCount(order) {
+  const products = getOrderProductArray(order)
+  const productQuantity = products.reduce((sum, item) => {
+    return sum + Math.max(Number(item?.quantity || 1), 1)
+  }, 0)
+
+  return Math.max(Number(order?.items ?? productQuantity ?? 0), 0)
+}
+
+function orderFromSupabase(row) {
+  const products = Array.isArray(row?.products) ? row.products : []
+  const total = Number(row?.total ?? row?.total_amount ?? 0)
+
+  return {
+    id: String(row?.id || `ORD-${Date.now().toString(36).toUpperCase().slice(-5)}`),
+    customer: row?.customer || row?.customer_name || 'Customer',
+    customerName: row?.customer || row?.customer_name || 'Customer',
+    mobileNumber: row?.mobile_number || row?.mobileNumber || row?.mobile || '',
+    address: row?.address || row?.delivery_address || '',
+    date: row?.date || row?.created_at || new Date().toISOString(),
+    createdAt: row?.created_at || row?.date || '',
+    updatedAt: row?.updated_at || '',
+    total,
+    totalAmount: Number(row?.total_amount ?? total),
+    status: row?.status || 'Processing',
+    items: Number(row?.items ?? products.length ?? 0),
+    products,
+    originalItemsTotal: Number(row?.original_items_total || 0),
+    saleDiscountAmount: Number(row?.sale_discount_amount || 0),
+    subtotalAfterSale: Number(row?.subtotal_after_sale || 0),
+    discountPercent: Number(row?.discount_percent || 0),
+    couponCode: row?.coupon_code || '',
+    couponDiscountAmount: Number(row?.coupon_discount_amount || 0),
+    paymentMode: row?.payment_mode || 'Cash on Delivery',
+    note: row?.note || '',
+    stockRestored: row?.stock_restored === true,
+    stockRestoredAt: row?.stock_restored_at || '',
+    enquiryId: row?.enquiry_id || '',
+  }
+}
+
+function orderToSupabase(order) {
+  const products = getOrderProductArray(order)
+  const total = getOrderTotal(order)
+  const date = order?.date || order?.createdAt || new Date().toISOString()
+
+  return {
+    id: String(order?.id || `ORD-${Date.now().toString(36).toUpperCase().slice(-5)}`),
+    customer: getOrderCustomerName(order),
+    mobile_number: getOrderMobile(order) === '—' ? '' : getOrderMobile(order),
+    address: getOrderAddress(order) === '—' ? '' : getOrderAddress(order),
+    date,
+    total,
+    total_amount: Number(order?.totalAmount ?? total),
+    status: order?.status || 'Processing',
+    items: getOrderItemsCount(order),
+    products,
+    original_items_total: Number(order?.originalItemsTotal || order?.original_items_total || 0),
+    sale_discount_amount: Number(order?.saleDiscountAmount || order?.sale_discount_amount || 0),
+    subtotal_after_sale: Number(order?.subtotalAfterSale || order?.subtotal_after_sale || 0),
+    discount_percent: Number(order?.discountPercent || order?.discount_percent || 0),
+    coupon_code: order?.couponCode || order?.coupon_code || '',
+    coupon_discount_amount: Number(order?.couponDiscountAmount || order?.coupon_discount_amount || 0),
+    payment_mode: order?.paymentMode || order?.payment_mode || 'Cash on Delivery',
+    note: order?.note || '',
+    stock_restored: order?.stockRestored === true,
+    stock_restored_at: order?.stockRestoredAt || order?.stock_restored_at || null,
+    enquiry_id: order?.enquiryId || order?.enquiry_id || null,
+    updated_at: new Date().toISOString(),
+  }
+}
+
 export default function IntegratedAdminPanelDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
@@ -300,12 +379,7 @@ export default function IntegratedAdminPanelDashboard() {
   const [newCampaignStartDate, setNewCampaignStartDate] = useState(getTodayDateString())
   const [newCampaignEndDate, setNewCampaignEndDate] = useState('')
 
-  const [orders, setOrders] = useState([
-    { id: 'ORD-8X91', customer: 'Rahul Sharma', date: '2024-05-12', total: 125000, status: 'Processing', items: 2 },
-    { id: 'ORD-7V22', customer: 'Sneha Patil', date: '2024-05-11', total: 85000, status: 'Shipped', items: 1 },
-    { id: 'ORD-4M55', customer: 'Amit Desai', date: '2024-05-10', total: 45000, status: 'Delivered', items: 1 },
-    { id: 'ORD-9K33', customer: 'Pooja Joshi', date: '2024-05-09', total: 155000, status: 'Cancelled', items: 2 }
-  ])
+  const [orders, setOrders] = useState([])
   const [orderFilter, setOrderFilter] = useState('All')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [salesReportRange, setSalesReportRange] = useState('all')
@@ -313,26 +387,50 @@ export default function IntegratedAdminPanelDashboard() {
   // 🔄 Supabase Live Data Fetch
   const fetchData = useCallback(async (showFeedback = false) => {
     if (showFeedback === true) setIsSyncing(true)
+
     try {
-      const { data: cData } = await supabase
+      const { data: cData, error: cError } = await supabase
         .from('customers')
         .select('*')
         .order('created_at', { ascending: false })
 
-      const { data: eData } = await supabase
+      if (cError) throw cError
+
+      const { data: eData, error: eError } = await supabase
         .from('enquiries')
         .select('*')
         .order('created_at', { ascending: false })
 
+      if (eError) throw eError
+
+      const { data: oData, error: oError } = await supabase
+        .from(ORDERS_TABLE_NAME)
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (oError) throw oError
+
+      const serverOrders = Array.isArray(oData) ? oData.map(orderFromSupabase) : []
+      const storedOrders = loadJson(ORDERS_STORAGE_KEY)
+      const localOrders = Array.isArray(storedOrders) ? storedOrders : []
+      const nextOrders = serverOrders.length > 0 ? serverOrders : localOrders
+
       setCustomers(cData || [])
       setEnquiries(eData || [])
+      setOrders(nextOrders)
+      saveJson(ORDERS_STORAGE_KEY, nextOrders)
+
       if (showFeedback === true) {
-        setMessage('✅ Live server data synced successfully!')
+        setMessage('✅ Customers, enquiries, and orders synced successfully!')
       }
     } catch (err) {
-      console.error("Supabase fetch error:", err)
+      console.error('Supabase fetch error:', err)
+      const storedOrders = loadJson(ORDERS_STORAGE_KEY)
+      if (Array.isArray(storedOrders)) {
+        setOrders(storedOrders)
+      }
       if (showFeedback === true) {
-        setMessage('❌ Failed to sync data with server.')
+        setMessage('❌ Failed to sync live data. Check Supabase tables and policies.')
       }
     } finally {
       if (showFeedback === true) {
@@ -353,7 +451,7 @@ export default function IntegratedAdminPanelDashboard() {
       }
 
       if (showFeedback === true) {
-        setMessage('✅ Customers, enquiries, and products synced successfully!')
+        setMessage('✅ Customers, enquiries, orders, and products synced successfully!')
       }
     } catch (err) {
       console.error('Mobisphere full sync error:', err)
@@ -993,7 +1091,7 @@ export default function IntegratedAdminPanelDashboard() {
     }
   }
 
-  const handleCreateOrderFromEnquiry = (enquiry) => {
+  const handleCreateOrderFromEnquiry = async (enquiry) => {
     if (!enquiry) return
 
     const order = {
@@ -1003,22 +1101,34 @@ export default function IntegratedAdminPanelDashboard() {
       address: enquiry.address || '',
       date: new Date().toISOString(),
       total: 0,
+      totalAmount: 0,
       status: 'Processing',
       items: 0,
       products: [],
       enquiryId: enquiry.id,
-      note: enquiry.message || 'Order created from enquiry.'
+      note: enquiry.message || 'Order created from enquiry.',
+      paymentMode: 'Cash on Delivery'
     }
 
-    setOrders((prev) => {
-      const next = [order, ...(Array.isArray(prev) ? prev : [])]
-      saveJson(ORDERS_STORAGE_KEY, next)
-      return next
-    })
+    const nextOrders = [order, ...(Array.isArray(orders) ? orders : [])]
+    setOrders(nextOrders)
+    saveJson(ORDERS_STORAGE_KEY, nextOrders)
+
+    try {
+      const { error } = await supabase
+        .from(ORDERS_TABLE_NAME)
+        .upsert([orderToSupabase(order)], { onConflict: 'id' })
+
+      if (error) throw error
+
+      setMessage(`✅ Order ${order.id} created from enquiry and synced to Supabase.`)
+    } catch (error) {
+      console.error('Create order from enquiry error:', error)
+      setMessage(`⚠️ Order ${order.id} created locally. Supabase sync failed.`)
+    }
 
     setEnquiries((prev) => prev.map((item) => item.id === enquiry.id ? { ...item, status: 'Converted to Order', admin_note: `Order ${order.id} created from enquiry.` } : item))
     setSelectedOrder(order)
-    setMessage(`✅ Order ${order.id} created from enquiry.`)
   }
 
 
@@ -1137,10 +1247,7 @@ export default function IntegratedAdminPanelDashboard() {
     setMessage('Product deleted successfully.')
   }
 
-  const getOrderProducts = (order) => {
-    const orderProducts = order?.products || order?.cartItems || order?.itemsList || []
-    return Array.isArray(orderProducts) ? orderProducts : []
-  }
+  const getOrderProducts = (order) => getOrderProductArray(order)
 
   const restoreStockForCancelledOrder = (order) => {
     const orderProducts = getOrderProducts(order)
@@ -1189,48 +1296,62 @@ export default function IntegratedAdminPanelDashboard() {
     return true
   }
 
-  const handleOrderStatusChange = (id, status) => {
+  const handleOrderStatusChange = async (id, status) => {
     let restoredStock = false
     let changedOrder = null
+    const safeOrders = Array.isArray(orders) ? orders : []
 
-    setOrders(prev => {
-      const next = prev.map(order => {
-        if (order.id !== id) return order
+    const nextOrders = safeOrders.map(order => {
+      if (order.id !== id) return order
 
-        const oldStatus = String(order.status || '')
-        const shouldRestoreStock =
-          status === 'Cancelled' &&
-          oldStatus !== 'Cancelled' &&
-          order.stockRestored !== true
+      const oldStatus = String(order.status || '')
+      const shouldRestoreStock =
+        status === 'Cancelled' &&
+        oldStatus !== 'Cancelled' &&
+        order.stockRestored !== true
 
-        if (shouldRestoreStock) {
-          restoredStock = restoreStockForCancelledOrder(order)
-        }
+      if (shouldRestoreStock) {
+        restoredStock = restoreStockForCancelledOrder(order)
+      }
 
-        changedOrder = {
-          ...order,
-          status,
-          stockRestored: shouldRestoreStock ? restoredStock : order.stockRestored,
-          stockRestoredAt: shouldRestoreStock && restoredStock ? new Date().toISOString() : order.stockRestoredAt
-        }
+      changedOrder = {
+        ...order,
+        status,
+        stockRestored: shouldRestoreStock ? restoredStock : order.stockRestored,
+        stockRestoredAt: shouldRestoreStock && restoredStock ? new Date().toISOString() : order.stockRestoredAt,
+        updatedAt: new Date().toISOString()
+      }
 
-        return changedOrder
-      })
-
-      saveJson(ORDERS_STORAGE_KEY, next)
-      return next
+      return changedOrder
     })
+
+    setOrders(nextOrders)
+    saveJson(ORDERS_STORAGE_KEY, nextOrders)
 
     if (selectedOrder && selectedOrder.id === id && changedOrder) {
       setSelectedOrder(changedOrder)
     }
 
+    if (changedOrder) {
+      try {
+        const { error } = await supabase
+          .from(ORDERS_TABLE_NAME)
+          .upsert([orderToSupabase(changedOrder)], { onConflict: 'id' })
+
+        if (error) throw error
+      } catch (error) {
+        console.error('Order status Supabase update error:', error)
+        setMessage(`⚠️ Order ${id} status changed locally, but Supabase sync failed.`)
+        return
+      }
+    }
+
     if (status === 'Cancelled') {
-      setMessage(restoredStock ? `Order ${id} cancelled and stock restored automatically!` : `Order ${id} cancelled.`)
+      setMessage(restoredStock ? `Order ${id} cancelled, stock restored, and Supabase synced!` : `Order ${id} cancelled and Supabase synced.`)
       return
     }
 
-    setMessage(`Order ${id} status updated!`)
+    setMessage(`Order ${id} status updated and synced to Supabase!`)
   }
 
   if (!hydrated) return null
