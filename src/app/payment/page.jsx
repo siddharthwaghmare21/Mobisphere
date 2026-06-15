@@ -8,8 +8,11 @@ import { useProductContext } from "@/app/context/ProductContext"
 const CART_STORAGE_KEY = "mobisphereCart"
 const ORDERS_STORAGE_KEY = "mobisphereOrders"
 const COUPON_STORAGE_KEY = "mobisphereCoupons"
-const SALE_CAMPAIGN_STORAGE_KEY = "mobisphereSaleCampaigns"
+const SALE_CAMPAIGNS_STORAGE_KEY = "mobisphereSaleCampaigns"
+
 const ORDERS_TABLE = "mobisphere_orders"
+const COUPONS_TABLE = "mobisphere_coupons"
+const SALE_CAMPAIGNS_TABLE = "mobisphere_sale_campaigns"
 
 const initialForm = {
   fullName: "",
@@ -88,48 +91,84 @@ function findProductById(products, productId) {
   return products.find((item) => String(item.id) === String(productId)) || null
 }
 
-function makeOrderId() {
-  return `ORD-${Date.now().toString(36).toUpperCase().slice(-5)}`
+function normalizeCoupon(coupon) {
+  if (!coupon) return null
+
+  return {
+    id: coupon.id || String(coupon.code || Date.now()),
+    code: String(coupon.code || "").trim().toUpperCase(),
+    discountPercent: Number(coupon.discount_percent ?? coupon.discountPercent ?? 0) || 0,
+    active: coupon.active !== false,
+    expiresAt: coupon.expires_at || coupon.expiresAt || coupon.expiryDate || "",
+    createdAt: coupon.created_at || coupon.createdAt || "",
+  }
 }
 
-function makeTodayDateOnly() {
-  return new Date(new Date().toDateString())
-}
+function normalizeCampaign(campaign) {
+  if (!campaign) return null
 
-function getCampaignStartDate(campaign) {
-  return campaign?.startDate || campaign?.startsAt || campaign?.fromDate || ""
-}
-
-function getCampaignEndDate(campaign) {
-  return (
-    campaign?.endDate ||
-    campaign?.expiresAt ||
-    campaign?.expiryDate ||
-    campaign?.toDate ||
-    ""
-  )
-}
-
-function isDateAfterToday(dateText) {
-  if (!dateText) return false
-  const target = new Date(dateText)
-  return !Number.isNaN(target.getTime()) && target > makeTodayDateOnly()
+  return {
+    id: campaign.id || `SALE-${Date.now()}`,
+    title: campaign.title || "Mobisphere Sale",
+    discountType: campaign.discount_type || campaign.discountType || "percent",
+    discountValue: Number(campaign.discount_value ?? campaign.discountValue ?? 0) || 0,
+    scope: campaign.scope || campaign.applyOn || campaign.targetType || "all",
+    brand: campaign.brand || campaign.targetBrand || "",
+    productId: campaign.product_id || campaign.productId || campaign.selectedProductId || "",
+    productTitle: campaign.product_title || campaign.productTitle || "",
+    startDate: campaign.start_date || campaign.startDate || campaign.startsAt || "",
+    endDate: campaign.end_date || campaign.endDate || campaign.expiresAt || "",
+    active: campaign.active !== false,
+    createdAt: campaign.created_at || campaign.createdAt || "",
+  }
 }
 
 function isDateBeforeToday(dateText) {
   if (!dateText) return false
+
+  const today = new Date(new Date().toDateString())
   const target = new Date(dateText)
-  return !Number.isNaN(target.getTime()) && target < makeTodayDateOnly()
+
+  return !Number.isNaN(target.getTime()) && target < today
 }
 
-function isCampaignDateActive(campaign) {
-  if (!campaign || campaign.active === false) return false
+function isDateAfterToday(dateText) {
+  if (!dateText) return false
 
-  const startDate = getCampaignStartDate(campaign)
-  const endDate = getCampaignEndDate(campaign)
+  const today = new Date(new Date().toDateString())
+  const target = new Date(dateText)
 
-  if (isDateAfterToday(startDate)) return false
-  if (isDateBeforeToday(endDate)) return false
+  return !Number.isNaN(target.getTime()) && target > today
+}
+
+function isCouponValid(coupon) {
+  if (!coupon) return false
+  if (!coupon.code) return false
+  if (coupon.active === false) return false
+  if (Number(coupon.discountPercent || 0) <= 0) return false
+  if (Number(coupon.discountPercent || 0) > 100) return false
+  if (isDateBeforeToday(coupon.expiresAt)) return false
+
+  return true
+}
+
+function getCouponInvalidMessage(coupon) {
+  if (!coupon) return "Invalid coupon code. Try another one."
+  if (coupon.active === false) return "This coupon is currently inactive."
+  if (isDateBeforeToday(coupon.expiresAt)) return "This coupon has expired."
+  if (Number(coupon.discountPercent || 0) <= 0 || Number(coupon.discountPercent || 0) > 100) {
+    return "This coupon is not valid."
+  }
+
+  return "This coupon is not valid."
+}
+
+function isCampaignLive(campaign) {
+  if (!campaign) return false
+  if (campaign.active === false) return false
+  if (Number(campaign.discountValue || 0) <= 0) return false
+  if (isDateAfterToday(campaign.startDate)) return false
+  if (isDateBeforeToday(campaign.endDate)) return false
 
   return true
 }
@@ -137,96 +176,61 @@ function isCampaignDateActive(campaign) {
 function campaignMatchesProduct(campaign, product) {
   if (!campaign || !product) return false
 
-  const scope = String(
-    campaign.scope || campaign.applyOn || campaign.targetType || campaign.offerScope || "all"
-  ).toLowerCase()
+  const scope = String(campaign.scope || "all").toLowerCase()
 
-  if (["all", "allproducts", "all-products"].includes(scope)) return true
+  if (scope === "all" || scope === "all_products" || scope === "products") return true
 
-  if (["brand", "selectedbrand", "selected-brand"].includes(scope)) {
-    const campaignBrand = String(
-      campaign.brand || campaign.targetBrand || campaign.selectedBrand || ""
-    ).toLowerCase()
-
-    return campaignBrand && campaignBrand === String(product.brand || "").toLowerCase()
+  if (scope === "brand") {
+    return String(campaign.brand || "").toLowerCase() === String(product.brand || "").toLowerCase()
   }
 
-  if (["product", "selectedproduct", "selected-product"].includes(scope)) {
-    const campaignProductId = String(
-      campaign.productId || campaign.targetProductId || campaign.selectedProductId || ""
-    )
-
-    return campaignProductId && campaignProductId === String(product.id || product.productId || "")
+  if (scope === "product") {
+    return String(campaign.productId || "") === String(product.id || product.productId || "")
   }
 
   return false
 }
 
-function calculateCampaignPrice(product, campaign) {
-  const originalPrice = Number(product?.price || product?.originalPrice || 0)
-  const discountValue = Number(
-    campaign?.discountValue ?? campaign?.discount ?? campaign?.discountPercent ?? 0
-  )
-  const discountType = String(campaign?.discountType || campaign?.type || "percent").toLowerCase()
+function calculateCampaignSale(product, campaign) {
+  const originalPrice = Number(product?.price || 0)
+  const discountValue = Number(campaign?.discountValue || 0)
 
   if (!Number.isFinite(originalPrice) || originalPrice <= 0) return null
   if (!Number.isFinite(discountValue) || discountValue <= 0) return null
 
-  let discountAmount = 0
-  let discountLabel = ""
+  const discountType = String(campaign?.discountType || "percent").toLowerCase()
+  const discountAmount = discountType === "flat"
+    ? Math.min(discountValue, originalPrice)
+    : Math.min(Math.round((originalPrice * discountValue) / 100), originalPrice)
 
-  if (["flat", "amount", "fixed"].includes(discountType)) {
-    discountAmount = Math.min(discountValue, originalPrice)
-    discountLabel = `₹${discountAmount.toLocaleString()} OFF`
-  } else {
-    const percent = Math.min(discountValue, 100)
-    discountAmount = Math.round((originalPrice * percent) / 100)
-    discountLabel = `${percent}% OFF`
-  }
+  if (discountAmount <= 0) return null
 
   const salePrice = Math.max(originalPrice - discountAmount, 0)
 
   return {
+    campaignId: campaign.id || "",
+    campaignTitle: campaign.title || "Mobisphere Sale",
     originalPrice,
     salePrice,
     discountAmount,
-    discountLabel,
+    discountLabel: discountType === "flat"
+      ? `₹${discountValue.toLocaleString()} OFF`
+      : `${discountValue}% OFF`,
+    endDate: campaign.endDate || "",
   }
 }
 
-function getBestSaleForProduct(product) {
-  const campaigns = safeJson(SALE_CAMPAIGN_STORAGE_KEY, [])
+function getBestSaleForProduct(product, campaigns) {
   const safeCampaigns = Array.isArray(campaigns) ? campaigns : []
-  const sourceProduct = {
-    ...product,
-    price: Number(product?.price ?? product?.originalPrice ?? 0),
-  }
 
-  const matchedSales = safeCampaigns
-    .filter((campaign) => isCampaignDateActive(campaign))
-    .filter((campaign) => campaignMatchesProduct(campaign, sourceProduct))
-    .map((campaign) => {
-      const priceInfo = calculateCampaignPrice(sourceProduct, campaign)
-      if (!priceInfo || priceInfo.discountAmount <= 0) return null
-
-      return {
-        campaignId: campaign.id || campaign.campaignId || "",
-        title: campaign.title || campaign.name || "Festival Sale",
-        discountType: campaign.discountType || campaign.type || "percent",
-        discountValue: Number(
-          campaign.discountValue ?? campaign.discount ?? campaign.discountPercent ?? 0
-        ),
-        endDate: getCampaignEndDate(campaign),
-        ...priceInfo,
-      }
-    })
+  return safeCampaigns
+    .filter((campaign) => isCampaignLive(campaign) && campaignMatchesProduct(campaign, product))
+    .map((campaign) => calculateCampaignSale(product, campaign))
     .filter(Boolean)
-    .sort((a, b) => b.discountAmount - a.discountAmount)
-
-  return matchedSales[0] || null
+    .sort((a, b) => b.discountAmount - a.discountAmount)[0] || null
 }
 
-function normalizeCartItem(item, latestProduct = null) {
+function normalizeCartItem(item, latestProduct = null, saleCampaigns = []) {
   const productId = item.productId || item.id || latestProduct?.id
   const source = latestProduct || item
   const quantity = Math.max(Number(item.quantity) || 1, 1)
@@ -234,26 +238,31 @@ function normalizeCartItem(item, latestProduct = null) {
   const minStockAlert = getMinimumStockAlert(source)
   const stockStatus = getStockStatusFromNumbers(stockQty, minStockAlert)
   const originalPrice = Number(latestProduct?.price ?? item.originalPrice ?? item.price) || 0
-  const saleInfo = getBestSaleForProduct({ ...source, id: productId, price: originalPrice })
-  const finalPrice = saleInfo ? Number(saleInfo.salePrice || 0) : originalPrice
+  const saleInfo = getBestSaleForProduct(
+    {
+      ...source,
+      id: source?.id ?? productId,
+      productId,
+      price: originalPrice,
+    },
+    saleCampaigns
+  )
+  const finalUnitPrice = saleInfo ? saleInfo.salePrice : originalPrice
 
   return {
-    productId,
     id: productId,
+    productId,
     title: latestProduct?.title || item.title || "Mobisphere Product",
     brand: latestProduct?.brand || item.brand || "Mobisphere",
-    image:
-      latestProduct?.image ||
-      item.image ||
-      "/images/IPhone 16 Pro Max.png",
+    image: latestProduct?.image || item.image || "/images/IPhone 16 Pro Max.png",
     description: latestProduct?.description || item.description || "",
+    price: finalUnitPrice,
     originalPrice,
-    price: finalPrice,
     salePrice: saleInfo?.salePrice || null,
     saleDiscountAmount: saleInfo?.discountAmount || 0,
     saleDiscountLabel: saleInfo?.discountLabel || "",
     saleCampaignId: saleInfo?.campaignId || "",
-    saleCampaignTitle: saleInfo?.title || "",
+    saleCampaignTitle: saleInfo?.campaignTitle || "",
     saleCampaignEndDate: saleInfo?.endDate || "",
     quantity,
     stockQty,
@@ -263,105 +272,90 @@ function normalizeCartItem(item, latestProduct = null) {
   }
 }
 
-function getCouponExpiryDate(coupon) {
-  return coupon?.expiresAt || coupon?.expiryDate || coupon?.endDate || ""
+function buildCheckoutItems({ cartMode, cartItems, products, productId, saleCampaigns }) {
+  if (cartMode) {
+    return (Array.isArray(cartItems) ? cartItems : []).map((item) => {
+      const itemProductId = item.productId || item.id
+      const latestProduct = findProductById(products, itemProductId)
+
+      return normalizeCartItem(item, latestProduct, saleCampaigns)
+    })
+  }
+
+  const selectedProduct = findProductById(products, productId)
+
+  return selectedProduct
+    ? [normalizeCartItem(selectedProduct, selectedProduct, saleCampaigns)]
+    : []
 }
 
-function validateCouponCode(code) {
-  const cleanCode = String(code || "").trim().toUpperCase()
+function validateStock(items) {
+  const quantityByProduct = new Map()
+  const itemByProduct = new Map()
 
-  if (!cleanCode) {
-    return {
-      valid: false,
-      message: "Please enter a coupon code.",
+  items.forEach((item) => {
+    if (!item.productId) return
+
+    const key = String(item.productId)
+    const quantity = Number(item.quantity || 1)
+
+    quantityByProduct.set(key, (quantityByProduct.get(key) || 0) + quantity)
+
+    if (!itemByProduct.has(key)) {
+      itemByProduct.set(key, item)
     }
-  }
+  })
 
-  const storedCoupons = safeJson(COUPON_STORAGE_KEY, [])
-  const found = Array.isArray(storedCoupons)
-    ? storedCoupons.find((coupon) => String(coupon.code || "").toUpperCase() === cleanCode)
-    : null
+  const issues = []
 
-  if (!found) {
-    return {
-      valid: false,
-      message: "Invalid coupon code. Try another one.",
+  quantityByProduct.forEach((orderedQuantity, productId) => {
+    const item = itemByProduct.get(productId)
+    const availableStock = getStockQuantity(item)
+
+    if (availableStock <= 0) {
+      issues.push(`${item?.title || "Product"} is out of stock.`)
+      return
     }
-  }
 
-  if (found.active === false) {
-    return {
-      valid: false,
-      message: "This coupon is currently inactive.",
+    if (orderedQuantity > availableStock) {
+      issues.push(
+        `${item?.title || "Product"} has only ${availableStock} units available.`
+      )
     }
-  }
-
-  const expiryDate = getCouponExpiryDate(found)
-  if (isDateBeforeToday(expiryDate)) {
-    return {
-      valid: false,
-      message: "This coupon has expired.",
-    }
-  }
-
-  const percent = Number(found.discountPercent ?? found.discount ?? 0) || 0
-
-  if (percent <= 0 || percent > 100) {
-    return {
-      valid: false,
-      message: "This coupon is not valid.",
-    }
-  }
+  })
 
   return {
-    valid: true,
-    coupon: {
-      ...found,
-      code: cleanCode,
-      discountPercent: percent,
-    },
-    percent,
-    message: `Coupon applied! You got ${percent}% off.`,
+    hasIssue: issues.length > 0,
+    issues,
   }
 }
 
-function mapOrderToSupabaseRow(order) {
-  const date = order.date || new Date().toISOString()
+function makeOrderId() {
+  return `ORD-${Date.now().toString(36).toUpperCase().slice(-5)}`
+}
 
+function mapOrderForSupabase(order) {
   return {
-    id: String(order.id),
-    customer: order.customer || "Customer",
-    mobile_number: order.mobileNumber || "",
-    address: order.address || "",
-    date,
-    total: Number(order.total || 0),
-    total_amount: Number(order.totalAmount || order.total || 0),
-    status: order.status || "Processing",
-    items: Number(order.items || 0),
-    products: Array.isArray(order.products) ? order.products : [],
-    original_items_total: Number(order.originalItemsTotal || 0),
-    sale_discount_amount: Number(order.saleDiscountAmount || 0),
-    subtotal_after_sale: Number(order.subtotalAfterSale || 0),
-    discount_percent: Number(order.discountPercent || 0),
+    id: order.id,
+    customer: order.customer,
+    mobile_number: order.mobileNumber,
+    address: order.address,
+    date: order.date,
+    total: order.total,
+    total_amount: order.total,
+    status: order.status,
+    items: order.items,
+    products: order.products,
+    original_items_total: order.originalItemsTotal,
+    sale_discount_amount: order.saleDiscountAmount,
+    subtotal_after_sale: order.subtotalAfterSale,
+    discount_percent: order.discountPercent,
     coupon_code: order.couponCode || "",
-    coupon_discount_amount: Number(order.couponDiscountAmount || 0),
-    payment_mode: order.paymentMode || "Cash on Delivery",
+    coupon_discount_amount: order.couponDiscountAmount,
+    payment_mode: order.paymentMode,
     note: order.note || "",
-    created_at: date,
     updated_at: new Date().toISOString(),
   }
-}
-
-async function saveOrderToSupabase(order) {
-  const payload = mapOrderToSupabaseRow(order)
-
-  const { error } = await supabase
-    .from(ORDERS_TABLE)
-    .upsert([payload], { onConflict: "id" })
-
-  if (error) throw error
-
-  return true
 }
 
 export default function PaymentPage() {
@@ -378,15 +372,67 @@ export default function PaymentPage() {
     productId: null,
   })
   const [cartItems, setCartItems] = useState([])
+  const [coupons, setCoupons] = useState([])
+  const [saleCampaigns, setSaleCampaigns] = useState([])
   const [discount, setDiscount] = useState(0)
   const [appliedCoupon, setAppliedCoupon] = useState(null)
   const [couponError, setCouponError] = useState("")
   const [couponSuccess, setCouponSuccess] = useState("")
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [lastOrder, setLastOrder] = useState(null)
+  const [syncStatus, setSyncStatus] = useState("")
   const [isHydrated, setIsHydrated] = useState(false)
-  const [isSavingOrder, setIsSavingOrder] = useState(false)
-  const [serverSyncError, setServerSyncError] = useState("")
+  const [isOffersHydrated, setIsOffersHydrated] = useState(false)
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false)
+
+  const loadPromotions = async () => {
+    const localCoupons = safeJson(COUPON_STORAGE_KEY, [])
+    const localCampaigns = safeJson(SALE_CAMPAIGNS_STORAGE_KEY, [])
+
+    const fallbackCoupons = Array.isArray(localCoupons)
+      ? localCoupons.map(normalizeCoupon).filter(Boolean)
+      : []
+    const fallbackCampaigns = Array.isArray(localCampaigns)
+      ? localCampaigns.map(normalizeCampaign).filter(Boolean)
+      : []
+
+    let nextCoupons = fallbackCoupons
+    let nextCampaigns = fallbackCampaigns
+
+    try {
+      const [{ data: couponData, error: couponErrorResult }, { data: campaignData, error: campaignErrorResult }] = await Promise.all([
+        supabase
+          .from(COUPONS_TABLE)
+          .select("*")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from(SALE_CAMPAIGNS_TABLE)
+          .select("*")
+          .order("created_at", { ascending: false }),
+      ])
+
+      if (!couponErrorResult && Array.isArray(couponData)) {
+        nextCoupons = couponData.map(normalizeCoupon).filter(Boolean)
+        saveJson(COUPON_STORAGE_KEY, nextCoupons)
+      }
+
+      if (!campaignErrorResult && Array.isArray(campaignData)) {
+        nextCampaigns = campaignData.map(normalizeCampaign).filter(Boolean)
+        saveJson(SALE_CAMPAIGNS_STORAGE_KEY, nextCampaigns)
+      }
+    } catch (error) {
+      console.error("Promotions sync error:", error)
+    }
+
+    setCoupons(nextCoupons)
+    setSaleCampaigns(nextCampaigns)
+    setIsOffersHydrated(true)
+
+    return {
+      coupons: nextCoupons,
+      saleCampaigns: nextCampaigns,
+    }
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -417,88 +463,36 @@ export default function PaymentPage() {
 
       setIsHydrated(true)
     })
+
+    loadPromotions()
   }, [])
 
-  const selectedProduct = useMemo(() => {
-    if (!checkoutMode.productId || !Array.isArray(products)) return null
-
-    return findProductById(products, checkoutMode.productId)
-  }, [checkoutMode.productId, products])
-
   const checkoutItems = useMemo(() => {
-    if (checkoutMode.cart) {
-      return cartItems.map((item) => {
-        const productId = item.productId || item.id
-        const latestProduct = findProductById(products, productId)
-
-        return normalizeCartItem(item, latestProduct)
-      })
-    }
-
-    return selectedProduct
-      ? [normalizeCartItem(selectedProduct, selectedProduct)]
-      : []
-  }, [cartItems, checkoutMode.cart, selectedProduct, products])
-
-  const stockValidation = useMemo(() => {
-    const quantityByProduct = new Map()
-    const itemByProduct = new Map()
-
-    checkoutItems.forEach((item) => {
-      if (!item.productId) return
-
-      const key = String(item.productId)
-      const quantity = Number(item.quantity || 1)
-
-      quantityByProduct.set(key, (quantityByProduct.get(key) || 0) + quantity)
-
-      if (!itemByProduct.has(key)) {
-        itemByProduct.set(key, item)
-      }
+    return buildCheckoutItems({
+      cartMode: checkoutMode.cart,
+      cartItems,
+      products,
+      productId: checkoutMode.productId,
+      saleCampaigns,
     })
+  }, [cartItems, checkoutMode.cart, checkoutMode.productId, products, saleCampaigns])
 
-    const issues = []
+  const stockValidation = useMemo(() => validateStock(checkoutItems), [checkoutItems])
 
-    quantityByProduct.forEach((orderedQuantity, productId) => {
-      const item = itemByProduct.get(productId)
-      const availableStock = getStockQuantity(item)
-
-      if (availableStock <= 0) {
-        issues.push(`${item?.title || "Product"} is out of stock.`)
-        return
-      }
-
-      if (orderedQuantity > availableStock) {
-        issues.push(
-          `${item?.title || "Product"} has only ${availableStock} units available.`
-        )
-      }
-    })
-
-    return {
-      hasIssue: issues.length > 0,
-      issues,
-    }
-  }, [checkoutItems])
-
-  const itemsTotalBeforeSale = checkoutItems.reduce((sum, item) => {
-    const price = Number(item.originalPrice || item.price || 0)
-    const quantity = Number(item.quantity || 1)
-    return sum + price * quantity
+  const originalItemsTotal = checkoutItems.reduce((sum, item) => {
+    return sum + Number(item.originalPrice ?? item.price ?? 0) * Number(item.quantity || 1)
   }, 0)
 
   const saleDiscountAmount = checkoutItems.reduce((sum, item) => {
-    const discountValue = Number(item.saleDiscountAmount || 0)
-    const quantity = Number(item.quantity || 1)
-    return sum + discountValue * quantity
+    return sum + Number(item.saleDiscountAmount || 0) * Number(item.quantity || 1)
   }, 0)
 
-  const basePrice = checkoutItems.reduce((sum, item) => {
+  const subtotalAfterSale = checkoutItems.reduce((sum, item) => {
     return sum + Number(item.price || 0) * Number(item.quantity || 1)
   }, 0)
 
-  const discountAmount = Math.round((basePrice * discount) / 100)
-  const finalPrice = Math.max(basePrice - discountAmount, 0)
+  const discountAmount = Math.round((subtotalAfterSale * discount) / 100)
+  const finalPrice = Math.max(subtotalAfterSale - discountAmount, 0)
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
@@ -507,29 +501,42 @@ export default function PaymentPage() {
     }))
 
     if (field === "couponCode") {
-      setDiscount(0)
-      setAppliedCoupon(null)
       setCouponError("")
       setCouponSuccess("")
+      setDiscount(0)
+      setAppliedCoupon(null)
     }
   }
 
-  const applyCoupon = () => {
+  const applyCoupon = async () => {
     setCouponError("")
     setCouponSuccess("")
 
-    const result = validateCouponCode(formData.couponCode)
+    const code = formData.couponCode.trim().toUpperCase()
 
-    if (!result.valid) {
-      setCouponError(result.message)
+    if (!code) {
+      setCouponError("Please enter a coupon code.")
+      return
+    }
+
+    const latestPromotions = await loadPromotions()
+    const latestCoupons = latestPromotions.coupons
+    const found = Array.isArray(latestCoupons)
+      ? latestCoupons.find((coupon) => String(coupon.code).toUpperCase() === code)
+      : null
+
+    if (!found || !isCouponValid(found)) {
+      setCouponError(getCouponInvalidMessage(found))
       setDiscount(0)
       setAppliedCoupon(null)
       return
     }
 
-    setDiscount(result.percent)
-    setAppliedCoupon(result.coupon)
-    setCouponSuccess(result.message)
+    const percent = Number(found.discountPercent) || 0
+
+    setDiscount(percent)
+    setAppliedCoupon(found)
+    setCouponSuccess(`Coupon applied! You got ${percent}% off.`)
   }
 
   const reduceProductStock = (orderedItems) => {
@@ -572,10 +579,27 @@ export default function PaymentPage() {
     })
   }
 
+  const saveOrderLocalFallback = (order) => {
+    const existingOrders = safeJson(ORDERS_STORAGE_KEY, [])
+    const nextOrders = Array.isArray(existingOrders)
+      ? [order, ...existingOrders]
+      : [order]
+
+    saveJson(ORDERS_STORAGE_KEY, nextOrders)
+  }
+
+  const saveOrderToSupabase = async (order) => {
+    const { error } = await supabase
+      .from(ORDERS_TABLE)
+      .insert([mapOrderForSupabase(order)])
+
+    if (error) throw error
+  }
+
   const handlePlaceOrder = async (event) => {
     event.preventDefault()
 
-    if (isSavingOrder) return
+    if (isPlacingOrder) return
 
     if (
       !formData.fullName.trim() ||
@@ -591,125 +615,119 @@ export default function PaymentPage() {
       return
     }
 
-    if (stockValidation.hasIssue) {
-      alert(stockValidation.issues.join("\n"))
-      return
-    }
+    setIsPlacingOrder(true)
 
-    let validCoupon = appliedCoupon
-    let validDiscount = discount
+    try {
+      const latestPromotions = await loadPromotions()
+      const freshCheckoutItems = buildCheckoutItems({
+        cartMode: checkoutMode.cart,
+        cartItems,
+        products,
+        productId: checkoutMode.productId,
+        saleCampaigns: latestPromotions.saleCampaigns,
+      })
 
-    if (discount > 0 || formData.couponCode.trim()) {
-      const couponResult = validateCouponCode(formData.couponCode)
+      const freshStockValidation = validateStock(freshCheckoutItems)
 
-      if (!couponResult.valid) {
-        setCouponError(couponResult.message)
-        setCouponSuccess("")
-        setDiscount(0)
-        setAppliedCoupon(null)
-        alert(couponResult.message)
+      if (freshCheckoutItems.length === 0) {
+        alert("No product selected for checkout.")
         return
       }
 
-      validCoupon = couponResult.coupon
-      validDiscount = couponResult.percent
-      setDiscount(validDiscount)
-      setAppliedCoupon(validCoupon)
+      if (freshStockValidation.hasIssue) {
+        alert(freshStockValidation.issues.join("\n"))
+        return
+      }
+
+      let finalCoupon = appliedCoupon
+      let finalDiscountPercent = discount
+
+      if (appliedCoupon?.code) {
+        const freshCoupon = latestPromotions.coupons.find(
+          (coupon) => String(coupon.code).toUpperCase() === String(appliedCoupon.code).toUpperCase()
+        )
+
+        if (!freshCoupon || !isCouponValid(freshCoupon)) {
+          setCouponError(getCouponInvalidMessage(freshCoupon))
+          setCouponSuccess("")
+          setDiscount(0)
+          setAppliedCoupon(null)
+          alert("Applied coupon is no longer valid. Please check coupon again.")
+          return
+        }
+
+        finalCoupon = freshCoupon
+        finalDiscountPercent = Number(freshCoupon.discountPercent || 0)
+      }
+
+      const freshOriginalItemsTotal = freshCheckoutItems.reduce((sum, item) => {
+        return sum + Number(item.originalPrice ?? item.price ?? 0) * Number(item.quantity || 1)
+      }, 0)
+
+      const freshSaleDiscountAmount = freshCheckoutItems.reduce((sum, item) => {
+        return sum + Number(item.saleDiscountAmount || 0) * Number(item.quantity || 1)
+      }, 0)
+
+      const freshSubtotalAfterSale = freshCheckoutItems.reduce((sum, item) => {
+        return sum + Number(item.price || 0) * Number(item.quantity || 1)
+      }, 0)
+
+      const freshCouponDiscountAmount = Math.round((freshSubtotalAfterSale * finalDiscountPercent) / 100)
+      const freshFinalPrice = Math.max(freshSubtotalAfterSale - freshCouponDiscountAmount, 0)
+
+      const orderProducts = freshCheckoutItems.map((item) => ({
+        ...item,
+        availableStockBeforeOrder: item.stockQty,
+      }))
+
+      const order = {
+        id: makeOrderId(),
+        customer: formData.fullName.trim(),
+        mobileNumber: formData.mobileNumber.trim(),
+        address: formData.address.trim(),
+        date: new Date().toISOString(),
+        total: freshFinalPrice,
+        status: "Processing",
+        items: orderProducts.reduce(
+          (sum, item) => sum + Number(item.quantity || 1),
+          0
+        ),
+        products: orderProducts,
+        originalItemsTotal: freshOriginalItemsTotal,
+        saleDiscountAmount: freshSaleDiscountAmount,
+        subtotalAfterSale: freshSubtotalAfterSale,
+        discountPercent: finalDiscountPercent,
+        couponCode: finalCoupon?.code || "",
+        couponDiscountAmount: freshCouponDiscountAmount,
+        paymentMode: "Cash on Delivery",
+        note: checkoutMode.cart ? "Cart checkout" : "Buy now checkout",
+      }
+
+      saveOrderLocalFallback(order)
+
+      try {
+        await saveOrderToSupabase(order)
+        setSyncStatus("Order synced with Supabase server.")
+      } catch (error) {
+        console.error("Order Supabase save error:", error)
+        setSyncStatus("Order saved locally. Supabase sync failed.")
+      }
+
+      reduceProductStock(orderProducts)
+
+      if (checkoutMode.cart) {
+        saveJson(CART_STORAGE_KEY, [])
+        setCartItems([])
+      }
+
+      setLastOrder(order)
+      setOrderPlaced(true)
+    } finally {
+      setIsPlacingOrder(false)
     }
-
-    const freshCheckoutItems = checkoutItems.map((item) => {
-      const latestProduct = findProductById(products, item.productId)
-      return normalizeCartItem(item, latestProduct || item)
-    })
-
-    const orderProducts = freshCheckoutItems.map((item) => ({
-      ...item,
-      availableStockBeforeOrder: item.stockQty,
-    }))
-
-    const subtotalAfterSale = orderProducts.reduce((sum, item) => {
-      return sum + Number(item.price || 0) * Number(item.quantity || 1)
-    }, 0)
-
-    const originalItemsTotal = orderProducts.reduce((sum, item) => {
-      return sum + Number(item.originalPrice || item.price || 0) * Number(item.quantity || 1)
-    }, 0)
-
-    const totalSaleDiscount = orderProducts.reduce((sum, item) => {
-      return sum + Number(item.saleDiscountAmount || 0) * Number(item.quantity || 1)
-    }, 0)
-
-    const finalCouponDiscount = Math.round((subtotalAfterSale * validDiscount) / 100)
-    const grandTotal = Math.max(subtotalAfterSale - finalCouponDiscount, 0)
-
-    const order = {
-      id: makeOrderId(),
-      customer: formData.fullName.trim(),
-      customerName: formData.fullName.trim(),
-      fullName: formData.fullName.trim(),
-      mobileNumber: formData.mobileNumber.trim(),
-      address: formData.address.trim(),
-      date: new Date().toISOString(),
-      total: grandTotal,
-      totalAmount: grandTotal,
-      originalItemsTotal,
-      saleDiscountAmount: totalSaleDiscount,
-      subtotalAfterSale,
-      status: "Processing",
-      items: orderProducts.reduce(
-        (sum, item) => sum + Number(item.quantity || 1),
-        0
-      ),
-      products: orderProducts,
-      discountPercent: validDiscount,
-      couponCode: validCoupon?.code || "",
-      couponDiscountAmount: finalCouponDiscount,
-      paymentMode: "Cash on Delivery",
-      note: "Order placed from Mobisphere checkout.",
-      serverSynced: false,
-    }
-
-    setIsSavingOrder(true)
-    setServerSyncError("")
-
-    let serverSynced = false
-    let syncErrorText = ""
-
-    try {
-      await saveOrderToSupabase(order)
-      serverSynced = true
-    } catch (error) {
-      console.error("Supabase order save error:", error)
-      syncErrorText = error?.message || "Could not sync order with Supabase."
-    }
-
-    const finalOrder = {
-      ...order,
-      serverSynced,
-      serverSyncError: syncErrorText,
-    }
-
-    const existingOrders = safeJson(ORDERS_STORAGE_KEY, [])
-    const nextOrders = Array.isArray(existingOrders)
-      ? [finalOrder, ...existingOrders]
-      : [finalOrder]
-
-    saveJson(ORDERS_STORAGE_KEY, nextOrders)
-
-    reduceProductStock(orderProducts)
-
-    if (checkoutMode.cart) {
-      saveJson(CART_STORAGE_KEY, [])
-      setCartItems([])
-    }
-
-    setLastOrder(finalOrder)
-    setServerSyncError(syncErrorText)
-    setOrderPlaced(true)
-    setIsSavingOrder(false)
   }
 
-  if (!isHydrated || !productsHydrated) {
+  if (!isHydrated || !productsHydrated || !isOffersHydrated) {
     return (
       <main className="mx-auto max-w-5xl px-4 py-20 pt-32 text-center">
         <div className="rounded-[2rem] border border-slate-100 bg-white p-10 shadow-xl">
@@ -771,18 +789,14 @@ export default function PaymentPage() {
               Total: ₹{Number(lastOrder?.total || 0).toLocaleString()}
             </p>
 
-            <p className="mt-1">
-              Server Sync: {lastOrder?.serverSynced ? "Supabase saved" : "Local fallback saved"}
-            </p>
-
-            {serverSyncError && (
-              <p className="mt-2 rounded-xl bg-amber-100 p-2 text-amber-800">
-                {serverSyncError}
+            {lastOrder?.couponCode && (
+              <p className="mt-1">
+                Coupon: {lastOrder.couponCode} (-₹{Number(lastOrder?.couponDiscountAmount || 0).toLocaleString()})
               </p>
             )}
 
             <p className="mt-1">
-              Stock updated automatically after order confirmation.
+              {syncStatus || "Stock updated automatically after order confirmation."}
             </p>
           </div>
 
@@ -811,7 +825,7 @@ export default function PaymentPage() {
           </h1>
 
           <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
-            Fill delivery details carefully. This checkout saves orders to Supabase and supports Cash on Delivery.
+            Fill delivery details carefully. This checkout uses Cash on Delivery.
           </p>
 
           {stockValidation.hasIssue && (
@@ -880,17 +894,17 @@ export default function PaymentPage() {
 
             <button
               type="submit"
-              disabled={stockValidation.hasIssue || isSavingOrder}
+              disabled={stockValidation.hasIssue || isPlacingOrder}
               className={`w-full rounded-full py-3.5 text-sm font-black transition ${
-                stockValidation.hasIssue || isSavingOrder
+                stockValidation.hasIssue || isPlacingOrder
                   ? "cursor-not-allowed bg-slate-200 text-slate-500"
                   : "bg-emerald-600 text-white hover:bg-emerald-700"
               }`}
             >
               {stockValidation.hasIssue
                 ? "Cannot Place Order"
-                : isSavingOrder
-                  ? "Saving Order..."
+                : isPlacingOrder
+                  ? "Placing Order..."
                   : "Confirm & Place Order"}
             </button>
           </form>
@@ -908,7 +922,7 @@ export default function PaymentPage() {
                 const price = Number(item.price || 0)
                 const originalPrice = Number(item.originalPrice || price)
                 const itemTotal = price * quantity
-                const originalItemTotal = originalPrice * quantity
+                const originalTotal = originalPrice * quantity
                 const image = item.image || "/images/IPhone 16 Pro Max.png"
                 const stockQty = getStockQuantity(item)
                 const minStockAlert = getMinimumStockAlert(item)
@@ -916,6 +930,7 @@ export default function PaymentPage() {
                   stockQty,
                   minStockAlert
                 )
+                const hasSale = Number(item.saleDiscountAmount || 0) > 0
 
                 return (
                   <div
@@ -944,8 +959,8 @@ export default function PaymentPage() {
                           {stockStatus.label}
                         </span>
 
-                        {item.saleCampaignId && (
-                          <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-white">
+                        {hasSale && (
+                          <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-rose-700">
                             {item.saleDiscountLabel || "SALE"}
                           </span>
                         )}
@@ -955,7 +970,7 @@ export default function PaymentPage() {
                         {item.title || "Mobisphere Product"}
                       </h3>
 
-                      {item.saleCampaignTitle && (
+                      {hasSale && item.saleCampaignTitle && (
                         <p className="mt-1 line-clamp-1 text-[10px] font-black uppercase tracking-wider text-rose-600">
                           {item.saleCampaignTitle}
                         </p>
@@ -970,15 +985,14 @@ export default function PaymentPage() {
                       </p>
 
                       <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-black text-slate-900">
-                          ₹{itemTotal.toLocaleString()}
-                        </p>
-
-                        {item.saleCampaignId && originalItemTotal > itemTotal && (
-                          <p className="text-xs font-black text-slate-400 line-through">
-                            ₹{originalItemTotal.toLocaleString()}
-                          </p>
+                        {hasSale && (
+                          <span className="text-xs font-black text-slate-400 line-through">
+                            ₹{originalTotal.toLocaleString()}
+                          </span>
                         )}
+                        <span className="text-sm font-black text-slate-900">
+                          ₹{itemTotal.toLocaleString()}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -989,7 +1003,7 @@ export default function PaymentPage() {
             <div className="mt-6 space-y-3 border-b border-slate-100 pb-4 text-sm font-bold">
               <div className="flex justify-between gap-4 text-slate-600">
                 <span>MRP total</span>
-                <span>₹{itemsTotalBeforeSale.toLocaleString()}</span>
+                <span>₹{originalItemsTotal.toLocaleString()}</span>
               </div>
 
               {saleDiscountAmount > 0 && (
@@ -1001,7 +1015,7 @@ export default function PaymentPage() {
 
               <div className="flex justify-between gap-4 text-slate-600">
                 <span>Items subtotal</span>
-                <span>₹{basePrice.toLocaleString()}</span>
+                <span>₹{subtotalAfterSale.toLocaleString()}</span>
               </div>
 
               <div className="flex justify-between gap-4 text-slate-600">
@@ -1011,7 +1025,7 @@ export default function PaymentPage() {
 
               {discount > 0 && (
                 <div className="flex justify-between gap-4 text-red-600">
-                  <span>Coupon discount</span>
+                  <span>Coupon discount {appliedCoupon?.code ? `(${appliedCoupon.code})` : ""}</span>
                   <span>-₹{discountAmount.toLocaleString()}</span>
                 </div>
               )}
@@ -1059,6 +1073,10 @@ export default function PaymentPage() {
                 {couponSuccess}
               </p>
             )}
+
+            <p className="mt-3 text-[11px] font-bold leading-5 text-slate-400">
+              Coupons are verified from Supabase live offers before checkout.
+            </p>
           </div>
         </aside>
       </div>

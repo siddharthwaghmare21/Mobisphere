@@ -3,8 +3,77 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { useProductContext } from "@/app/context/ProductContext"
 import ProductDisplayCard from "@/app/components/product/ProductDisplayCard"
+import { supabase } from "@/lib/supabase"
 
 const SALE_CAMPAIGN_STORAGE_KEY = "mobisphereSaleCampaigns"
+
+function readJson(key, fallback) {
+  if (typeof window === "undefined") return fallback
+
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "null")
+    return parsed ?? fallback
+  } catch {
+    return fallback
+  }
+}
+
+function saveJson(key, value) {
+  if (typeof window === "undefined") return
+  localStorage.setItem(key, JSON.stringify(value))
+}
+
+function normalizeSaleCampaign(campaign) {
+  return {
+    id: campaign?.id || `SALE-${Date.now()}`,
+    title: campaign?.title || campaign?.name || campaign?.offer_title || "Festival Sale",
+    discountType:
+      campaign?.discountType ||
+      campaign?.discount_type ||
+      campaign?.type ||
+      "percent",
+    discountValue: Number(
+      campaign?.discountValue ??
+        campaign?.discount_value ??
+        campaign?.discount ??
+        campaign?.discountPercent ??
+        0
+    ),
+    scope:
+      campaign?.scope ||
+      campaign?.applyOn ||
+      campaign?.targetType ||
+      campaign?.offerScope ||
+      "all",
+    brand: campaign?.brand || campaign?.targetBrand || campaign?.selectedBrand || "",
+    productId:
+      campaign?.productId ||
+      campaign?.product_id ||
+      campaign?.targetProductId ||
+      campaign?.selectedProductId ||
+      "",
+    productTitle:
+      campaign?.productTitle ||
+      campaign?.product_title ||
+      campaign?.selectedProductTitle ||
+      "",
+    startDate:
+      campaign?.startDate ||
+      campaign?.start_date ||
+      campaign?.startsAt ||
+      campaign?.fromDate ||
+      "",
+    endDate:
+      campaign?.endDate ||
+      campaign?.end_date ||
+      campaign?.expiresAt ||
+      campaign?.expiryDate ||
+      campaign?.toDate ||
+      "",
+    active: campaign?.active !== false,
+    createdAt: campaign?.createdAt || campaign?.created_at || new Date().toISOString(),
+  }
+}
 
 function getStockQuantity(product) {
   const value =
@@ -15,7 +84,7 @@ function getStockQuantity(product) {
     0
 
   const stock = Number(value)
-  return Number.isFinite(stock) ? stock : 0
+  return Number.isFinite(stock) ? Math.max(stock, 0) : 0
 }
 
 function getMinimumStockAlert(product) {
@@ -26,7 +95,7 @@ function getMinimumStockAlert(product) {
     3
 
   const minStock = Number(value)
-  return Number.isFinite(minStock) ? minStock : 3
+  return Number.isFinite(minStock) ? Math.max(minStock, 1) : 3
 }
 
 function getStockStatus(product) {
@@ -56,23 +125,12 @@ function getStockStatus(product) {
   }
 }
 
-function readJson(key, fallback) {
-  if (typeof window === "undefined") return fallback
-
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key) || "null")
-    return parsed ?? fallback
-  } catch {
-    return fallback
-  }
-}
-
 function getCampaignStartDate(campaign) {
-  return campaign?.startDate || campaign?.startsAt || campaign?.fromDate || ""
+  return campaign?.startDate || campaign?.start_date || campaign?.startsAt || campaign?.fromDate || ""
 }
 
 function getCampaignEndDate(campaign) {
-  return campaign?.endDate || campaign?.expiresAt || campaign?.expiryDate || campaign?.toDate || ""
+  return campaign?.endDate || campaign?.end_date || campaign?.expiresAt || campaign?.expiryDate || campaign?.toDate || ""
 }
 
 function isCampaignDateActive(campaign) {
@@ -103,9 +161,9 @@ function isCampaignDateActive(campaign) {
 
 function campaignMatchesProduct(campaign, product) {
   const applyOn = String(
-    campaign?.applyOn ||
+    campaign?.scope ||
+      campaign?.applyOn ||
       campaign?.targetType ||
-      campaign?.scope ||
       campaign?.offerScope ||
       "all"
   ).toLowerCase()
@@ -115,9 +173,7 @@ function campaignMatchesProduct(campaign, product) {
   }
 
   if (applyOn === "brand" || applyOn === "selected-brand" || applyOn === "selectedbrand") {
-    const campaignBrand = String(
-      campaign?.brand || campaign?.targetBrand || campaign?.selectedBrand || ""
-    )
+    const campaignBrand = String(campaign?.brand || campaign?.targetBrand || campaign?.selectedBrand || "")
       .toLowerCase()
       .trim()
 
@@ -130,7 +186,11 @@ function campaignMatchesProduct(campaign, product) {
 
   if (applyOn === "product" || applyOn === "selected-product" || applyOn === "selectedproduct") {
     const campaignProductId = String(
-      campaign?.productId || campaign?.targetProductId || campaign?.selectedProductId || ""
+      campaign?.productId ||
+        campaign?.product_id ||
+        campaign?.targetProductId ||
+        campaign?.selectedProductId ||
+        ""
     ).trim()
 
     return campaignProductId && campaignProductId === String(product?.id)
@@ -142,15 +202,31 @@ function campaignMatchesProduct(campaign, product) {
 function calculateCampaignPrice(product, campaign) {
   const originalPrice = Number(product?.price) || 0
   const discountValue = Number(
-    campaign?.discountValue ?? campaign?.discount ?? campaign?.discountPercent ?? 0
+    campaign?.discountValue ??
+      campaign?.discount_value ??
+      campaign?.discount ??
+      campaign?.discountPercent ??
+      0
   )
 
-  if (originalPrice <= 0 || discountValue <= 0) return null
+  if (originalPrice <= 0 || discountValue <= 0) {
+    return null
+  }
 
-  const discountType = String(campaign?.discountType || campaign?.type || "percentage").toLowerCase()
+  const discountType = String(
+    campaign?.discountType ||
+      campaign?.discount_type ||
+      campaign?.type ||
+      "percent"
+  ).toLowerCase()
+
   let discountAmount = 0
 
-  if (discountType === "percentage" || discountType === "percent" || discountType === "%") {
+  if (
+    discountType === "percentage" ||
+    discountType === "percent" ||
+    discountType === "%"
+  ) {
     discountAmount = Math.round((originalPrice * discountValue) / 100)
   } else {
     discountAmount = Math.round(discountValue)
@@ -158,11 +234,13 @@ function calculateCampaignPrice(product, campaign) {
 
   const salePrice = Math.max(originalPrice - discountAmount, 0)
 
-  if (salePrice >= originalPrice) return null
+  if (salePrice >= originalPrice) {
+    return null
+  }
 
   return {
     campaignId: campaign?.id || "",
-    title: campaign?.title || campaign?.name || campaign?.offerTitle || "Festival Sale",
+    title: campaign?.title || campaign?.name || "Festival Sale",
     originalPrice,
     salePrice,
     discountAmount,
@@ -176,14 +254,14 @@ function calculateCampaignPrice(product, campaign) {
   }
 }
 
-function getActiveSaleCampaigns(campaigns) {
-  return (Array.isArray(campaigns) ? campaigns : [])
+function getBestSaleForProduct(product, campaigns = []) {
+  if (!Array.isArray(campaigns) || campaigns.length === 0) {
+    return null
+  }
+
+  const validSales = campaigns
     .filter((campaign) => campaign?.active !== false)
     .filter((campaign) => isCampaignDateActive(campaign))
-}
-
-function getBestSaleForProduct(product, campaigns) {
-  const validSales = getActiveSaleCampaigns(campaigns)
     .filter((campaign) => campaignMatchesProduct(campaign, product))
     .map((campaign) => calculateCampaignPrice(product, campaign))
     .filter(Boolean)
@@ -203,6 +281,8 @@ export default function ProductPage() {
   const [stockFilter, setStockFilter] = useState("all")
   const [saleFilter, setSaleFilter] = useState("all")
   const [saleCampaigns, setSaleCampaigns] = useState([])
+  const [isSaleLoading, setIsSaleLoading] = useState(false)
+  const [saleSyncMessage, setSaleSyncMessage] = useState("")
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -212,29 +292,71 @@ export default function ProductPage() {
     return () => window.clearTimeout(timer)
   }, [searchTerm])
 
-
   useEffect(() => {
-    if (typeof window === "undefined") return
+    let isMounted = true
 
-    const syncSaleCampaigns = () => {
-      const storedCampaigns = readJson(SALE_CAMPAIGN_STORAGE_KEY, [])
-      setSaleCampaigns(Array.isArray(storedCampaigns) ? storedCampaigns : [])
+    const loadSaleCampaigns = async () => {
+      setIsSaleLoading(true)
+      setSaleSyncMessage("")
+
+      try {
+        const { data, error } = await supabase
+          .from("mobisphere_sale_campaigns")
+          .select("*")
+          .order("created_at", { ascending: false })
+
+        if (error) throw error
+
+        const campaigns = Array.isArray(data)
+          ? data.map(normalizeSaleCampaign)
+          : []
+
+        if (!isMounted) return
+
+        setSaleCampaigns(campaigns)
+        saveJson(SALE_CAMPAIGN_STORAGE_KEY, campaigns)
+      } catch (error) {
+        console.error("Sale campaigns fetch error:", error)
+
+        const fallbackCampaigns = readJson(SALE_CAMPAIGN_STORAGE_KEY, [])
+        if (!isMounted) return
+
+        setSaleCampaigns(Array.isArray(fallbackCampaigns) ? fallbackCampaigns.map(normalizeSaleCampaign) : [])
+        setSaleSyncMessage("Showing saved sale data. Live sale sync unavailable.")
+      } finally {
+        if (isMounted) setIsSaleLoading(false)
+      }
     }
 
-    syncSaleCampaigns()
-    window.addEventListener("storage", syncSaleCampaigns)
+    queueMicrotask(loadSaleCampaigns)
 
-    return () => window.removeEventListener("storage", syncSaleCampaigns)
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   const safeProducts = useMemo(() => {
     return Array.isArray(products) ? products : []
   }, [products])
 
-
   const activeSaleCampaigns = useMemo(() => {
-    return getActiveSaleCampaigns(saleCampaigns)
+    return saleCampaigns
+      .filter((campaign) => campaign?.active !== false)
+      .filter((campaign) => isCampaignDateActive(campaign))
   }, [saleCampaigns])
+
+  const productSaleMap = useMemo(() => {
+    const map = new Map()
+
+    safeProducts.forEach((product) => {
+      const saleInfo = getBestSaleForProduct(product, activeSaleCampaigns)
+      if (saleInfo) {
+        map.set(String(product.id), saleInfo)
+      }
+    })
+
+    return map
+  }, [safeProducts, activeSaleCampaigns])
 
   const stockSummary = useMemo(() => {
     const totalStockUnits = safeProducts.reduce((sum, product) => {
@@ -253,26 +375,16 @@ export default function ProductPage() {
       (product) => getStockStatus(product).type === "out"
     ).length
 
-    const saleProducts = safeProducts.filter((product) => {
-      return Boolean(getBestSaleForProduct(product, activeSaleCampaigns))
-    }).length
-
-    const bestSaving = safeProducts.reduce((max, product) => {
-      const saleInfo = getBestSaleForProduct(product, activeSaleCampaigns)
-      return Math.max(max, saleInfo?.discountAmount || 0)
-    }, 0)
-
     return {
       totalProducts: safeProducts.length,
       totalStockUnits,
       inStock,
       lowStock,
       outOfStock,
-      saleProducts,
-      activeSales: activeSaleCampaigns.length,
-      bestSaving,
+      saleProducts: productSaleMap.size,
+      liveCampaigns: activeSaleCampaigns.length,
     }
-  }, [safeProducts, activeSaleCampaigns])
+  }, [safeProducts, productSaleMap, activeSaleCampaigns])
 
   const uniqueBrands = useMemo(() => {
     return [
@@ -298,12 +410,12 @@ export default function ProductPage() {
           description.includes(normalizedSearch)
         )
       })
-    } else if (saleFilter === "sale") {
-      result = safeProducts
     } else if (view === "products" && selectedBrand) {
       result = safeProducts.filter(
         (product) => (product.brand || "Other Models") === selectedBrand
       )
+    } else if (saleFilter === "sale") {
+      result = [...safeProducts]
     } else {
       return []
     }
@@ -315,19 +427,25 @@ export default function ProductPage() {
     }
 
     if (saleFilter === "sale") {
-      result = result.filter((product) => {
-        return Boolean(getBestSaleForProduct(product, activeSaleCampaigns))
-      })
+      result = result.filter((product) => productSaleMap.has(String(product.id)))
     }
 
     const sorted = [...result]
 
     if (sortOrder === "asc") {
-      sorted.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0))
+      sorted.sort((a, b) => {
+        const aSale = productSaleMap.get(String(a.id))
+        const bSale = productSaleMap.get(String(b.id))
+        return (Number(aSale?.salePrice ?? a.price) || 0) - (Number(bSale?.salePrice ?? b.price) || 0)
+      })
     }
 
     if (sortOrder === "desc") {
-      sorted.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0))
+      sorted.sort((a, b) => {
+        const aSale = productSaleMap.get(String(a.id))
+        const bSale = productSaleMap.get(String(b.id))
+        return (Number(bSale?.salePrice ?? b.price) || 0) - (Number(aSale?.salePrice ?? a.price) || 0)
+      })
     }
 
     if (sortOrder === "name-asc") {
@@ -346,11 +464,11 @@ export default function ProductPage() {
       sorted.sort((a, b) => getStockQuantity(a) - getStockQuantity(b))
     }
 
-    if (sortOrder === "sale-high") {
+    if (sortOrder === "sale-saving") {
       sorted.sort((a, b) => {
-        const saleA = getBestSaleForProduct(a, activeSaleCampaigns)?.discountAmount || 0
-        const saleB = getBestSaleForProduct(b, activeSaleCampaigns)?.discountAmount || 0
-        return saleB - saleA
+        const aSale = productSaleMap.get(String(a.id))
+        const bSale = productSaleMap.get(String(b.id))
+        return Number(bSale?.discountAmount || 0) - Number(aSale?.discountAmount || 0)
       })
     }
 
@@ -363,7 +481,7 @@ export default function ProductPage() {
     sortOrder,
     stockFilter,
     saleFilter,
-    activeSaleCampaigns,
+    productSaleMap,
   ])
 
   const hasSearchTerm = searchTerm.trim().length > 0
@@ -373,10 +491,12 @@ export default function ProductPage() {
 
   const showNoResults =
     !isSearchingUI &&
-    (hasSearchTerm || stockFilter !== "all" || saleFilter !== "all") &&
-    (debouncedSearch.trim().length > 0 || stockFilter !== "all" || saleFilter !== "all") &&
+    (hasSearchTerm || stockFilter !== "all" || saleFilter === "sale") &&
+    (debouncedSearch.trim().length > 0 || stockFilter !== "all" || saleFilter === "sale") &&
     filteredProducts.length === 0 &&
     showProductGrid
+
+  const bestCampaign = activeSaleCampaigns[0]
 
   const handleBrandSelect = (brand) => {
     setSelectedBrand(brand)
@@ -402,6 +522,16 @@ export default function ProductPage() {
     setSortOrder("none")
     setStockFilter("all")
     setSaleFilter("all")
+  }
+
+  const handleShowSaleProducts = () => {
+    setView("products")
+    setSelectedBrand("")
+    setSearchTerm("")
+    setDebouncedSearch("")
+    setStockFilter("all")
+    setSaleFilter("sale")
+    setSortOrder("sale-saving")
   }
 
   if (!hydrated) {
@@ -431,9 +561,11 @@ export default function ProductPage() {
                 ? "Searching..."
                 : hasSearchTerm
                   ? "Search Results"
-                  : view === "brands"
-                    ? "Browse by Brand"
-                    : `Mobiles from ${selectedBrand}`}
+                  : saleFilter === "sale"
+                    ? "Festival Sale Deals"
+                    : view === "brands"
+                      ? "Browse by Brand"
+                      : `Mobiles from ${selectedBrand}`}
             </h1>
 
             <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500 sm:text-sm">
@@ -441,9 +573,11 @@ export default function ProductPage() {
                 ? `Looking up ${searchTerm}...`
                 : hasSearchTerm
                   ? `Showing results for ${debouncedSearch}`
-                  : view === "brands"
-                    ? "Select a company to see all available models with live stock status."
-                    : "Explore smartphones with product photos, stock quantity, and availability status."}
+                  : saleFilter === "sale"
+                    ? "Showing products with live Supabase sale campaigns and best available discounts."
+                    : view === "brands"
+                      ? "Select a company to see all available models with live stock status."
+                      : "Explore smartphones with product photos, stock quantity, and availability status."}
             </p>
           </div>
 
@@ -497,7 +631,7 @@ export default function ProductPage() {
                 onChange={(event) => setSearchTerm(event.target.value)}
               />
 
-              {(hasSearchTerm || stockFilter !== "all" || saleFilter !== "all") && (
+              {(hasSearchTerm || stockFilter !== "all" || saleFilter === "sale") && (
                 <button
                   type="button"
                   onClick={handleClearSearch}
@@ -524,6 +658,44 @@ export default function ProductPage() {
           </div>
         </div>
 
+        {activeSaleCampaigns.length > 0 && (
+          <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-orange-200 bg-gradient-to-r from-slate-950 via-orange-950 to-slate-950 p-5 text-white shadow-xl sm:rounded-[2rem] sm:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-300">
+                  Live Festival Sale
+                </p>
+                <h2 className="mt-2 text-2xl font-black sm:text-3xl">
+                  {bestCampaign?.title || "Mobisphere Mega Sale"}
+                </h2>
+                <p className="mt-1 text-xs font-bold leading-5 text-orange-100 sm:text-sm">
+                  {stockSummary.saleProducts} products are currently on sale from Supabase campaigns.
+                  {bestCampaign?.endDate ? ` Offer ends on ${new Date(bestCampaign.endDate).toLocaleDateString("en-IN")}.` : ""}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <span className="rounded-full bg-white/10 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-orange-100">
+                  {stockSummary.liveCampaigns} Live Campaigns
+                </span>
+                <button
+                  type="button"
+                  onClick={handleShowSaleProducts}
+                  className="rounded-full bg-orange-400 px-5 py-2.5 text-xs font-black uppercase tracking-wider text-slate-950 transition hover:bg-orange-300"
+                >
+                  View Sale Products
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {saleSyncMessage && (
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-700">
+            {saleSyncMessage}
+          </div>
+        )}
+
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
             <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
@@ -534,21 +706,21 @@ export default function ProductPage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-orange-100 bg-orange-50 p-3">
-            <p className="text-[9px] font-black uppercase tracking-wider text-orange-600">
-              Sale Products
-            </p>
-            <p className="mt-1 text-lg font-black text-orange-700">
-              {stockSummary.saleProducts}
-            </p>
-          </div>
-
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
             <p className="text-[9px] font-black uppercase tracking-wider text-emerald-600">
               Stock Units
             </p>
             <p className="mt-1 text-lg font-black text-emerald-700">
               {stockSummary.totalStockUnits}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-orange-100 bg-orange-50 p-3">
+            <p className="text-[9px] font-black uppercase tracking-wider text-orange-600">
+              Sale Deals
+            </p>
+            <p className="mt-1 text-lg font-black text-orange-700">
+              {isSaleLoading ? "..." : stockSummary.saleProducts}
             </p>
           </div>
 
@@ -572,46 +744,15 @@ export default function ProductPage() {
         </div>
       </header>
 
-      {activeSaleCampaigns.length > 0 && (
-        <div className="mb-5 overflow-hidden rounded-[1.75rem] border border-orange-200 bg-gradient-to-r from-orange-50 via-amber-50 to-emerald-50 p-5 shadow-xl sm:mb-8 sm:rounded-[2rem] sm:p-7">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-orange-700">
-                Festival Sale Live
-              </p>
-              <h2 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">
-                {activeSaleCampaigns[0]?.title || activeSaleCampaigns[0]?.name || "Mobisphere Sale"}
-              </h2>
-              <p className="mt-2 text-xs font-bold leading-5 text-slate-600 sm:text-sm">
-                {stockSummary.saleProducts} products have active sale pricing.
-                {stockSummary.bestSaving > 0 ? ` Best saving up to ₹${stockSummary.bestSaving.toLocaleString()}.` : ""}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setSaleFilter("sale")
-                setSearchTerm("")
-                setDebouncedSearch("")
-              }}
-              className="w-fit rounded-full bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg transition hover:bg-slate-800"
-            >
-              View Sale Products
-            </button>
-          </div>
-        </div>
-      )}
-
       {!showNoResults && showProductGrid && (
         <div
           className={`mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row ${
-            view === "products" && !hasSearchTerm
+            view === "products" && !hasSearchTerm && saleFilter !== "sale"
               ? "items-start justify-between sm:items-center"
               : "items-start justify-end sm:items-center"
           }`}
         >
-          {view === "products" && !hasSearchTerm && (
+          {view === "products" && !hasSearchTerm && saleFilter !== "sale" && (
             <button
               type="button"
               onClick={handleBackToBrands}
@@ -621,7 +762,44 @@ export default function ProductPage() {
             </button>
           )}
 
+          {saleFilter === "sale" && (
+            <button
+              type="button"
+              onClick={handleBackToBrands}
+              className="flex items-center gap-2 rounded-full bg-orange-50 px-4 py-2 text-xs font-black text-orange-700 shadow-sm transition hover:bg-orange-100 sm:px-5 sm:text-sm"
+            >
+              ← Back to All Brands
+            </button>
+          )}
+
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:justify-start">
+            <div className="flex items-center justify-between gap-3 sm:justify-start">
+              <label
+                htmlFor="saleFilter"
+                className="text-[10px] font-black uppercase tracking-wider text-slate-400"
+              >
+                Sale
+              </label>
+
+              <select
+                id="saleFilter"
+                value={saleFilter}
+                onChange={(event) => {
+                  const next = event.target.value
+                  setSaleFilter(next)
+                  if (next === "sale") {
+                    setView("products")
+                    setSelectedBrand("")
+                    setSortOrder("sale-saving")
+                  }
+                }}
+                className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-black text-slate-700 shadow-sm outline-none transition-all focus:border-slate-900 focus:ring-1 focus:ring-slate-900 sm:px-4 sm:text-xs"
+              >
+                <option value="all">All Deals</option>
+                <option value="sale">Sale Products</option>
+              </select>
+            </div>
+
             <div className="flex items-center justify-between gap-3 sm:justify-start">
               <label
                 htmlFor="stockFilter"
@@ -645,25 +823,6 @@ export default function ProductPage() {
 
             <div className="flex items-center justify-between gap-3 sm:justify-start">
               <label
-                htmlFor="saleFilter"
-                className="text-[10px] font-black uppercase tracking-wider text-slate-400"
-              >
-                Sale
-              </label>
-
-              <select
-                id="saleFilter"
-                value={saleFilter}
-                onChange={(event) => setSaleFilter(event.target.value)}
-                className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-black text-slate-700 shadow-sm outline-none transition-all focus:border-slate-900 focus:ring-1 focus:ring-slate-900 sm:px-4 sm:text-xs"
-              >
-                <option value="all">All Products</option>
-                <option value="sale">Sale Products</option>
-              </select>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 sm:justify-start">
-              <label
                 htmlFor="sort"
                 className="text-[10px] font-black uppercase tracking-wider text-slate-400"
               >
@@ -679,9 +838,9 @@ export default function ProductPage() {
                 <option value="none">Featured</option>
                 <option value="asc">Price: Low to High</option>
                 <option value="desc">Price: High to Low</option>
+                <option value="sale-saving">Biggest Sale Saving</option>
                 <option value="stock-high">Stock: High to Low</option>
                 <option value="stock-low">Stock: Low to High</option>
-                <option value="sale-high">Biggest Sale Saving</option>
                 <option value="name-asc">Name: A to Z</option>
                 <option value="name-desc">Name: Z to A</option>
               </select>
@@ -690,7 +849,7 @@ export default function ProductPage() {
         </div>
       )}
 
-      {hasSearchTerm || (showProductGrid && (stockFilter !== "all" || saleFilter !== "all")) ? (
+      {hasSearchTerm || saleFilter === "sale" || (showProductGrid && stockFilter !== "all") ? (
         showNoResults ? (
           <div className="mt-6 rounded-[1.75rem] border border-rose-100 bg-rose-50 p-8 text-center shadow-sm sm:mt-8 sm:rounded-[2rem] sm:p-16">
             <div className="mb-4 text-4xl opacity-80 sm:mb-5 sm:text-5xl">
@@ -702,7 +861,7 @@ export default function ProductPage() {
             </p>
 
             <p className="mt-2 text-xs font-bold text-rose-700 sm:text-sm">
-              Nothing matched your search or stock filter.
+              Nothing matched your search, stock filter, or sale filter.
             </p>
 
             <button
@@ -754,9 +913,9 @@ export default function ProductPage() {
                 (product) => getStockStatus(product).type === "out"
               ).length
 
-              const brandSaleProducts = brandProducts.filter((product) => {
-                return Boolean(getBestSaleForProduct(product, activeSaleCampaigns))
-              }).length
+              const brandSaleProducts = brandProducts.filter((product) =>
+                productSaleMap.has(String(product.id))
+              ).length
 
               return (
                 <button
@@ -765,8 +924,15 @@ export default function ProductPage() {
                   onClick={() => handleBrandSelect(brand)}
                   className="group min-h-[155px] rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl sm:min-h-[205px] sm:rounded-3xl sm:p-8 sm:hover:-translate-y-1.5 sm:hover:shadow-2xl"
                 >
-                  <div className="mb-3 text-3xl opacity-80 group-hover:opacity-100 sm:mb-4 sm:text-4xl">
-                    📱
+                  <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+                    <span className="text-3xl opacity-80 group-hover:opacity-100 sm:text-4xl">
+                      📱
+                    </span>
+                    {brandSaleProducts > 0 && (
+                      <span className="rounded-full bg-orange-50 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-orange-700 sm:text-[9px]">
+                        {brandSaleProducts} Sale
+                      </span>
+                    )}
                   </div>
 
                   <h3 className="line-clamp-1 text-base font-black text-slate-900 sm:text-2xl">
@@ -776,12 +942,6 @@ export default function ProductPage() {
                   <p className="mt-1 text-[11px] font-bold leading-4 text-slate-500 group-hover:text-emerald-600 sm:text-sm">
                     {brandProductCount} Models Available
                   </p>
-
-                  {brandSaleProducts > 0 && (
-                    <p className="mt-2 w-fit rounded-full bg-orange-50 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-orange-700">
-                      {brandSaleProducts} Sale Deals
-                    </p>
-                  )}
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-emerald-700">

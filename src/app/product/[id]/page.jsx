@@ -1,11 +1,18 @@
 "use client"
 
-import React, { useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase"
 import { useProductContext } from "@/app/context/ProductContext"
 import ProductDisplayCard from "@/app/components/product/ProductDisplayCard"
 
 const SALE_CAMPAIGN_STORAGE_KEY = "mobisphereSaleCampaigns"
+
+function formatINR(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return "—"
+  return `₹${n.toLocaleString()}`
+}
 
 function readJson(key, fallback) {
   if (typeof window === "undefined") return fallback
@@ -16,12 +23,6 @@ function readJson(key, fallback) {
   } catch {
     return fallback
   }
-}
-
-function formatINR(value) {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return "—"
-  return `₹${n.toLocaleString()}`
 }
 
 function getStockQuantity(product) {
@@ -77,6 +78,54 @@ function getStockStatus(product) {
   }
 }
 
+function normalizeCampaign(campaign) {
+  if (!campaign) return null
+
+  return {
+    id: campaign.id || `SALE-${Date.now()}`,
+    title: campaign.title || campaign.name || campaign.offerTitle || "Festival Sale",
+    discountType:
+      campaign.discountType ||
+      campaign.discount_type ||
+      campaign.type ||
+      "percent",
+    discountValue:
+      campaign.discountValue ??
+      campaign.discount_value ??
+      campaign.discount ??
+      campaign.discountPercent ??
+      0,
+    scope:
+      campaign.scope ||
+      campaign.applyOn ||
+      campaign.targetType ||
+      campaign.offerScope ||
+      "all",
+    brand: campaign.brand || campaign.targetBrand || campaign.selectedBrand || "",
+    productId:
+      campaign.productId ||
+      campaign.product_id ||
+      campaign.targetProductId ||
+      campaign.selectedProductId ||
+      "",
+    productTitle: campaign.productTitle || campaign.product_title || "",
+    startDate:
+      campaign.startDate ||
+      campaign.start_date ||
+      campaign.startsAt ||
+      campaign.fromDate ||
+      "",
+    endDate:
+      campaign.endDate ||
+      campaign.end_date ||
+      campaign.expiresAt ||
+      campaign.expiryDate ||
+      campaign.toDate ||
+      "",
+    active: campaign.active !== false,
+    createdAt: campaign.createdAt || campaign.created_at || "",
+  }
+}
 
 function getCampaignStartDate(campaign) {
   return campaign?.startDate || campaign?.startsAt || campaign?.fromDate || ""
@@ -139,7 +188,7 @@ function campaignMatchesProduct(campaign, product) {
       .toLowerCase()
       .trim()
 
-    return Boolean(campaignBrand) && campaignBrand === productBrand
+    return campaignBrand && campaignBrand === productBrand
   }
 
   if (applyOn === "product" || applyOn === "selected-product" || applyOn === "selectedproduct") {
@@ -150,7 +199,7 @@ function campaignMatchesProduct(campaign, product) {
         ""
     ).trim()
 
-    return Boolean(campaignProductId) && campaignProductId === String(product?.id)
+    return campaignProductId && campaignProductId === String(product?.id)
   }
 
   return false
@@ -165,17 +214,23 @@ function calculateCampaignPrice(product, campaign) {
       0
   )
 
-  if (originalPrice <= 0 || discountValue <= 0) return null
+  if (originalPrice <= 0 || discountValue <= 0) {
+    return null
+  }
 
   const discountType = String(
     campaign?.discountType ||
       campaign?.type ||
-      "percentage"
+      "percent"
   ).toLowerCase()
 
   let discountAmount = 0
 
-  if (discountType === "percentage" || discountType === "percent" || discountType === "%") {
+  if (
+    discountType === "percentage" ||
+    discountType === "percent" ||
+    discountType === "%"
+  ) {
     discountAmount = Math.round((originalPrice * discountValue) / 100)
   } else {
     discountAmount = Math.round(discountValue)
@@ -183,11 +238,17 @@ function calculateCampaignPrice(product, campaign) {
 
   const salePrice = Math.max(originalPrice - discountAmount, 0)
 
-  if (salePrice >= originalPrice) return null
+  if (salePrice >= originalPrice) {
+    return null
+  }
 
   return {
     campaignId: campaign?.id || "",
-    title: campaign?.title || campaign?.name || campaign?.offerTitle || "Festival Sale",
+    title:
+      campaign?.title ||
+      campaign?.name ||
+      campaign?.offerTitle ||
+      "Festival Sale",
     originalPrice,
     salePrice,
     discountAmount,
@@ -201,10 +262,8 @@ function calculateCampaignPrice(product, campaign) {
   }
 }
 
-function getBestSaleForProduct(product) {
-  const campaigns = readJson(SALE_CAMPAIGN_STORAGE_KEY, [])
-
-  if (!Array.isArray(campaigns) || campaigns.length === 0 || !product) {
+function getBestSaleForProduct(product, campaigns) {
+  if (!product || !Array.isArray(campaigns) || campaigns.length === 0) {
     return null
   }
 
@@ -255,6 +314,7 @@ function addProductToCart(product, saleInfo) {
     saleDiscountLabel: saleInfo?.discountLabel || "",
     saleCampaignId: saleInfo?.campaignId || "",
     saleCampaignTitle: saleInfo?.title || "",
+    saleCampaignEndDate: saleInfo?.endsAt || "",
     quantity: 1,
     stockQty: stock,
     minStockAlert: getMinimumStockAlert(product),
@@ -271,6 +331,43 @@ export default function ProductDetailPage() {
 
   const productId = params?.id
   const [cartMessage, setCartMessage] = useState("")
+  const [saleCampaigns, setSaleCampaigns] = useState([])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function fetchSaleCampaigns() {
+      const fallbackCampaigns = readJson(SALE_CAMPAIGN_STORAGE_KEY, [])
+
+      try {
+        const { data, error } = await supabase
+          .from("mobisphere_sale_campaigns")
+          .select("*")
+          .order("created_at", { ascending: false })
+
+        if (error) throw error
+
+        const mappedCampaigns = Array.isArray(data)
+          ? data.map(normalizeCampaign).filter(Boolean)
+          : []
+
+        if (isMounted) {
+          setSaleCampaigns(mappedCampaigns.length > 0 ? mappedCampaigns : fallbackCampaigns)
+        }
+      } catch (error) {
+        console.error("Sale campaign fetch error:", error)
+        if (isMounted) {
+          setSaleCampaigns(Array.isArray(fallbackCampaigns) ? fallbackCampaigns : [])
+        }
+      }
+    }
+
+    fetchSaleCampaigns()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const product = useMemo(() => {
     if (!Array.isArray(products)) return null
@@ -300,10 +397,17 @@ export default function ProductDetailPage() {
       .slice(0, 4)
   }, [products, productId])
 
+  const saleInfo = useMemo(() => {
+    return getBestSaleForProduct(product, saleCampaigns)
+  }, [product, saleCampaigns])
+
   const stockQuantity = getStockQuantity(product)
   const minimumStockAlert = getMinimumStockAlert(product)
   const stockStatus = getStockStatus(product)
   const isOutOfStock = stockStatus.type === "out"
+  const originalPrice = Number(product?.price) || 0
+  const finalPrice = saleInfo?.salePrice ?? originalPrice
+  const hasSale = Boolean(saleInfo) && !isOutOfStock
 
   const handleAddToCart = () => {
     if (!product) return
@@ -375,10 +479,6 @@ export default function ProductDetailPage() {
 
   const productImage = product.image || "/images/IPhone 16 Pro Max.png"
   const productTitle = product.title || "Mobisphere Product"
-  const productPrice = Number(product.price) || 0
-  const saleInfo = getBestSaleForProduct(product)
-  const hasSale = Boolean(saleInfo) && !isOutOfStock
-  const finalPrice = saleInfo?.salePrice ?? productPrice
 
   return (
     <main className="mx-auto max-w-6xl px-3 py-8 pt-28 sm:px-6 sm:py-10 lg:px-8">
@@ -429,24 +529,23 @@ export default function ProductDetailPage() {
                   </p>
 
                   {hasSale ? (
-                    <div className="mt-2">
+                    <div className="mt-2 space-y-1">
                       <div className="flex flex-wrap items-end gap-3">
                         <p className="text-3xl font-black text-emerald-700 sm:text-4xl">
                           {formatINR(finalPrice)}
                         </p>
-
-                        <p className="pb-1 text-sm font-black text-slate-400 line-through sm:text-base">
-                          {formatINR(productPrice)}
+                        <p className="text-sm font-black text-slate-400 line-through sm:text-base">
+                          {formatINR(originalPrice)}
                         </p>
                       </div>
 
-                      <p className="mt-2 text-xs font-black uppercase tracking-wider text-orange-600">
+                      <p className="text-xs font-black uppercase tracking-wider text-orange-600">
                         {saleInfo.title} • You save {formatINR(saleInfo.discountAmount)}
                       </p>
                     </div>
                   ) : (
                     <p className="mt-2 text-3xl font-black text-slate-950 sm:text-4xl">
-                      {formatINR(productPrice)}
+                      {formatINR(product.price)}
                     </p>
                   )}
                 </div>
@@ -465,6 +564,28 @@ export default function ProductDetailPage() {
                   </p>
                 </div>
               </div>
+
+              {hasSale && (
+                <div className="rounded-[1.75rem] border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 p-5">
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-orange-600">
+                    Limited Time Offer
+                  </p>
+
+                  <h3 className="mt-2 text-xl font-black text-slate-950">
+                    {saleInfo.title}
+                  </h3>
+
+                  <p className="mt-1 text-sm font-bold text-orange-700">
+                    {saleInfo.discountLabel} on this product. Final price is {formatINR(finalPrice)}.
+                  </p>
+
+                  {saleInfo.endsAt ? (
+                    <p className="mt-2 text-xs font-black uppercase tracking-wider text-slate-600">
+                      Offer ends on {new Date(saleInfo.endsAt).toLocaleDateString("en-IN")}
+                    </p>
+                  ) : null}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
@@ -487,20 +608,6 @@ export default function ProductDetailPage() {
                   </p>
                 </div>
               </div>
-
-              {hasSale ? (
-                <div className="rounded-3xl border border-orange-200 bg-orange-50 p-4 text-sm font-bold text-orange-800">
-                  <p className="font-black uppercase tracking-wider">Limited Time Offer</p>
-                  <p className="mt-1">
-                    {saleInfo.title} is active on this product. Offer price: {formatINR(finalPrice)}.
-                  </p>
-                  {saleInfo.endsAt ? (
-                    <p className="mt-1 text-xs font-black uppercase tracking-wider">
-                      Offer ends on {new Date(saleInfo.endsAt).toLocaleDateString("en-IN")}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
 
               {cartMessage ? (
                 <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800">
