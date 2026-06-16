@@ -508,6 +508,14 @@ export default function IntegratedAdminPanelDashboard() {
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [salesReportRange, setSalesReportRange] = useState('all')
 
+  const [profileForm, setProfileForm] = useState({
+    fullName: '',
+    email: '',
+    newPassword: '',
+    confirmNewPassword: '',
+  })
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false)
+
   // 🔄 Supabase Live Data Fetch
   const fetchData = useCallback(async (showFeedback = false) => {
     if (showFeedback === true) setIsSyncing(true)
@@ -716,6 +724,18 @@ export default function IntegratedAdminPanelDashboard() {
       isMounted = false
     }
   }, [fetchData, loadAdminProfile])
+
+  useEffect(() => {
+    if (!adminProfile) return
+
+    setProfileForm((prev) => ({
+      ...prev,
+      fullName: adminProfile.full_name || '',
+      email: adminProfile.email || username || '',
+      newPassword: '',
+      confirmNewPassword: '',
+    }))
+  }, [adminProfile, username])
 
   // Analytics Graph Logic
   const chartAnalytics = useMemo(() => {
@@ -1131,6 +1151,121 @@ export default function IntegratedAdminPanelDashboard() {
     setIsLoggedIn(false)
     setAdminProfile(null)
     resetAuthForm()
+  }
+
+  const handleProfileFormChange = (field, value) => {
+    setProfileForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
+  }
+
+  const handleUpdateAdminProfile = async (event) => {
+    event.preventDefault()
+
+    const fullName = profileForm.fullName.trim()
+    const nextEmail = profileForm.email.trim().toLowerCase()
+    const newPassword = profileForm.newPassword
+    const confirmNewPassword = profileForm.confirmNewPassword
+
+    if (!fullName) {
+      setMessage('Please enter admin full name.')
+      return
+    }
+
+    if (!nextEmail || !nextEmail.includes('@')) {
+      setMessage('Please enter a valid email address.')
+      return
+    }
+
+    if (newPassword && newPassword.length < 6) {
+      setMessage('New password must be at least 6 characters.')
+      return
+    }
+
+    if (newPassword && newPassword !== confirmNewPassword) {
+      setMessage('New password and confirm password do not match.')
+      return
+    }
+
+    setIsUpdatingProfile(true)
+
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      if (userError) throw userError
+
+      const user = userData?.user
+
+      if (!user?.id) {
+        throw new Error('Admin session expired. Please login again.')
+      }
+
+      const authUpdates = {}
+
+      if (nextEmail && nextEmail !== String(user.email || '').toLowerCase()) {
+        authUpdates.email = nextEmail
+      }
+
+      if (newPassword) {
+        authUpdates.password = newPassword
+      }
+
+      if (Object.keys(authUpdates).length > 0) {
+        const { error: updateAuthError } = await supabase.auth.updateUser(authUpdates)
+        if (updateAuthError) throw updateAuthError
+      }
+
+      const profileUpdate = {
+        full_name: fullName,
+        email: nextEmail,
+        updated_at: new Date().toISOString(),
+      }
+
+      const { data: updatedProfile, error: profileError } = await supabase
+        .from(ADMIN_PROFILES_TABLE_NAME)
+        .update(profileUpdate)
+        .eq('id', user.id)
+        .select('*')
+        .maybeSingle()
+
+      if (profileError) throw profileError
+
+      const nextProfile = {
+        ...(adminProfile || {}),
+        ...(updatedProfile || {}),
+        ...profileUpdate,
+        id: user.id,
+      }
+
+      setAdminProfile(nextProfile)
+      setUsername(nextProfile.full_name || nextProfile.email || nextEmail)
+      setProfileForm({
+        fullName: nextProfile.full_name || fullName,
+        email: nextProfile.email || nextEmail,
+        newPassword: '',
+        confirmNewPassword: '',
+      })
+
+      saveJson(ADMIN_SESSION_KEY, {
+        userId: user.id,
+        email: nextProfile.email || nextEmail,
+        username: nextProfile.email || nextEmail,
+        name: nextProfile.full_name || fullName,
+        provider: 'supabase',
+      })
+
+      setMessage(
+        authUpdates.email
+          ? '✅ Admin profile updated. Email change may need confirmation from your inbox.'
+          : '✅ Admin profile updated successfully.'
+      )
+    } catch (error) {
+      console.error('Admin profile update error:', error)
+      setMessage(error?.message || 'Admin profile update failed.')
+    } finally {
+      setIsUpdatingProfile(false)
+      setTimeout(() => setMessage(''), 4500)
+    }
   }
 
   const handleCustomerDelete = async (id) => {
@@ -2180,6 +2315,80 @@ export default function IntegratedAdminPanelDashboard() {
                     </div>
                   </div>
                 </div>
+              </section>
+
+              <section className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
+                <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-violet-600">Admin Security</p>
+                    <h3 className="mt-1 text-xl font-black text-slate-950">Admin Profile Settings</h3>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">Update your admin name, email address, or password securely through Supabase Auth.</p>
+                  </div>
+
+                  <div className="w-fit rounded-full bg-slate-950 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white">
+                    {adminProfile?.role || 'admin'} • {adminProfile?.active === false ? 'Inactive' : 'Active'}
+                  </div>
+                </div>
+
+                <form onSubmit={handleUpdateAdminProfile} className="grid gap-4 lg:grid-cols-2">
+                  <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
+                    <span>Admin Name</span>
+                    <input
+                      type="text"
+                      value={profileForm.fullName}
+                      onChange={(event) => handleProfileFormChange('fullName', event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-slate-900"
+                      placeholder="Admin full name"
+                    />
+                  </label>
+
+                  <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
+                    <span>Email Address</span>
+                    <input
+                      type="email"
+                      value={profileForm.email}
+                      onChange={(event) => handleProfileFormChange('email', event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-slate-900"
+                      placeholder="admin@example.com"
+                    />
+                  </label>
+
+                  <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
+                    <span>New Password</span>
+                    <input
+                      type="password"
+                      value={profileForm.newPassword}
+                      onChange={(event) => handleProfileFormChange('newPassword', event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-slate-900"
+                      placeholder="Leave blank to keep current password"
+                    />
+                  </label>
+
+                  <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
+                    <span>Confirm New Password</span>
+                    <input
+                      type="password"
+                      value={profileForm.confirmNewPassword}
+                      onChange={(event) => handleProfileFormChange('confirmNewPassword', event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-slate-900"
+                      placeholder="Repeat new password"
+                    />
+                  </label>
+
+                  <div className="lg:col-span-2 flex flex-col gap-3 rounded-3xl border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs font-bold leading-5 text-slate-500">
+                      Email change can require inbox confirmation depending on your Supabase Auth settings. Password change applies to the currently logged-in admin.
+                    </p>
+
+                    <button
+                      type="submit"
+                      disabled={isUpdatingProfile}
+                      className="shrink-0 rounded-full bg-slate-950 px-6 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isUpdatingProfile ? 'Updating...' : 'Update Profile'}
+                    </button>
+                  </div>
+                </form>
               </section>
 
               <section className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
