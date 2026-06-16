@@ -248,6 +248,47 @@ function getCampaignScopeLabel(campaign) {
   return 'All products'
 }
 
+
+function isValidEmailAddress(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim())
+}
+
+function isDemoLikeName(value) {
+  const text = String(value || '').trim().toLowerCase()
+  if (!text) return true
+  return ['demo', 'test', 'visitor', 'sample', 'dummy', 'admin'].some((word) => text === word || text.includes(word))
+}
+
+function isCleanCustomerRecord(customer) {
+  if (!customer) return false
+
+  const name = customer.full_name || customer.fullName || ''
+  const mobile = customer.mobile_number || customer.mobileNumber || ''
+  const email = customer.email || ''
+  const hasAuthUser = Boolean(customer.auth_user_id)
+  const hasVerifiedEmail = Boolean(customer.email_verified_at || customer.verified_at || customer.verifiedAt)
+
+  if (isDemoLikeName(name)) return false
+  if (!String(mobile || '').trim()) return false
+
+  return hasAuthUser || isValidEmailAddress(email) || hasVerifiedEmail
+}
+
+function isCleanEnquiryRecord(enquiry) {
+  if (!enquiry) return false
+
+  const name = enquiry.full_name || enquiry.fullName || ''
+  const mobile = enquiry.mobile_number || enquiry.mobileNumber || ''
+  const email = enquiry.email || ''
+  const message = enquiry.message || enquiry.subject || enquiry.admin_note || ''
+
+  if (isDemoLikeName(name)) return false
+  if (!String(mobile || email || message).trim()) return false
+  if (String(mobile || '').trim() && !/^[6-9]\d{9}$/.test(String(mobile).trim())) return false
+
+  return true
+}
+
 export default function IntegratedAdminPanelDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
@@ -361,6 +402,17 @@ export default function IntegratedAdminPanelDashboard() {
       queueMicrotask(() => fetchData())
     }
   }, [fetchData])
+
+  const visibleCustomers = useMemo(() => {
+    return Array.isArray(customers) ? customers.filter(isCleanCustomerRecord) : []
+  }, [customers])
+
+  const visibleEnquiries = useMemo(() => {
+    return Array.isArray(enquiries) ? enquiries.filter(isCleanEnquiryRecord) : []
+  }, [enquiries])
+
+  const hiddenCustomerCount = Math.max((Array.isArray(customers) ? customers.length : 0) - visibleCustomers.length, 0)
+  const hiddenEnquiryCount = Math.max((Array.isArray(enquiries) ? enquiries.length : 0) - visibleEnquiries.length, 0)
 
   // Analytics Graph Logic
   const chartAnalytics = useMemo(() => {
@@ -560,8 +612,8 @@ export default function IntegratedAdminPanelDashboard() {
         },
         {
           label: 'Customers',
-          value: customers.length.toLocaleString(),
-          helper: `${enquiries.length} enquiries tracked`,
+          value: visibleCustomers.length.toLocaleString(),
+          helper: `${visibleEnquiries.length} clean enquiries tracked`,
           icon: '👥',
           accent: 'text-violet-600'
         },
@@ -595,7 +647,7 @@ export default function IntegratedAdminPanelDashboard() {
         }
       ]
     }
-  }, [hydrated, orders, localProducts, customers.length, enquiries.length, coupons.length])
+  }, [hydrated, orders, localProducts, visibleCustomers.length, visibleEnquiries.length, coupons.length])
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours()
@@ -1372,137 +1424,65 @@ export default function IntegratedAdminPanelDashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-4 py-8 pt-28 font-sans text-slate-900 sm:px-6 lg:px-8">
-      <div className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-72 bg-gradient-to-b from-slate-950 via-slate-900 to-transparent" />
-      <div className="mx-auto max-w-[1440px]">
+    <main className="mx-auto max-w-7xl px-4 py-10 pt-28 sm:px-6 font-sans text-slate-900">
 
-      {/* 👑 Professional Welcome Header */}
-      <section className="mb-8 overflow-hidden rounded-[2.2rem] border border-white/10 bg-slate-950 text-white shadow-2xl shadow-slate-950/20">
-        <div className="relative p-5 sm:p-7 lg:p-8">
-          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-emerald-400/20 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-28 left-20 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl" />
-
-          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-2xl font-black shadow-inner">
-                M
-              </div>
-
-              <div>
-                <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.24em] text-emerald-300">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_16px_rgba(52,211,153,0.9)]" />
-                  System Dashboard Live
-                </div>
-                <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl lg:text-5xl">
-                  {greeting}, {username}
-                </h1>
-                <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-300">
-                  Welcome back! Your store insights and controls are waiting.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[520px]">
-              <div className="rounded-3xl border border-white/10 bg-white/[0.08] p-4 backdrop-blur">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Customers</p>
-                <p className="mt-2 text-2xl font-black text-white">{customers.length}</p>
-              </div>
-              <div className="rounded-3xl border border-white/10 bg-white/[0.08] p-4 backdrop-blur">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Enquiries</p>
-                <p className="mt-2 text-2xl font-black text-white">{enquiries.length}</p>
-              </div>
-              <div className="rounded-3xl border border-white/10 bg-white/[0.08] p-4 backdrop-blur">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Products</p>
-                <p className="mt-2 text-2xl font-black text-emerald-300">{chartAnalytics.totalProducts}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="relative mt-6 flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs font-semibold text-slate-400">
-              Secure workspace for products, stock, orders, customers, campaigns and reports.
-            </p>
-            <button
-              onClick={handleLogout}
-              className="inline-flex w-fit items-center justify-center rounded-full border border-rose-400/20 bg-rose-500/10 px-5 py-2.5 text-xs font-black uppercase tracking-wider text-rose-200 transition hover:border-rose-300/40 hover:bg-rose-500/20"
-            >
-              Logout Session
-            </button>
-          </div>
+      {/* 👑 Welcome Header Banner */}
+      <div className="mb-8 rounded-[2rem] bg-white p-8 shadow-xl border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-emerald-500 font-bold">● System Dashboard Live</p>
+          <h1 className="text-4xl font-black text-slate-900 mt-2">✨ {greeting}, {username}! 👋</h1>
+          <p className="text-sm text-slate-500 mt-2 italic">Hello Admin!! How are you?</p>
         </div>
-      </section>
+        <div className="flex flex-col items-end gap-3">
+          <div className="rounded-full bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow-lg">
+            Customers: {visibleCustomers.length} • Enquiries: {visibleEnquiries.length}
+          </div>
+          <button onClick={handleLogout} className="text-xs font-bold text-rose-600 hover:underline">Logout Session</button>
+        </div>
+      </div>
 
       {message && (
-        <div className="mb-5 rounded-2xl border-l-4 border-emerald-500 bg-white px-5 py-4 text-xs font-black text-slate-800 shadow-sm">
+        <div className="mb-4 rounded-2xl bg-slate-100 p-4 text-xs font-bold text-slate-800 border border-slate-200">
           {message}
         </div>
       )}
 
       {/* Main Layout Divided into Sidebar & Dashboard Panels */}
-      <div className="grid gap-7 lg:grid-cols-[300px_minmax(0,1fr)]">
+      <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
 
-        {/* 📋 Professional Sidebar Links */}
-        <aside className="lg:sticky lg:top-28 lg:self-start">
-          <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
-            <div className="border-b border-slate-100 bg-gradient-to-br from-white to-slate-50 p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-lg font-black text-white shadow-lg">M</div>
-                <div>
-                  <h2 className="text-sm font-black text-slate-950">Mobisphere Admin</h2>
-                  <p className="mt-0.5 text-[11px] font-bold text-slate-500">Production workspace</p>
-                </div>
-              </div>
-            </div>
+        {/* 📋 Sidebar Links (7 Tabs System) */}
+        <aside className="space-y-2">
+          <p className="text-[10px] font-black uppercase text-slate-400 px-4 mb-4 tracking-wider">Navigation Menu</p>
+          {[
+            { id: 1, icon: '📊', name: 'Dashboard & Analytics' },
+            { id: 2, icon: '📦', name: 'Inventory & Stock' },
+            { id: 3, icon: '🛒', name: 'Orders & Tracking' },
+            { id: 4, icon: '👥', name: 'Customer Accounts' },
+            { id: 5, icon: '🎫', name: 'Coupons & Offers' },
+            { id: 6, icon: '📈', name: 'Sales Reports' },
+            { id: 7, icon: '📩', name: 'Enquiry Center' },
+          ].map(tab => (
+            <button key={tab.id} onClick={() => { setActiveTab(tab.id); setMessage(''); }} className={`flex w-full items-center gap-3 rounded-2xl px-5 py-4 text-sm font-bold transition-all ${activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg scale-105' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100'}`}>
+              <span>{tab.icon}</span> {tab.name}
+            </button>
+          ))}
 
-            <nav className="space-y-1.5 p-3">
-              <p className="px-3 pb-2 pt-1 text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Navigation</p>
-              {[
-                { id: 1, icon: '📊', name: 'Dashboard & Analytics' },
-                { id: 2, icon: '📦', name: 'Inventory & Stock' },
-                { id: 3, icon: '🛒', name: 'Orders & Tracking' },
-                { id: 4, icon: '👥', name: 'Customer Accounts' },
-                { id: 5, icon: '🎫', name: 'Coupons & Offers' },
-                { id: 6, icon: '📈', name: 'Sales Reports' },
-                { id: 7, icon: '📩', name: 'Enquiry Center' },
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => { setActiveTab(tab.id); setMessage(''); }}
-                  className={`group flex w-full items-center justify-between rounded-2xl px-4 py-3.5 text-left text-sm font-black transition-all ${activeTab === tab.id ? 'bg-slate-950 text-white shadow-lg shadow-slate-950/15' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'}`}
-                >
-                  <span className="flex min-w-0 items-center gap-3">
-                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base ${activeTab === tab.id ? 'bg-white/10' : 'bg-slate-100 group-hover:bg-white'}`}>{tab.icon}</span>
-                    <span className="truncate">{tab.name}</span>
-                  </span>
-                  {activeTab === tab.id && <span className="h-2 w-2 rounded-full bg-emerald-400" />}
-                </button>
-              ))}
-            </nav>
-
-            <div className="m-3 rounded-3xl bg-slate-950 p-5 text-white">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-black">Quick Actions</h3>
-                <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-emerald-300">v2.3</span>
-              </div>
-              <p className="mt-3 text-[11px] font-semibold leading-5 text-slate-400">
-                Manage inventory, orders, customers and reports from one clean workspace.
-              </p>
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                <button type="button" onClick={() => { setEditingProduct(null); setInventoryView('form'); setActiveTab(2); }} className="rounded-2xl bg-white/10 p-3 text-lg transition hover:bg-white/15">＋</button>
-                <button type="button" onClick={() => setActiveTab(3)} className="rounded-2xl bg-white/10 p-3 text-lg transition hover:bg-white/15">🛒</button>
-                <button type="button" onClick={() => fetchData(true)} className="rounded-2xl bg-emerald-400 p-3 text-lg transition hover:bg-emerald-300">🔄</button>
-              </div>
-            </div>
+          {/* Dark Quick Actions Info Box */}
+          <div className="mt-8 rounded-3xl bg-slate-950 p-6 text-white shadow-xl">
+            <h3 className="text-sm font-bold border-b border-slate-800 pb-2 mb-3 flex justify-between items-center">
+              Quick Actions <span className="text-[9px] text-emerald-400 font-mono bg-emerald-400/10 px-2 py-0.5 rounded-full">v2.3</span>
+            </h3>
+            <p className="text-[11px] leading-relaxed text-slate-400">Control panel for adding devices, inventory analytics sync, and customer resolution pathways.</p>
           </div>
         </aside>
 
         {/* 💻 Active Workspace View */}
-        <section className="min-w-0 space-y-8">
+        <div className="space-y-8">
 
           {/* TAB 1: Dashboard & Analytics */}
           {activeTab === 1 && (
             <div className="space-y-7">
-              <section className="overflow-hidden rounded-[2.2rem] border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white shadow-2xl shadow-slate-950/20">
+              <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 text-white shadow-2xl">
                 <div className="relative p-6 sm:p-8 lg:p-10">
                   <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-emerald-400/20 blur-3xl" />
                   <div className="pointer-events-none absolute -bottom-24 left-1/3 h-64 w-64 rounded-full bg-blue-400/10 blur-3xl" />
@@ -1515,7 +1495,7 @@ export default function IntegratedAdminPanelDashboard() {
                       </div>
 
                       <h2 className="text-3xl font-black leading-tight tracking-tight sm:text-4xl lg:text-5xl">
-                        Mobisphere command center
+                        Store command center
                       </h2>
 
                       <p className="mt-3 max-w-xl text-sm font-semibold leading-6 text-slate-300">
@@ -1553,12 +1533,12 @@ export default function IntegratedAdminPanelDashboard() {
                   { label: 'Total Revenue', value: `₹${Number(chartAnalytics.totalRevenue || 0).toLocaleString()}`, helper: 'Saved orders', icon: '₹', className: 'xl:col-span-2 bg-emerald-50 border-emerald-100 text-emerald-700' },
                   { label: 'Total Orders', value: chartAnalytics.totalOrders, helper: `${chartAnalytics.pendingOrders} processing`, icon: '🛒', className: 'bg-white border-slate-100 text-slate-900' },
                   { label: 'Products', value: chartAnalytics.totalProducts, helper: `${chartAnalytics.totalStockUnits} units`, icon: '📦', className: 'bg-white border-slate-100 text-blue-700' },
-                  { label: 'Customers', value: customers.length, helper: `${enquiries.length} enquiries`, icon: '👥', className: 'bg-white border-slate-100 text-violet-700' },
+                  { label: 'Customers', value: visibleCustomers.length, helper: `${visibleEnquiries.length} clean enquiries`, icon: '👥', className: 'bg-white border-slate-100 text-violet-700' },
                   { label: 'Live Sales', value: (Array.isArray(saleCampaigns) ? saleCampaigns.filter((campaign) => getCampaignStatus(campaign).label === 'Live').length : 0), helper: `${saleCampaigns.length} campaigns`, icon: '🔥', className: 'bg-orange-50 border-orange-100 text-orange-700' }
                 ].map((card) => (
                   <article
                     key={card.label}
-                    className={`rounded-[1.5rem] border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg sm:rounded-3xl sm:p-5 ${card.className}`}
+                    className={`rounded-[1.5rem] border p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-xl sm:rounded-3xl sm:p-5 ${card.className}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -1610,7 +1590,7 @@ export default function IntegratedAdminPanelDashboard() {
               )}
 
               <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
                   <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-600">Performance</p>
@@ -1629,7 +1609,7 @@ export default function IntegratedAdminPanelDashboard() {
                         <p className="mt-1 text-xs font-semibold text-slate-500">Cart and order activity will appear here.</p>
                       </div>
                     ) : chartAnalytics.topProducts.map((product, index) => (
-                      <div key={`${product.title}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div key={`${product.title}-${index}`} className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
                         <div className="mb-2 flex items-center justify-between gap-4">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-black text-slate-900">{product.title}</p>
@@ -1646,7 +1626,7 @@ export default function IntegratedAdminPanelDashboard() {
                 </div>
 
                 <div className="space-y-6">
-                  <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+                  <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
                     <div className="mb-5">
                       <p className="text-[10px] font-black uppercase tracking-[0.25em] text-blue-600">Orders</p>
                       <h3 className="mt-1 text-xl font-black text-slate-950">Status Pipeline</h3>
@@ -1725,7 +1705,7 @@ export default function IntegratedAdminPanelDashboard() {
                 </div>
               </section>
 
-              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+              <section className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
                 <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Orders</p>
@@ -1791,113 +1771,83 @@ export default function IntegratedAdminPanelDashboard() {
 
           {/* 👥 TAB 4: Registered Customers */}
           {activeTab === 4 && (
-            <div className="space-y-6">
-              <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 px-6 py-6 text-white sm:px-8">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-300">Customer CRM</p>
-                      <h2 className="mt-2 text-3xl font-black tracking-tight">Registered Customers</h2>
-                      <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-300">
-                        Clean customer database with order count, lifetime spend, contact details and quick actions.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-black text-white">
-                        {customers.length} Customers
-                      </span>
-                      <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-4 py-2 text-xs font-black text-emerald-300">
-                        {orders.length} Orders Linked
-                      </span>
-                    </div>
-                  </div>
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
+              <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-600">Verified customer records</p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-950">Registered Customers ({visibleCustomers.length})</h2>
+                  {hiddenCustomerCount > 0 && (
+                    <p className="mt-1 text-xs font-bold text-amber-600">{hiddenCustomerCount} old/demo record{hiddenCustomerCount > 1 ? 's' : ''} hidden from this view.</p>
+                  )}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => fetchData(true)}
+                  disabled={isSyncing}
+                  className="rounded-full bg-slate-950 px-5 py-2.5 text-[11px] font-black uppercase tracking-wider text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:opacity-60"
+                >
+                  {isSyncing ? 'Refreshing...' : 'Refresh Data'}
+                </button>
+              </div>
+              {visibleCustomers.length === 0 ? (
+                <p className="text-sm text-slate-400 py-6 text-center">No verified customer records found yet. Old/demo rows are hidden automatically.</p>
+              ) : (
+                <div className="grid gap-4">
+                  {visibleCustomers.map(c => {
+                    const customerOrders = orders.filter((order) => {
+                      const sameMobile = String(getOrderMobile(order) || '').trim() && String(getOrderMobile(order)).trim() === String(c.mobile_number || '').trim()
+                      const sameName = String(getOrderCustomerName(order) || '').toLowerCase().trim() === String(c.full_name || '').toLowerCase().trim()
+                      return sameMobile || sameName
+                    })
+                    const customerSpend = customerOrders.reduce((sum, order) => sum + getOrderTotal(order), 0)
 
-                {customers.length === 0 ? (
-                  <div className="p-10 text-center">
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">👥</div>
-                    <p className="mt-4 text-sm font-black text-slate-900">No customers found.</p>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">Verified customer accounts will appear here automatically.</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[980px] text-left">
-                      <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                        <tr>
-                          <th className="px-5 py-4 font-black">Customer</th>
-                          <th className="px-5 py-4 font-black">Contact</th>
-                          <th className="px-5 py-4 font-black">Location</th>
-                          <th className="px-5 py-4 font-black text-center">Orders</th>
-                          <th className="px-5 py-4 font-black text-right">Lifetime Spend</th>
-                          <th className="px-5 py-4 font-black text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {customers.map(c => {
-                          const customerOrders = orders.filter((order) => {
-                            const sameMobile = String(getOrderMobile(order) || '').trim() && String(getOrderMobile(order)).trim() === String(c.mobile_number || '').trim()
-                            const sameName = String(getOrderCustomerName(order) || '').toLowerCase().trim() === String(c.full_name || '').toLowerCase().trim()
-                            return sameMobile || sameName
-                          })
-                          const customerSpend = customerOrders.reduce((sum, order) => sum + getOrderTotal(order), 0)
-                          const joinedDate = c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '—'
+                    return (
+                      <div key={c.id} className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                          <div>
+                            <p className="text-lg font-black text-slate-900">{c.full_name || 'No Name Provided'}</p>
+                            <p className="text-sm font-bold text-slate-600">📞 {c.mobile_number || '—'} | 📍 {c.address || '—'}</p>
+                            <p className="text-[10px] font-mono mt-1 text-slate-400">UUID: {c.id} | Joined: {c.created_at ? new Date(c.created_at).toLocaleString() : '—'}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-600">{customerOrders.length} Orders</span>
+                            <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-700">₹{customerSpend.toLocaleString()}</span>
+                            <button onClick={() => handleCustomerDelete(c.id)} className="px-4 py-1.5 bg-rose-100 text-rose-600 rounded-full text-[10px] font-black hover:bg-rose-600 hover:text-white transition">Remove</button>
+                          </div>
+                        </div>
 
-                          return (
-                            <tr key={c.id} className="group transition hover:bg-slate-50/90">
-                              <td className="px-5 py-4">
-                                <div className="flex items-center gap-3">
-                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-xs font-black uppercase text-white shadow-sm">
-                                    {(c.full_name || 'C').slice(0, 1)}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-black text-slate-950">{c.full_name || 'No Name Provided'}</p>
-                                    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Joined {joinedDate}</p>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-5 py-4">
-                                <p className="text-xs font-black text-slate-700">{c.mobile_number || '—'}</p>
-                                <p className="mt-0.5 text-[11px] font-semibold text-slate-400">{c.email || 'Email not added'}</p>
-                              </td>
-                              <td className="max-w-[260px] px-5 py-4">
-                                <p className="line-clamp-2 text-xs font-semibold leading-5 text-slate-500">{c.address || '—'}</p>
-                              </td>
-                              <td className="px-5 py-4 text-center">
+                        <div className="mt-4 rounded-2xl bg-white p-4">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Order History</p>
+                          {customerOrders.length === 0 ? (
+                            <p className="mt-2 text-xs font-bold text-slate-400">No orders found for this customer.</p>
+                          ) : (
+                            <div className="mt-3 space-y-2">
+                              {customerOrders.slice(0, 4).map((order) => (
                                 <button
+                                  key={order.id}
                                   type="button"
-                                  onClick={() => {
-                                    if (customerOrders.length > 0) setSelectedOrder(customerOrders[0])
-                                    setActiveTab(3)
-                                  }}
-                                  className="rounded-full bg-slate-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-700 transition hover:bg-slate-950 hover:text-white"
+                                  onClick={() => setSelectedOrder(order)}
+                                  className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-left text-xs font-bold transition hover:bg-slate-100"
                                 >
-                                  {customerOrders.length} Orders
+                                  <span>{order.id} • {order.status || 'Processing'}</span>
+                                  <span className="font-black text-emerald-600">₹{getOrderTotal(order).toLocaleString()}</span>
                                 </button>
-                              </td>
-                              <td className="px-5 py-4 text-right text-sm font-black text-emerald-600">₹{customerSpend.toLocaleString()}</td>
-                              <td className="px-5 py-4 text-right">
-                                <button
-                                  onClick={() => handleCustomerDelete(c.id)}
-                                  className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-rose-700 transition hover:-translate-y-0.5 hover:bg-rose-600 hover:text-white"
-                                >
-                                  Remove
-                                </button>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </section>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 
           {/* 🎫 TAB 5: Coupons & Offers */}
           {activeTab === 5 && (
             <div className="space-y-6">
-              <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+              <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl sm:p-8">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600">
@@ -1925,7 +1875,7 @@ export default function IntegratedAdminPanelDashboard() {
               </div>
 
               <div className="grid gap-6 lg:grid-cols-2">
-                <div className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
                   <h3 className="font-black text-slate-900 text-sm mb-4">Create System Coupon</h3>
                   <form onSubmit={handleCreateCoupon} className="space-y-3">
                     <input type="text" value={newCouponCode} onChange={(e) => setNewCouponCode(e.target.value)} placeholder="COUPON CODE (e.g. IPHONE10)" className="w-full border p-3 text-xs uppercase font-bold rounded-xl text-slate-900 outline-none focus:border-slate-900" />
@@ -1938,7 +1888,7 @@ export default function IntegratedAdminPanelDashboard() {
                   </form>
                 </div>
 
-                <div className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
                   <h3 className="font-black text-slate-900 text-sm mb-4">Coupon Codes</h3>
                   <div className="overflow-y-auto max-h-[320px] divide-y">
                     {coupons.length === 0 ? <p className="text-xs text-slate-400 py-4">No active coupon parameters saved.</p> : coupons.map((coupon) => {
@@ -2075,7 +2025,7 @@ export default function IntegratedAdminPanelDashboard() {
                   </form>
                 </div>
 
-                <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl">
                   <div className="mb-5 flex items-center justify-between gap-4">
                     <div>
                       <h3 className="text-lg font-black text-slate-900">Sale Campaigns</h3>
@@ -2099,7 +2049,7 @@ export default function IntegratedAdminPanelDashboard() {
                         const status = getCampaignStatus(campaign)
 
                         return (
-                          <article key={campaign.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <article key={campaign.id} className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
@@ -2404,104 +2354,73 @@ export default function IntegratedAdminPanelDashboard() {
 
           {/* 📩 TAB 7: Enquiry Management Logs */}
           {activeTab === 7 && (
-            <div className="space-y-6">
-              <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-200 px-6 py-6 sm:px-8">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600">Support Inbox</p>
-                      <h2 className="mt-2 text-3xl font-black text-slate-950">Enquiry Center</h2>
-                      <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-500">
-                        Inbox-style layout for customer queries, internal notes, status updates and conversion actions.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white">
-                      <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                      {enquiries.length} Total Enquiries
-                    </div>
-                  </div>
-                </div>
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
+              <h2 className="text-2xl font-black mb-2">Enquiry Management</h2>
+              <p className="text-sm text-slate-500 mb-6">Review input logs, modify resolution states and save internal records.</p>
 
-                {enquiries.length === 0 ? (
-                  <div className="p-10 text-center">
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">📩</div>
-                    <p className="mt-4 text-sm font-black text-slate-900">No enquiries yet.</p>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">Customer contact requests will appear here.</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1100px] text-left">
-                      <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                        <tr>
-                          <th className="px-5 py-4 font-black">Visitor</th>
-                          <th className="px-5 py-4 font-black">Message</th>
-                          <th className="px-5 py-4 font-black">Status</th>
-                          <th className="px-5 py-4 font-black">Admin Note</th>
-                          <th className="px-5 py-4 font-black text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {enquiries.map(e => (
-                          <tr key={e.id} className="align-top transition hover:bg-slate-50/90">
-                            <td className="px-5 py-5">
-                              <div className="flex items-start gap-3">
-                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-sm font-black text-emerald-700">
-                                  {(e.full_name || 'V').slice(0, 1)}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-black text-slate-950">{e.full_name || 'Visitor'}</p>
-                                  <p className="mt-0.5 text-xs font-bold text-slate-500">{e.mobile_number || '—'}</p>
-                                  <p className="mt-0.5 text-[10px] font-semibold text-slate-400">{e.email || 'No email'} • {e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="max-w-[340px] px-5 py-5">
-                              <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">{e.subject || 'iPhone Enquiry'}</span>
-                              <p className="mt-3 line-clamp-3 text-xs font-semibold leading-5 text-slate-600">{e.message || '—'}</p>
-                            </td>
-                            <td className="px-5 py-5">
-                              <select
-                                value={e.status || 'New'}
-                                onChange={(el) => handleEnquiryFieldChange(e.id, 'status', el.target.value)}
-                                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-700 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
-                              >
-                                <option value="New">New</option>
-                                <option value="In progress">In progress</option>
-                                <option value="Completed">Completed</option>
-                                <option value="Closed">Closed</option>
-                              </select>
-                            </td>
-                            <td className="px-5 py-5">
-                              <input
-                                type="text"
-                                value={e.admin_note || ''}
-                                onChange={(el) => handleEnquiryFieldChange(e.id, 'admin_note', el.target.value)}
-                                className="w-[240px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-                                placeholder="Add internal note..."
-                              />
-                            </td>
-                            <td className="px-5 py-5 text-right">
-                              <div className="flex flex-wrap justify-end gap-2">
-                                <button onClick={() => handleSaveEnquiry(e.id)} className="rounded-full bg-emerald-600 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white transition hover:-translate-y-0.5 hover:bg-emerald-700">Save</button>
-                                <button onClick={() => handleConvertEnquiryToCustomer(e)} className="rounded-full bg-blue-600 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white transition hover:-translate-y-0.5 hover:bg-blue-700">Customer</button>
-                                <button onClick={() => handleCreateOrderFromEnquiry(e)} className="rounded-full bg-slate-950 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white transition hover:-translate-y-0.5 hover:bg-slate-800">Order</button>
-                                <button onClick={() => handleEnquiryDelete(e.id)} className="rounded-full bg-rose-50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-rose-700 transition hover:-translate-y-0.5 hover:bg-rose-600 hover:text-white">Delete</button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </section>
+              <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-600">Clean enquiry inbox</p>
+                  {hiddenEnquiryCount > 0 && (
+                    <p className="mt-1 text-xs font-bold text-amber-600">{hiddenEnquiryCount} old/demo enquiry record{hiddenEnquiryCount > 1 ? 's' : ''} hidden from this view.</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fetchData(true)}
+                  disabled={isSyncing}
+                  className="rounded-full bg-slate-950 px-5 py-2.5 text-[11px] font-black uppercase tracking-wider text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:opacity-60"
+                >
+                  {isSyncing ? 'Refreshing...' : 'Refresh Data'}
+                </button>
+              </div>
+
+              {visibleEnquiries.length === 0 ? (
+                <p className="text-sm text-slate-400 py-6 text-center">No clean enquiries found yet. Empty/demo rows are hidden automatically.</p>
+              ) : (
+                <div className="space-y-6">
+                  {visibleEnquiries.map(e => (
+                    <div key={e.id} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200">
+                      <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
+                        <div>
+                          <span className="text-xs font-black bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full uppercase tracking-wider">{e.subject || 'iPhone Enquiry'}</span>
+                          <h3 className="text-lg font-black text-slate-900 mt-2">{e.full_name || 'Visitor'} — <span className="font-mono font-medium text-slate-600 text-base">{e.mobile_number || '—'}</span></h3>
+                          <p className="text-xs text-slate-500 font-mono mt-0.5">Email: {e.email || '—'} | Received: {e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</p>
+                          <p className="text-sm text-slate-900 font-medium italic mt-3 bg-white p-3 rounded-xl border border-slate-100">{e.message || '—'}</p>
+                        </div>
+                        <div className="flex gap-2 self-end sm:self-start">
+                          <button onClick={() => handleSaveEnquiry(e.id)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 transition font-bold text-xs">Save Changes</button>
+                          <button onClick={() => handleConvertEnquiryToCustomer(e)} className="px-4 py-2 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 transition font-bold text-xs">Convert Customer</button>
+                          <button onClick={() => handleCreateOrderFromEnquiry(e)} className="px-4 py-2 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs">Create Order</button>
+                          <button onClick={() => handleEnquiryDelete(e.id)} className="px-4 py-2 bg-rose-600 text-white rounded-xl shadow-md hover:bg-rose-700 transition font-bold text-xs">Delete</button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-200/80">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-black uppercase text-slate-400">Status Selector</label>
+                          <select value={e.status || 'New'} onChange={(el) => handleEnquiryFieldChange(e.id, 'status', el.target.value)} className="p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none bg-white text-slate-900">
+                            <option value="New">New</option>
+                            <option value="In progress">In progress</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Closed">Closed</option>
+                          </select>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-black uppercase text-slate-400">Admin Response Note</label>
+                          <input type="text" value={e.admin_note || ''} onChange={(el) => handleEnquiryFieldChange(e.id, 'admin_note', el.target.value)} className="p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none bg-white text-slate-900" placeholder="Add internal database comment..." />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {/* 📈 TAB 6: Sales Reports */}
           {activeTab === 6 && (
             <div className="space-y-6">
-              <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+              <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl sm:p-8">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600">
@@ -2542,7 +2461,7 @@ export default function IntegratedAdminPanelDashboard() {
                   ['Items Sold', salesReportStats.items.toLocaleString(), 'Units in filtered orders', 'text-blue-600'],
                   ['Cancelled', salesReportStats.cancelled.toLocaleString(), 'Cancelled in selected range', 'text-rose-600']
                 ].map(([label, value, helper, color]) => (
-                  <div key={label} className="rounded-2xl border-l-4 border-l-slate-950 border-slate-200 bg-white p-5 shadow-sm">
+                  <div key={label} className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p>
                     <p className={`mt-2 text-2xl font-black ${color}`}>{value}</p>
                     <p className="mt-1 text-xs font-bold text-slate-500">{helper}</p>
@@ -2551,7 +2470,7 @@ export default function IntegratedAdminPanelDashboard() {
               </div>
 
               <div className="grid gap-6 xl:grid-cols-2">
-                <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl">
                   <h3 className="text-lg font-black text-slate-900">Filtered orders</h3>
                   <p className="mt-1 text-xs font-semibold text-slate-500">
                     Date range: {salesReportRange === 'all' ? 'All time' : salesReportRange}
@@ -2572,7 +2491,7 @@ export default function IntegratedAdminPanelDashboard() {
                   </div>
                 </div>
 
-                <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl">
                   <h3 className="text-lg font-black text-slate-900">Stock health report</h3>
                   <p className="mt-1 text-xs font-semibold text-slate-500">
                     Products that need refill or are unavailable.
@@ -2609,8 +2528,8 @@ export default function IntegratedAdminPanelDashboard() {
             </div>
           )}
 
-        </section>
-      </div>
+
+        </div>
       </div>
 
       {selectedOrder && (
