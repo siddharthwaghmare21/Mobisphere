@@ -1433,7 +1433,7 @@ export default function IntegratedAdminPanelDashboard() {
       </section>
 
       {message && (
-        <div className="mb-5 rounded-3xl border border-slate-200 bg-white px-5 py-4 text-xs font-black text-slate-800 shadow-sm">
+        <div className="mb-5 rounded-2xl border-l-4 border-emerald-500 bg-white px-5 py-4 text-xs font-black text-slate-800 shadow-sm">
           {message}
         </div>
       )}
@@ -1558,7 +1558,7 @@ export default function IntegratedAdminPanelDashboard() {
                 ].map((card) => (
                   <article
                     key={card.label}
-                    className={`rounded-[1.5rem] border p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-xl sm:rounded-3xl sm:p-5 ${card.className}`}
+                    className={`rounded-[1.5rem] border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg sm:rounded-3xl sm:p-5 ${card.className}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -1610,7 +1610,7 @@ export default function IntegratedAdminPanelDashboard() {
               )}
 
               <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
+                <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
                   <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-600">Performance</p>
@@ -1629,7 +1629,7 @@ export default function IntegratedAdminPanelDashboard() {
                         <p className="mt-1 text-xs font-semibold text-slate-500">Cart and order activity will appear here.</p>
                       </div>
                     ) : chartAnalytics.topProducts.map((product, index) => (
-                      <div key={`${product.title}-${index}`} className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                      <div key={`${product.title}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <div className="mb-2 flex items-center justify-between gap-4">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-black text-slate-900">{product.title}</p>
@@ -1646,7 +1646,7 @@ export default function IntegratedAdminPanelDashboard() {
                 </div>
 
                 <div className="space-y-6">
-                  <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
+                  <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
                     <div className="mb-5">
                       <p className="text-[10px] font-black uppercase tracking-[0.25em] text-blue-600">Orders</p>
                       <h3 className="mt-1 text-xl font-black text-slate-950">Status Pipeline</h3>
@@ -1725,7 +1725,7 @@ export default function IntegratedAdminPanelDashboard() {
                 </div>
               </section>
 
-              <section className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
+              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
                 <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Orders</p>
@@ -1791,67 +1791,113 @@ export default function IntegratedAdminPanelDashboard() {
 
           {/* 👥 TAB 4: Registered Customers */}
           {activeTab === 4 && (
-            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
-              <h2 className="text-2xl font-black mb-6">Registered Customers ({customers.length})</h2>
-              {customers.length === 0 ? (
-                <p className="text-sm text-slate-400 py-6 text-center">No accounts found in Supabase server.</p>
-              ) : (
-                <div className="grid gap-4">
-                  {customers.map(c => {
-                    const customerOrders = orders.filter((order) => {
-                      const sameMobile = String(getOrderMobile(order) || '').trim() && String(getOrderMobile(order)).trim() === String(c.mobile_number || '').trim()
-                      const sameName = String(getOrderCustomerName(order) || '').toLowerCase().trim() === String(c.full_name || '').toLowerCase().trim()
-                      return sameMobile || sameName
-                    })
-                    const customerSpend = customerOrders.reduce((sum, order) => sum + getOrderTotal(order), 0)
-
-                    return (
-                      <div key={c.id} className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                          <div>
-                            <p className="text-lg font-black text-slate-900">{c.full_name || 'No Name Provided'}</p>
-                            <p className="text-sm font-bold text-slate-600">📞 {c.mobile_number || '—'} | 📍 {c.address || '—'}</p>
-                            <p className="text-[10px] font-mono mt-1 text-slate-400">UUID: {c.id} | Joined: {c.created_at ? new Date(c.created_at).toLocaleString() : '—'}</p>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-600">{customerOrders.length} Orders</span>
-                            <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-700">₹{customerSpend.toLocaleString()}</span>
-                            <button onClick={() => handleCustomerDelete(c.id)} className="px-4 py-1.5 bg-rose-100 text-rose-600 rounded-full text-[10px] font-black hover:bg-rose-600 hover:text-white transition">Remove</button>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 rounded-2xl bg-white p-4">
-                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Order History</p>
-                          {customerOrders.length === 0 ? (
-                            <p className="mt-2 text-xs font-bold text-slate-400">No orders found for this customer.</p>
-                          ) : (
-                            <div className="mt-3 space-y-2">
-                              {customerOrders.slice(0, 4).map((order) => (
-                                <button
-                                  key={order.id}
-                                  type="button"
-                                  onClick={() => setSelectedOrder(order)}
-                                  className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-left text-xs font-bold transition hover:bg-slate-100"
-                                >
-                                  <span>{order.id} • {order.status || 'Processing'}</span>
-                                  <span className="font-black text-emerald-600">₹{getOrderTotal(order).toLocaleString()}</span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
+            <div className="space-y-6">
+              <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+                <div className="border-b border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 px-6 py-6 text-white sm:px-8">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-300">Customer CRM</p>
+                      <h2 className="mt-2 text-3xl font-black tracking-tight">Registered Customers</h2>
+                      <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-300">
+                        Clean customer database with order count, lifetime spend, contact details and quick actions.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-black text-white">
+                        {customers.length} Customers
+                      </span>
+                      <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-4 py-2 text-xs font-black text-emerald-300">
+                        {orders.length} Orders Linked
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              )}
+
+                {customers.length === 0 ? (
+                  <div className="p-10 text-center">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">👥</div>
+                    <p className="mt-4 text-sm font-black text-slate-900">No customers found.</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">Verified customer accounts will appear here automatically.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[980px] text-left">
+                      <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.18em] text-slate-400">
+                        <tr>
+                          <th className="px-5 py-4 font-black">Customer</th>
+                          <th className="px-5 py-4 font-black">Contact</th>
+                          <th className="px-5 py-4 font-black">Location</th>
+                          <th className="px-5 py-4 font-black text-center">Orders</th>
+                          <th className="px-5 py-4 font-black text-right">Lifetime Spend</th>
+                          <th className="px-5 py-4 font-black text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {customers.map(c => {
+                          const customerOrders = orders.filter((order) => {
+                            const sameMobile = String(getOrderMobile(order) || '').trim() && String(getOrderMobile(order)).trim() === String(c.mobile_number || '').trim()
+                            const sameName = String(getOrderCustomerName(order) || '').toLowerCase().trim() === String(c.full_name || '').toLowerCase().trim()
+                            return sameMobile || sameName
+                          })
+                          const customerSpend = customerOrders.reduce((sum, order) => sum + getOrderTotal(order), 0)
+                          const joinedDate = c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '—'
+
+                          return (
+                            <tr key={c.id} className="group transition hover:bg-slate-50/90">
+                              <td className="px-5 py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-xs font-black uppercase text-white shadow-sm">
+                                    {(c.full_name || 'C').slice(0, 1)}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-black text-slate-950">{c.full_name || 'No Name Provided'}</p>
+                                    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Joined {joinedDate}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-5 py-4">
+                                <p className="text-xs font-black text-slate-700">{c.mobile_number || '—'}</p>
+                                <p className="mt-0.5 text-[11px] font-semibold text-slate-400">{c.email || 'Email not added'}</p>
+                              </td>
+                              <td className="max-w-[260px] px-5 py-4">
+                                <p className="line-clamp-2 text-xs font-semibold leading-5 text-slate-500">{c.address || '—'}</p>
+                              </td>
+                              <td className="px-5 py-4 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (customerOrders.length > 0) setSelectedOrder(customerOrders[0])
+                                    setActiveTab(3)
+                                  }}
+                                  className="rounded-full bg-slate-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-700 transition hover:bg-slate-950 hover:text-white"
+                                >
+                                  {customerOrders.length} Orders
+                                </button>
+                              </td>
+                              <td className="px-5 py-4 text-right text-sm font-black text-emerald-600">₹{customerSpend.toLocaleString()}</td>
+                              <td className="px-5 py-4 text-right">
+                                <button
+                                  onClick={() => handleCustomerDelete(c.id)}
+                                  className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-rose-700 transition hover:-translate-y-0.5 hover:bg-rose-600 hover:text-white"
+                                >
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
             </div>
           )}
 
           {/* 🎫 TAB 5: Coupons & Offers */}
           {activeTab === 5 && (
             <div className="space-y-6">
-              <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl sm:p-8">
+              <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600">
@@ -1879,7 +1925,7 @@ export default function IntegratedAdminPanelDashboard() {
               </div>
 
               <div className="grid gap-6 lg:grid-cols-2">
-                <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+                <div className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
                   <h3 className="font-black text-slate-900 text-sm mb-4">Create System Coupon</h3>
                   <form onSubmit={handleCreateCoupon} className="space-y-3">
                     <input type="text" value={newCouponCode} onChange={(e) => setNewCouponCode(e.target.value)} placeholder="COUPON CODE (e.g. IPHONE10)" className="w-full border p-3 text-xs uppercase font-bold rounded-xl text-slate-900 outline-none focus:border-slate-900" />
@@ -1892,7 +1938,7 @@ export default function IntegratedAdminPanelDashboard() {
                   </form>
                 </div>
 
-                <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+                <div className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
                   <h3 className="font-black text-slate-900 text-sm mb-4">Coupon Codes</h3>
                   <div className="overflow-y-auto max-h-[320px] divide-y">
                     {coupons.length === 0 ? <p className="text-xs text-slate-400 py-4">No active coupon parameters saved.</p> : coupons.map((coupon) => {
@@ -2029,7 +2075,7 @@ export default function IntegratedAdminPanelDashboard() {
                   </form>
                 </div>
 
-                <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl">
+                <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
                   <div className="mb-5 flex items-center justify-between gap-4">
                     <div>
                       <h3 className="text-lg font-black text-slate-900">Sale Campaigns</h3>
@@ -2053,7 +2099,7 @@ export default function IntegratedAdminPanelDashboard() {
                         const status = getCampaignStatus(campaign)
 
                         return (
-                          <article key={campaign.id} className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                          <article key={campaign.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
@@ -2358,56 +2404,104 @@ export default function IntegratedAdminPanelDashboard() {
 
           {/* 📩 TAB 7: Enquiry Management Logs */}
           {activeTab === 7 && (
-            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl">
-              <h2 className="text-2xl font-black mb-2">Enquiry Management</h2>
-              <p className="text-sm text-slate-500 mb-6">Review input logs, modify resolution states and save internal records.</p>
-
-              {enquiries.length === 0 ? (
-                <p className="text-sm text-slate-400 py-6 text-center">No user enquiries tracked inside system logs.</p>
-              ) : (
-                <div className="space-y-6">
-                  {enquiries.map(e => (
-                    <div key={e.id} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200">
-                      <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
-                        <div>
-                          <span className="text-xs font-black bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full uppercase tracking-wider">{e.subject || 'iPhone Enquiry'}</span>
-                          <h3 className="text-lg font-black text-slate-900 mt-2">{e.full_name || 'Visitor'} — <span className="font-mono font-medium text-slate-600 text-base">{e.mobile_number || '—'}</span></h3>
-                          <p className="text-xs text-slate-500 font-mono mt-0.5">Email: {e.email || '—'} | Received: {e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</p>
-                          <p className="text-sm text-slate-900 font-medium italic mt-3 bg-white p-3 rounded-xl border border-slate-100">{e.message || '—'}</p>
-                        </div>
-                        <div className="flex gap-2 self-end sm:self-start">
-                          <button onClick={() => handleSaveEnquiry(e.id)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 transition font-bold text-xs">Save Changes</button>
-                          <button onClick={() => handleConvertEnquiryToCustomer(e)} className="px-4 py-2 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 transition font-bold text-xs">Convert Customer</button>
-                          <button onClick={() => handleCreateOrderFromEnquiry(e)} className="px-4 py-2 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs">Create Order</button>
-                          <button onClick={() => handleEnquiryDelete(e.id)} className="px-4 py-2 bg-rose-600 text-white rounded-xl shadow-md hover:bg-rose-700 transition font-bold text-xs">Delete</button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-200/80">
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[10px] font-black uppercase text-slate-400">Status Selector</label>
-                          <select value={e.status || 'New'} onChange={(el) => handleEnquiryFieldChange(e.id, 'status', el.target.value)} className="p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none bg-white text-slate-900">
-                            <option value="New">New</option>
-                            <option value="In progress">In progress</option>
-                            <option value="Completed">Completed</option>
-                            <option value="Closed">Closed</option>
-                          </select>
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[10px] font-black uppercase text-slate-400">Admin Response Note</label>
-                          <input type="text" value={e.admin_note || ''} onChange={(el) => handleEnquiryFieldChange(e.id, 'admin_note', el.target.value)} className="p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none bg-white text-slate-900" placeholder="Add internal database comment..." />
-                        </div>
-                      </div>
+            <div className="space-y-6">
+              <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+                <div className="border-b border-slate-200 px-6 py-6 sm:px-8">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600">Support Inbox</p>
+                      <h2 className="mt-2 text-3xl font-black text-slate-950">Enquiry Center</h2>
+                      <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-500">
+                        Inbox-style layout for customer queries, internal notes, status updates and conversion actions.
+                      </p>
                     </div>
-                  ))}
+                    <div className="flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                      {enquiries.length} Total Enquiries
+                    </div>
+                  </div>
                 </div>
-              )}
+
+                {enquiries.length === 0 ? (
+                  <div className="p-10 text-center">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">📩</div>
+                    <p className="mt-4 text-sm font-black text-slate-900">No enquiries yet.</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">Customer contact requests will appear here.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[1100px] text-left">
+                      <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.18em] text-slate-400">
+                        <tr>
+                          <th className="px-5 py-4 font-black">Visitor</th>
+                          <th className="px-5 py-4 font-black">Message</th>
+                          <th className="px-5 py-4 font-black">Status</th>
+                          <th className="px-5 py-4 font-black">Admin Note</th>
+                          <th className="px-5 py-4 font-black text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {enquiries.map(e => (
+                          <tr key={e.id} className="align-top transition hover:bg-slate-50/90">
+                            <td className="px-5 py-5">
+                              <div className="flex items-start gap-3">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-sm font-black text-emerald-700">
+                                  {(e.full_name || 'V').slice(0, 1)}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-black text-slate-950">{e.full_name || 'Visitor'}</p>
+                                  <p className="mt-0.5 text-xs font-bold text-slate-500">{e.mobile_number || '—'}</p>
+                                  <p className="mt-0.5 text-[10px] font-semibold text-slate-400">{e.email || 'No email'} • {e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="max-w-[340px] px-5 py-5">
+                              <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">{e.subject || 'iPhone Enquiry'}</span>
+                              <p className="mt-3 line-clamp-3 text-xs font-semibold leading-5 text-slate-600">{e.message || '—'}</p>
+                            </td>
+                            <td className="px-5 py-5">
+                              <select
+                                value={e.status || 'New'}
+                                onChange={(el) => handleEnquiryFieldChange(e.id, 'status', el.target.value)}
+                                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-700 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                              >
+                                <option value="New">New</option>
+                                <option value="In progress">In progress</option>
+                                <option value="Completed">Completed</option>
+                                <option value="Closed">Closed</option>
+                              </select>
+                            </td>
+                            <td className="px-5 py-5">
+                              <input
+                                type="text"
+                                value={e.admin_note || ''}
+                                onChange={(el) => handleEnquiryFieldChange(e.id, 'admin_note', el.target.value)}
+                                className="w-[240px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                                placeholder="Add internal note..."
+                              />
+                            </td>
+                            <td className="px-5 py-5 text-right">
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <button onClick={() => handleSaveEnquiry(e.id)} className="rounded-full bg-emerald-600 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white transition hover:-translate-y-0.5 hover:bg-emerald-700">Save</button>
+                                <button onClick={() => handleConvertEnquiryToCustomer(e)} className="rounded-full bg-blue-600 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white transition hover:-translate-y-0.5 hover:bg-blue-700">Customer</button>
+                                <button onClick={() => handleCreateOrderFromEnquiry(e)} className="rounded-full bg-slate-950 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white transition hover:-translate-y-0.5 hover:bg-slate-800">Order</button>
+                                <button onClick={() => handleEnquiryDelete(e.id)} className="rounded-full bg-rose-50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-rose-700 transition hover:-translate-y-0.5 hover:bg-rose-600 hover:text-white">Delete</button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
             </div>
           )}
 
           {/* 📈 TAB 6: Sales Reports */}
           {activeTab === 6 && (
             <div className="space-y-6">
-              <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl sm:p-8">
+              <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600">
@@ -2448,7 +2542,7 @@ export default function IntegratedAdminPanelDashboard() {
                   ['Items Sold', salesReportStats.items.toLocaleString(), 'Units in filtered orders', 'text-blue-600'],
                   ['Cancelled', salesReportStats.cancelled.toLocaleString(), 'Cancelled in selected range', 'text-rose-600']
                 ].map(([label, value, helper, color]) => (
-                  <div key={label} className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+                  <div key={label} className="rounded-2xl border-l-4 border-l-slate-950 border-slate-200 bg-white p-5 shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p>
                     <p className={`mt-2 text-2xl font-black ${color}`}>{value}</p>
                     <p className="mt-1 text-xs font-bold text-slate-500">{helper}</p>
@@ -2457,7 +2551,7 @@ export default function IntegratedAdminPanelDashboard() {
               </div>
 
               <div className="grid gap-6 xl:grid-cols-2">
-                <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl">
+                <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
                   <h3 className="text-lg font-black text-slate-900">Filtered orders</h3>
                   <p className="mt-1 text-xs font-semibold text-slate-500">
                     Date range: {salesReportRange === 'all' ? 'All time' : salesReportRange}
@@ -2478,7 +2572,7 @@ export default function IntegratedAdminPanelDashboard() {
                   </div>
                 </div>
 
-                <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl">
+                <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
                   <h3 className="text-lg font-black text-slate-900">Stock health report</h3>
                   <p className="mt-1 text-xs font-semibold text-slate-500">
                     Products that need refill or are unavailable.
