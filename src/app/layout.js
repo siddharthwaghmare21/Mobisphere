@@ -3,6 +3,7 @@ import "./globals.css";
 import Header from "@/app/components/common/Header";
 import Footer from "@/app/components/common/Footer";
 import ClientProviders from "@/app/components/common/ClientProviders";
+import GoToTopButton from "@/app/components/common/GoToTopButton";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -19,6 +20,7 @@ export default function RootLayout({ children }) {
           <Header />
           <main className="flex-1 pt-24">{children}</main>
           <Footer />
+          <GoToTopButton />
         </ClientProviders>
       </body>
     </html>
