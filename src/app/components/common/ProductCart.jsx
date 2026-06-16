@@ -109,94 +109,96 @@ export const productData = {
 }
 
 export default function ProductCart({ productId, image, alt, title, description, price, onBuyNow, onAdded }) {
-    const router = useRouter()
-    const product = productId ? productData[productId] : null
-    const [showSkeleton, setShowSkeleton] = React.useState(true)
+  const router = useRouter()
+  const product = productId ? productData[productId] : null
+  const [showSkeleton, setShowSkeleton] = React.useState(true)
 
-    React.useEffect(() => {
-        const t = window.setTimeout(() => setShowSkeleton(false), 350)
-        return () => window.clearTimeout(t)
-    }, [])
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setShowSkeleton(false), 350)
+    return () => window.clearTimeout(timer)
+  }, [])
 
-    const cardImage = image || product?.image || "/images/IPhone 16 Pro Max.png"
-    const cardAlt = alt || product?.alt || "Product image"
-    const cardTitle = title || product?.title || "Featured product"
-    const cardDescription = description || product?.description || "Discover our premium mobile products."
-    const cardPrice = price || product?.price || 50000
+  const cardImage = image || product?.image || '/images/IPhone 16 Pro Max.png'
+  const cardAlt = alt || product?.alt || 'Product image'
+  const cardTitle = title || product?.title || 'Featured product'
+  const cardDescription = description || product?.description || 'Discover our premium mobile products.'
+  const cardPrice = Number(price || product?.price || 50000)
 
-    const handleAddToCart = () => {
-        const currentCart = JSON.parse(localStorage.getItem('mobisphereCart') || '[]')
-        currentCart.push({
-            cartItemId: Date.now().toString() + Math.random().toString(36).substring(2, 9),
-            productId: productId || null,
-            title: cardTitle,
-            image: cardImage,
-            description: cardDescription,
-            price: cardPrice,
-            quantity: 1
-        })
-        localStorage.setItem('mobisphereCart', JSON.stringify(currentCart))
-        alert(`${cardTitle} has been added to your cart!`)
-    }
+  const handleAddToCart = () => {
+    const currentCart = JSON.parse(localStorage.getItem('mobisphereCart') || '[]')
+    currentCart.push({
+      cartItemId: Date.now().toString() + Math.random().toString(36).substring(2, 9),
+      productId: productId || null,
+      title: cardTitle,
+      image: cardImage,
+      description: cardDescription,
+      price: cardPrice,
+      quantity: 1,
+    })
+    localStorage.setItem('mobisphereCart', JSON.stringify(currentCart))
+    alert(`${cardTitle} has been added to your cart!`)
+  }
 
-    const handleNavigateToDetail = () => {
-        if (!productId) return
-        router.push(`/product/${productId}`)
-    }
+  const handleNavigateToDetail = () => {
+    if (!productId) return
+    router.push(`/product/${productId}`)
+  }
 
-    return (
-        <figure
-            onClick={handleNavigateToDetail}
-            role="link"
-            tabIndex={0}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') handleNavigateToDetail()
+  return (
+    <article
+      onClick={handleNavigateToDetail}
+      role="link"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') handleNavigateToDetail()
+      }}
+      className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-[2rem] border border-slate-100 bg-white shadow-sm transition hover:-translate-y-1.5 hover:shadow-2xl"
+    >
+      <div className="relative bg-gradient-to-br from-slate-100 to-white p-4">
+        <span className="absolute left-4 top-4 z-10 rounded-full bg-slate-950 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white">
+          Mobisphere
+        </span>
+        <div className="overflow-hidden rounded-[1.6rem] bg-white p-5 shadow-inner">
+          {showSkeleton ? (
+            <div className="h-56 w-full animate-pulse rounded-3xl bg-slate-100" />
+          ) : (
+            <img src={cardImage} alt={cardAlt} className="h-56 w-full object-contain transition duration-500 group-hover:scale-105" />
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col p-5">
+        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-600">Featured device</p>
+        <h3 className="mt-2 text-xl font-black tracking-tight text-slate-950">{cardTitle}</h3>
+        <p className="mt-2 line-clamp-2 text-sm font-semibold leading-6 text-slate-500">{cardDescription}</p>
+        <p className="mt-5 text-2xl font-black text-slate-950">₹{cardPrice.toLocaleString()}</p>
+
+        <div className="mt-auto grid grid-cols-2 gap-3 pt-5">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleAddToCart()
+              if (typeof onAdded === 'function') onAdded()
             }}
-            className="cursor-pointer flex h-full flex-col justify-between rounded-xl bg-white p-3 shadow-lg transition hover:-translate-y-1 hover:shadow-2xl sm:rounded-[1.75rem] sm:p-5"
-        >
-            <div className="mb-2 overflow-hidden rounded-xl bg-slate-100 sm:mb-4 sm:rounded-3xl">
-                <img
-                    src={cardImage}
-                    alt={cardAlt}
-                    className="w-full object-cover min-h-[100px] sm:min-h-[160px] md:min-h-[200px]"
-                />
-            </div>
-            <div>
-                <h3 className="mb-1 text-sm font-semibold text-slate-950 line-clamp-1 sm:mb-2 sm:text-xl sm:line-clamp-none">{cardTitle}</h3>
-                <p className="mb-2 text-[10px] leading-4 text-slate-600 line-clamp-2 sm:mb-4 sm:text-sm sm:leading-6 sm:line-clamp-none">{cardDescription}</p>
-                <p className="mb-2 text-sm font-bold text-slate-900 sm:text-lg">₹{cardPrice.toLocaleString()}</p>
-                <p className="text-xs text-slate-500">Tap for details</p>
-            </div>
-            <div className="mt-2 flex flex-col gap-1.5 sm:mt-4 sm:flex-row sm:justify-between sm:gap-3">
-                <button
-                    type="button"
-                    onClick={(e) => {
-                        e.stopPropagation() // कार्डची डिटेल लिंक ओपन होण्यापासून रोखले
-                        handleAddToCart()
-                        onAdded?.()
-                    }}
-                    className="inline-flex w-full items-center justify-center rounded-full bg-slate-950 px-2 py-1.5 text-[10px] font-semibold text-white transition hover:bg-slate-800 sm:w-auto sm:px-4 sm:py-2 sm:text-sm"
-                >
-                    Add to cart
-                </button>
-                <button
-                    type="button"
-                    onClick={(e) => {
-                        e.stopPropagation() // कार्डची डिटेल लिंक ओपन होण्यापासून रोखले
-                        e.preventDefault()
-                        if (onBuyNow) {
-                            onBuyNow()
-                            return
-                        }
-                        if (productId) {
-                            router.push(`/payment?productId=${productId}`)
-                        }
-                    }}
-                    className="inline-flex w-full items-center justify-center rounded-full border border-emerald-600 bg-emerald-600 px-2 py-1.5 text-[10px] font-semibold text-slate-950 transition hover:bg-emerald-500 sm:w-auto sm:px-4 sm:py-2 sm:text-sm"
-                >
-                    Buy product
-                </button>
-            </div>
-        </figure>
-    )
+            className="rounded-full bg-slate-950 px-4 py-3 text-xs font-black text-white transition hover:bg-slate-800"
+          >
+            Add cart
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              if (typeof onBuyNow === 'function') onBuyNow()
+              else if (productId) router.push(`/payment?productId=${productId}`)
+              else router.push('/product')
+            }}
+            className="rounded-full bg-emerald-400 px-4 py-3 text-xs font-black text-slate-950 transition hover:bg-emerald-300"
+          >
+            Buy now
+          </button>
+        </div>
+      </div>
+    </article>
+  )
 }

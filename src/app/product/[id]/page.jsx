@@ -1,382 +1,41 @@
 "use client"
 
-import React, { useEffect, useMemo, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
-import { useProductContext } from "@/app/context/ProductContext"
-import ProductDisplayCard from "@/app/components/product/ProductDisplayCard"
-
-const SALE_CAMPAIGN_STORAGE_KEY = "mobisphereSaleCampaigns"
+import React, { useMemo, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import ProductCart from '@/app/components/common/ProductCart'
+import { useProductContext } from '@/app/context/ProductContext'
 
 function formatINR(value) {
   const n = Number(value)
-  if (!Number.isFinite(n)) return "—"
+  if (!Number.isFinite(n)) return '—'
   return `₹${n.toLocaleString()}`
 }
 
-function readJson(key, fallback) {
-  if (typeof window === "undefined") return fallback
-
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key) || "null")
-    return parsed ?? fallback
-  } catch {
-    return fallback
-  }
-}
-
-function getStockQuantity(product) {
-  const value =
-    product?.stockQty ??
-    product?.stockQuantity ??
-    product?.stock ??
-    product?.quantity ??
-    0
-
-  const stock = Number(value)
-  return Number.isFinite(stock) ? Math.max(stock, 0) : 0
-}
-
-function getMinimumStockAlert(product) {
-  const value =
-    product?.minStockAlert ??
-    product?.minimumStockAlert ??
-    product?.lowStockLimit ??
-    3
-
-  const minStock = Number(value)
-  return Number.isFinite(minStock) ? Math.max(minStock, 1) : 3
-}
-
-function getStockStatus(product) {
-  const stock = getStockQuantity(product)
-  const minStock = getMinimumStockAlert(product)
-
-  if (stock <= 0) {
-    return {
-      type: "out",
-      label: "Out of Stock",
-      helper: "Currently unavailable",
-      className: "border-rose-200 bg-rose-50 text-rose-700",
-    }
-  }
-
-  if (stock <= minStock) {
-    return {
-      type: "low",
-      label: "Low Stock",
-      helper: `${stock} units left`,
-      className: "border-amber-200 bg-amber-50 text-amber-700",
-    }
-  }
-
-  return {
-    type: "in",
-    label: "In Stock",
-    helper: `${stock} units available`,
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  }
-}
-
-function normalizeCampaign(campaign) {
-  if (!campaign) return null
-
-  return {
-    id: campaign.id || `SALE-${Date.now()}`,
-    title: campaign.title || campaign.name || campaign.offerTitle || "Festival Sale",
-    discountType:
-      campaign.discountType ||
-      campaign.discount_type ||
-      campaign.type ||
-      "percent",
-    discountValue:
-      campaign.discountValue ??
-      campaign.discount_value ??
-      campaign.discount ??
-      campaign.discountPercent ??
-      0,
-    scope:
-      campaign.scope ||
-      campaign.applyOn ||
-      campaign.targetType ||
-      campaign.offerScope ||
-      "all",
-    brand: campaign.brand || campaign.targetBrand || campaign.selectedBrand || "",
-    productId:
-      campaign.productId ||
-      campaign.product_id ||
-      campaign.targetProductId ||
-      campaign.selectedProductId ||
-      "",
-    productTitle: campaign.productTitle || campaign.product_title || "",
-    startDate:
-      campaign.startDate ||
-      campaign.start_date ||
-      campaign.startsAt ||
-      campaign.fromDate ||
-      "",
-    endDate:
-      campaign.endDate ||
-      campaign.end_date ||
-      campaign.expiresAt ||
-      campaign.expiryDate ||
-      campaign.toDate ||
-      "",
-    active: campaign.active !== false,
-    createdAt: campaign.createdAt || campaign.created_at || "",
-  }
-}
-
-function getCampaignStartDate(campaign) {
-  return campaign?.startDate || campaign?.startsAt || campaign?.fromDate || ""
-}
-
-function getCampaignEndDate(campaign) {
-  return campaign?.endDate || campaign?.expiresAt || campaign?.expiryDate || campaign?.toDate || ""
-}
-
-function isCampaignDateActive(campaign) {
-  const now = new Date()
-  const startDate = getCampaignStartDate(campaign)
-  const endDate = getCampaignEndDate(campaign)
-
-  if (startDate) {
-    const start = new Date(startDate)
-    start.setHours(0, 0, 0, 0)
-
-    if (!Number.isNaN(start.getTime()) && now < start) {
-      return false
-    }
-  }
-
-  if (endDate) {
-    const end = new Date(endDate)
-    end.setHours(23, 59, 59, 999)
-
-    if (!Number.isNaN(end.getTime()) && now > end) {
-      return false
-    }
-  }
-
-  return true
-}
-
-function campaignMatchesProduct(campaign, product) {
-  const applyOn = String(
-    campaign?.applyOn ||
-      campaign?.targetType ||
-      campaign?.scope ||
-      campaign?.offerScope ||
-      "all"
-  ).toLowerCase()
-
-  if (applyOn === "all" || applyOn === "all-products" || applyOn === "allproducts") {
-    return true
-  }
-
-  if (applyOn === "brand" || applyOn === "selected-brand" || applyOn === "selectedbrand") {
-    const campaignBrand = String(
-      campaign?.brand ||
-        campaign?.targetBrand ||
-        campaign?.selectedBrand ||
-        ""
-    )
-      .toLowerCase()
-      .trim()
-
-    const productBrand = String(product?.brand || "Other Models")
-      .toLowerCase()
-      .trim()
-
-    return campaignBrand && campaignBrand === productBrand
-  }
-
-  if (applyOn === "product" || applyOn === "selected-product" || applyOn === "selectedproduct") {
-    const campaignProductId = String(
-      campaign?.productId ||
-        campaign?.targetProductId ||
-        campaign?.selectedProductId ||
-        ""
-    ).trim()
-
-    return campaignProductId && campaignProductId === String(product?.id)
-  }
-
-  return false
-}
-
-function calculateCampaignPrice(product, campaign) {
-  const originalPrice = Number(product?.price) || 0
-  const discountValue = Number(
-    campaign?.discountValue ??
-      campaign?.discount ??
-      campaign?.discountPercent ??
-      0
-  )
-
-  if (originalPrice <= 0 || discountValue <= 0) {
-    return null
-  }
-
-  const discountType = String(
-    campaign?.discountType ||
-      campaign?.type ||
-      "percent"
-  ).toLowerCase()
-
-  let discountAmount = 0
-
-  if (
-    discountType === "percentage" ||
-    discountType === "percent" ||
-    discountType === "%"
-  ) {
-    discountAmount = Math.round((originalPrice * discountValue) / 100)
-  } else {
-    discountAmount = Math.round(discountValue)
-  }
-
-  const salePrice = Math.max(originalPrice - discountAmount, 0)
-
-  if (salePrice >= originalPrice) {
-    return null
-  }
-
-  return {
-    campaignId: campaign?.id || "",
-    title:
-      campaign?.title ||
-      campaign?.name ||
-      campaign?.offerTitle ||
-      "Festival Sale",
-    originalPrice,
-    salePrice,
-    discountAmount,
-    discountValue,
-    discountType,
-    discountLabel:
-      discountType === "percentage" || discountType === "percent" || discountType === "%"
-        ? `${discountValue}% OFF`
-        : `₹${discountAmount.toLocaleString()} OFF`,
-    endsAt: getCampaignEndDate(campaign),
-  }
-}
-
-function getBestSaleForProduct(product, campaigns) {
-  if (!product || !Array.isArray(campaigns) || campaigns.length === 0) {
-    return null
-  }
-
-  const validSales = campaigns
-    .filter((campaign) => campaign?.active !== false)
-    .filter((campaign) => isCampaignDateActive(campaign))
-    .filter((campaign) => campaignMatchesProduct(campaign, product))
-    .map((campaign) => calculateCampaignPrice(product, campaign))
-    .filter(Boolean)
-    .sort((a, b) => b.discountAmount - a.discountAmount)
-
-  return validSales[0] || null
-}
-
-function addProductToCart(product, saleInfo) {
-  if (typeof window === "undefined" || !product) return false
-
-  const stock = getStockQuantity(product)
-
-  if (stock <= 0) {
-    alert("This product is currently out of stock.")
-    return false
-  }
-
-  let currentCart = []
-
-  try {
-    const storedCart = JSON.parse(localStorage.getItem("mobisphereCart") || "[]")
-    currentCart = Array.isArray(storedCart) ? storedCart : []
-  } catch {
-    currentCart = []
-  }
-
-  const originalPrice = Number(product.price) || 0
-  const finalPrice = saleInfo?.salePrice ?? originalPrice
-
+function addProductToCart(product) {
+  const currentCart = JSON.parse(localStorage.getItem('mobisphereCart') || '[]')
   currentCart.push({
-    cartItemId: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    cartItemId: Date.now().toString() + Math.random().toString(36).slice(2, 9),
     productId: product.id,
     title: product.title,
-    brand: product.brand || "Mobisphere",
-    image: product.image || "/images/IPhone 16 Pro Max.png",
-    description: product.description || "",
-    price: Number(finalPrice) || 0,
-    originalPrice,
-    salePrice: saleInfo?.salePrice || null,
-    saleDiscountAmount: saleInfo?.discountAmount || 0,
-    saleDiscountLabel: saleInfo?.discountLabel || "",
-    saleCampaignId: saleInfo?.campaignId || "",
-    saleCampaignTitle: saleInfo?.title || "",
-    saleCampaignEndDate: saleInfo?.endsAt || "",
+    image: product.image,
+    description: product.description,
+    price: product.price,
     quantity: 1,
-    stockQty: stock,
-    minStockAlert: getMinimumStockAlert(product),
   })
-
-  localStorage.setItem("mobisphereCart", JSON.stringify(currentCart))
-  return true
+  localStorage.setItem('mobisphereCart', JSON.stringify(currentCart))
 }
 
 export default function ProductDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { products, hydrated } = useProductContext()
-
   const productId = params?.id
-  const [cartMessage, setCartMessage] = useState("")
-  const [saleCampaigns, setSaleCampaigns] = useState([])
+  const [cartMessage, setCartMessage] = useState('')
 
-  useEffect(() => {
-    let isMounted = true
-
-    async function fetchSaleCampaigns() {
-      const fallbackCampaigns = readJson(SALE_CAMPAIGN_STORAGE_KEY, [])
-
-      try {
-        const { data, error } = await supabase
-          .from("mobisphere_sale_campaigns")
-          .select("*")
-          .order("created_at", { ascending: false })
-
-        if (error) throw error
-
-        const mappedCampaigns = Array.isArray(data)
-          ? data.map(normalizeCampaign).filter(Boolean)
-          : []
-
-        if (isMounted) {
-          setSaleCampaigns(mappedCampaigns.length > 0 ? mappedCampaigns : fallbackCampaigns)
-        }
-      } catch (error) {
-        console.error("Sale campaign fetch error:", error)
-        if (isMounted) {
-          setSaleCampaigns(Array.isArray(fallbackCampaigns) ? fallbackCampaigns : [])
-        }
-      }
-    }
-
-    fetchSaleCampaigns()
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
-  const product = useMemo(() => {
-    if (!Array.isArray(products)) return null
-    return products.find((item) => String(item.id) === String(productId)) || null
-  }, [products, productId])
+  const product = useMemo(() => products.find((item) => String(item.id) === String(productId)) || null, [products, productId])
 
   const specs = useMemo(() => {
     const s = product?.specs || {}
-
     return {
       RAM: s.RAM,
       Storage: s.Storage,
@@ -389,87 +48,25 @@ export default function ProductDetailPage() {
     }
   }, [product])
 
-  const recommendedProducts = useMemo(() => {
-    if (!Array.isArray(products)) return []
+  const recommendedProducts = useMemo(() => products.filter((item) => String(item.id) !== String(productId)).slice(0, 3), [products, productId])
 
-    return products
-      .filter((item) => String(item.id) !== String(productId))
-      .slice(0, 4)
-  }, [products, productId])
-
-  const saleInfo = useMemo(() => {
-    return getBestSaleForProduct(product, saleCampaigns)
-  }, [product, saleCampaigns])
-
-  const stockQuantity = getStockQuantity(product)
-  const minimumStockAlert = getMinimumStockAlert(product)
-  const stockStatus = getStockStatus(product)
-  const isOutOfStock = stockStatus.type === "out"
-  const originalPrice = Number(product?.price) || 0
-  const finalPrice = saleInfo?.salePrice ?? originalPrice
-  const hasSale = Boolean(saleInfo) && !isOutOfStock
-
-  const handleAddToCart = () => {
+  const addToCart = () => {
     if (!product) return
-
-    if (isOutOfStock) {
-      alert("This product is currently out of stock.")
-      return
-    }
-
-    const saved = addProductToCart(product, saleInfo)
-
-    if (!saved) return
-
+    addProductToCart(product)
     setCartMessage(`${product.title} added to cart!`)
-
-    window.setTimeout(() => {
-      setCartMessage("")
-    }, 1500)
-  }
-
-  const handleBuyNow = () => {
-    if (!product) return
-
-    if (isOutOfStock) {
-      alert("This product is currently out of stock.")
-      return
-    }
-
-    router.push(`/payment?productId=${product.id}`)
+    window.setTimeout(() => setCartMessage(''), 1800)
   }
 
   if (!hydrated) {
-    return (
-      <main className="mx-auto max-w-5xl px-4 py-20 text-center">
-        <div className="rounded-[2rem] border border-slate-100 bg-white p-10 shadow-xl">
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-500" />
-
-          <p className="text-sm font-black uppercase tracking-[0.25em] text-slate-500">
-            Loading Product
-          </p>
-        </div>
-      </main>
-    )
+    return <main className="px-4 py-24 text-center font-black text-slate-500">Loading product...</main>
   }
 
   if (!product) {
     return (
-      <main className="mx-auto max-w-5xl px-4 py-10 pt-28 sm:px-6 lg:px-8">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
-          <h1 className="text-2xl font-black text-slate-950">
-            Product not found
-          </h1>
-
-          <p className="mt-2 text-sm font-bold text-slate-500">
-            This product may have been removed or edited from the admin panel.
-          </p>
-
-          <button
-            type="button"
-            onClick={() => router.push("/product")}
-            className="mt-6 rounded-full bg-slate-950 px-6 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
-          >
+      <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
+        <div className="rounded-[2rem] border border-slate-100 bg-white p-8 text-center shadow-xl">
+          <h1 className="text-2xl font-black text-slate-950">Product not found</h1>
+          <button type="button" onClick={() => router.push('/product')} className="mt-6 rounded-full bg-slate-950 px-6 py-3 text-sm font-black text-white hover:bg-slate-800">
             Back to products
           </button>
         </div>
@@ -477,247 +74,92 @@ export default function ProductDetailPage() {
     )
   }
 
-  const productImage = product.image || "/images/IPhone 16 Pro Max.png"
-  const productTitle = product.title || "Mobisphere Product"
-
   return (
-    <main className="mx-auto max-w-6xl px-3 py-8 pt-28 sm:px-6 sm:py-10 lg:px-8">
-      <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-4 shadow-xl sm:p-8 lg:p-10">
-        <div className="grid gap-8 lg:grid-cols-[1fr_1fr] lg:items-start">
-          <div className="w-full">
-            <div className="relative flex h-[340px] w-full items-center justify-center overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-slate-100 via-white to-slate-200 p-5 sm:h-[460px] sm:p-8 lg:h-[520px]">
-              <div
-                className={`absolute left-4 top-4 z-10 rounded-full border px-4 py-2 text-[10px] font-black uppercase tracking-wider shadow-sm sm:text-xs ${stockStatus.className}`}
-              >
-                {stockStatus.label}
-              </div>
-
-              {hasSale && (
-                <div className="absolute right-4 top-4 z-10 rounded-full border border-orange-200 bg-orange-50 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-orange-700 shadow-sm sm:text-xs">
-                  {saleInfo.discountLabel}
-                </div>
-              )}
-
-              <img
-                src={productImage}
-                alt={product.alt || productTitle}
-                className={`h-full max-h-full w-full max-w-full object-contain transition duration-500 hover:scale-105 ${
-                  isOutOfStock ? "opacity-55 grayscale" : ""
-                }`}
-              />
+    <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+      <section className="overflow-hidden rounded-[2.3rem] border border-slate-100 bg-white shadow-2xl">
+        <div className="grid gap-0 lg:grid-cols-[1fr_0.95fr]">
+          <div className="relative bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-6 sm:p-10">
+            <div className="absolute right-10 top-10 rounded-full bg-emerald-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.24em] text-emerald-300">
+              Premium device
+            </div>
+            <div className="flex min-h-[440px] items-center justify-center rounded-[2rem] border border-white/10 bg-white/10 p-8 backdrop-blur">
+              <img src={product.image} alt={product.alt || product.title} className="max-h-[430px] w-full object-contain drop-shadow-2xl" />
             </div>
           </div>
 
-          <div className="w-full">
-            <div className="space-y-4">
-              <p className="text-xs font-black uppercase tracking-[0.28em] text-emerald-600 sm:text-sm sm:tracking-[0.3em]">
-                {product.brand || "Mobisphere Mobile Shop"}
-              </p>
+          <div className="p-6 sm:p-10">
+            <button type="button" onClick={() => router.push('/product')} className="mb-6 rounded-full bg-slate-50 px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-600 hover:bg-slate-100">
+              ← Back to products
+            </button>
 
-              <h1 className="text-3xl font-black leading-tight text-slate-950 sm:text-4xl lg:text-5xl">
-                {productTitle}
-              </h1>
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600">{product.brand || 'Mobisphere Mobile Shop'}</p>
+            <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">{product.title}</h1>
+            <p className="mt-4 text-sm font-semibold leading-7 text-slate-600">{product.description}</p>
 
-              <p className="text-sm font-medium leading-7 text-slate-600 sm:text-base">
-                {product.description || "Premium smartphone available at Mobisphere."}
-              </p>
+            <div className="mt-7 rounded-[1.7rem] bg-slate-950 p-5 text-white">
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Mobisphere price</p>
+              <p className="mt-2 text-4xl font-black text-emerald-300">{formatINR(product.price)}</p>
+              <p className="mt-2 text-xs font-semibold text-slate-400">Cash on delivery / store pickup support available.</p>
+            </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-[1.75rem] bg-slate-50 p-5">
-                  <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-500">
-                    Price
-                  </p>
+            {cartMessage && <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-bold text-emerald-800">{cartMessage}</div>}
 
-                  {hasSale ? (
-                    <div className="mt-2 space-y-1">
-                      <div className="flex flex-wrap items-end gap-3">
-                        <p className="text-3xl font-black text-emerald-700 sm:text-4xl">
-                          {formatINR(finalPrice)}
-                        </p>
-                        <p className="text-sm font-black text-slate-400 line-through sm:text-base">
-                          {formatINR(originalPrice)}
-                        </p>
-                      </div>
-
-                      <p className="text-xs font-black uppercase tracking-wider text-orange-600">
-                        {saleInfo.title} • You save {formatINR(saleInfo.discountAmount)}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-3xl font-black text-slate-950 sm:text-4xl">
-                      {formatINR(product.price)}
-                    </p>
-                  )}
-                </div>
-
-                <div className={`rounded-[1.75rem] border p-5 ${stockStatus.className}`}>
-                  <p className="text-xs font-black uppercase tracking-[0.24em]">
-                    Availability
-                  </p>
-
-                  <p className="mt-2 text-2xl font-black">
-                    {stockStatus.label}
-                  </p>
-
-                  <p className="mt-1 text-xs font-black uppercase tracking-wider">
-                    {stockStatus.helper}
-                  </p>
-                </div>
-              </div>
-
-              {hasSale && (
-                <div className="rounded-[1.75rem] border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 p-5">
-                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-orange-600">
-                    Limited Time Offer
-                  </p>
-
-                  <h3 className="mt-2 text-xl font-black text-slate-950">
-                    {saleInfo.title}
-                  </h3>
-
-                  <p className="mt-1 text-sm font-bold text-orange-700">
-                    {saleInfo.discountLabel} on this product. Final price is {formatINR(finalPrice)}.
-                  </p>
-
-                  {saleInfo.endsAt ? (
-                    <p className="mt-2 text-xs font-black uppercase tracking-wider text-slate-600">
-                      Offer ends on {new Date(saleInfo.endsAt).toLocaleDateString("en-IN")}
-                    </p>
-                  ) : null}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    Current Stock
-                  </p>
-
-                  <p className="mt-1 text-xl font-black text-slate-950">
-                    {stockQuantity} Units
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    Low Stock Alert
-                  </p>
-
-                  <p className="mt-1 text-xl font-black text-slate-950">
-                    {minimumStockAlert} Units
-                  </p>
-                </div>
-              </div>
-
-              {cartMessage ? (
-                <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800">
-                  {cartMessage}
-                </div>
-              ) : null}
-
-              {isOutOfStock ? (
-                <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700">
-                  This product is currently out of stock. Please check other models
-                  or contact Mobisphere support.
-                </div>
-              ) : null}
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={handleAddToCart}
-                  disabled={isOutOfStock}
-                  className={`inline-flex w-full items-center justify-center rounded-full px-6 py-3 text-sm font-black transition ${
-                    isOutOfStock
-                      ? "cursor-not-allowed bg-slate-200 text-slate-500"
-                      : "bg-slate-950 text-white hover:bg-slate-800"
-                  }`}
-                >
-                  {isOutOfStock ? "Unavailable" : "Add to cart"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleBuyNow}
-                  disabled={isOutOfStock}
-                  className={`inline-flex w-full items-center justify-center rounded-full border px-6 py-3 text-sm font-black transition ${
-                    isOutOfStock
-                      ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500"
-                      : "border-emerald-600 bg-emerald-600 text-slate-950 hover:bg-emerald-500"
-                  }`}
-                >
-                  {isOutOfStock ? "Out of Stock" : "Buy now"}
-                </button>
-              </div>
-
-              <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5">
-                <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-500">
-                  Specifications
-                </p>
-
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {Object.entries(specs)
-                    .filter(([, value]) => Boolean(value))
-                    .map(([key, value]) => (
-                      <div key={key} className="rounded-2xl bg-slate-50 p-4">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                          {key}
-                        </p>
-
-                        <p className="mt-2 text-sm font-bold text-slate-900">
-                          {value}
-                        </p>
-                      </div>
-                    ))}
-                </div>
-
-                {Object.entries(specs).filter(([, value]) => Boolean(value)).length === 0 && (
-                  <p className="mt-4 text-sm font-bold text-slate-400">
-                    No specifications added yet.
-                  </p>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => router.push("/product")}
-                className="text-sm font-black text-slate-700 underline underline-offset-4 transition hover:text-slate-950"
-              >
-                Continue shopping
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={addToCart} className="rounded-full bg-slate-950 px-6 py-4 text-sm font-black text-white transition hover:-translate-y-1 hover:bg-slate-800">
+                Add to cart
               </button>
+              <button type="button" onClick={() => router.push(`/payment?productId=${product.id}`)} className="rounded-full bg-emerald-400 px-6 py-4 text-sm font-black text-slate-950 transition hover:-translate-y-1 hover:bg-emerald-300">
+                Buy now
+              </button>
+            </div>
+
+            <div className="mt-7 grid gap-3 sm:grid-cols-3">
+              {['Genuine product', 'Fast pickup', 'Store support'].map((item) => (
+                <div key={item} className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-center text-xs font-black text-slate-700">✓ {item}</div>
+              ))}
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {recommendedProducts.length > 0 && (
-        <div className="mt-10">
-          <div className="mb-5 flex items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.25em] text-emerald-600">
-                Recommended
-              </p>
-
-              <h2 className="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">
-                Customers also viewed
-              </h2>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => router.push("/product")}
-              className="hidden rounded-full bg-slate-100 px-5 py-2 text-xs font-black text-slate-800 transition hover:bg-slate-200 sm:inline-flex"
-            >
-              View All
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 items-stretch gap-3 sm:gap-5 md:grid-cols-2 lg:grid-cols-4">
-            {recommendedProducts.map((item) => (
-              <ProductDisplayCard key={item.id} product={item} />
+      <section className="mt-8 grid gap-6 lg:grid-cols-[1fr_0.8fr]">
+        <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl sm:p-8">
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600">Specifications</p>
+          <h2 className="mt-2 text-2xl font-black text-slate-950">Key details</h2>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            {Object.entries(specs).filter(([, value]) => Boolean(value)).map(([key, value]) => (
+              <div key={key} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{key}</p>
+                <p className="mt-2 text-sm font-black text-slate-950">{value}</p>
+              </div>
             ))}
           </div>
         </div>
+
+        <div className="rounded-[2rem] border border-slate-100 bg-slate-950 p-6 text-white shadow-xl sm:p-8">
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-300">Need help?</p>
+          <h2 className="mt-3 text-2xl font-black">Not sure this is right?</h2>
+          <p className="mt-3 text-sm font-semibold leading-7 text-slate-400">Send us your budget, preferred brand, and usage. Mobisphere will guide you with a better choice.</p>
+          <button type="button" onClick={() => router.push('/enquiry')} className="mt-6 w-full rounded-full bg-white px-6 py-3 text-xs font-black uppercase tracking-wider text-slate-950 transition hover:bg-emerald-200">
+            Ask Mobisphere
+          </button>
+        </div>
+      </section>
+
+      {recommendedProducts.length > 0 && (
+        <section className="mt-10">
+          <div className="mb-5 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600">Related products</p>
+              <h2 className="mt-2 text-2xl font-black text-slate-950">Customers also viewed</h2>
+            </div>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {recommendedProducts.map((item) => (
+              <ProductCart key={item.id} productId={item.id} image={item.image} alt={item.alt || item.title} title={item.title} description={item.description} price={item.price} onBuyNow={() => router.push(`/payment?productId=${item.id}`)} />
+            ))}
+          </div>
+        </section>
       )}
     </main>
   )

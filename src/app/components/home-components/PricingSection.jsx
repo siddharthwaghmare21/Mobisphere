@@ -1,70 +1,78 @@
 import React from 'react'
+import Link from 'next/link'
 
 const pricingPlans = [
   {
-    title: 'Starter Pack',
+    title: 'Starter Accessory Pack',
     price: '₹699',
-    subtitle: 'Best for first-time buyers',
-    features: ['Affordable phone and charger bundle', 'Same-day Sangli pickup', 'Local support included'],
+    subtitle: 'For new smartphone users',
+    features: ['Essential charger/accessory guidance', 'Same-day Sangli pickup support', 'Basic local support included'],
   },
   {
-    title: 'Business Bundle',
+    title: 'Premium Protection Bundle',
     price: '₹1,299',
-    subtitle: 'Perfect for frequent upgrade seekers',
-    features: ['Premium accessory combo', 'Priority stock alerts', 'Express delivery'],
+    subtitle: 'Most popular customer bundle',
+    features: ['Accessory combo recommendation', 'Priority stock update', 'Screen protection support'],
     featured: true,
   },
   {
-    title: 'Premium Bundle',
-    price: '₹2,499',
-    subtitle: 'For customers who want the best',
-    features: ['Top-tier smartphone package', 'Extended warranty support', 'Dedicated consultation'],
+    title: 'Business / Bulk Support',
+    price: 'Custom',
+    subtitle: 'For multiple device requirements',
+    features: ['Bulk order guidance', 'Dedicated consultation', 'Delivery and billing assistance'],
   },
 ]
 
 export default function PricingSection() {
   return (
-    <section id="pricing" className="py-16 bg-slate-100">
+    <section id="pricing" className="bg-slate-50 py-16 sm:py-20">
       <div className="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl text-center">
-          <p className="text-sm uppercase tracking-[0.3em] text-emerald-600">Pricing plans</p>
-          <h2 className="mt-4 text-3xl font-semibold text-slate-950 sm:text-4xl">
-            Simple plans for every mobile shopper.
-          </h2>
-          <p className="mt-4 text-sm leading-7 text-slate-600 sm:text-base">
-            Transparent pricing with clear benefits so you can choose the right package for your mobile purchase and accessories.
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600 sm:text-xs">Bundles & services</p>
+          <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">Choose a support bundle</h2>
+          <p className="mt-4 text-sm font-semibold leading-7 text-slate-500 sm:text-base">
+            Instead of confusing pricing plans, Mobisphere shows practical bundles that fit mobile shoppers.
           </p>
         </div>
 
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-10 grid gap-5 lg:grid-cols-3">
           {pricingPlans.map((plan) => (
-            <div
+            <article
               key={plan.title}
-              className={`rounded-[2rem] border p-6 shadow-xl transition hover:-translate-y-1 hover:shadow-2xl ${
-                plan.featured ? 'border-emerald-500 bg-slate-950 text-white' : 'border-slate-200 bg-white text-slate-950'
+              className={`rounded-[2rem] border p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-2xl sm:p-7 ${
+                plan.featured ? 'border-slate-950 bg-slate-950 text-white' : 'border-slate-100 bg-white text-slate-950'
               }`}
             >
-              <p className={`text-sm font-semibold uppercase tracking-[0.24em] ${plan.featured ? 'text-emerald-200' : 'text-emerald-600'}`}>
-                {plan.title}
-              </p>
-              <p className="mt-5 text-4xl font-bold tracking-tight">{plan.price}</p>
-              <p className={`mt-3 text-sm ${plan.featured ? 'text-slate-300' : 'text-slate-600'}`}>{plan.subtitle}</p>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-[0.22em] ${plan.featured ? 'text-emerald-300' : 'text-emerald-600'}`}>{plan.title}</p>
+                  <p className="mt-4 text-4xl font-black tracking-tight">{plan.price}</p>
+                </div>
+                {plan.featured && (
+                  <span className="rounded-full bg-emerald-400 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-950">Popular</span>
+                )}
+              </div>
 
-              <ul className={`mt-8 space-y-3 text-sm leading-6 ${plan.featured ? 'text-slate-200' : 'text-slate-700'}`}>
+              <p className={`mt-3 text-sm font-semibold leading-6 ${plan.featured ? 'text-slate-300' : 'text-slate-500'}`}>{plan.subtitle}</p>
+
+              <ul className={`mt-7 space-y-3 text-sm font-semibold leading-6 ${plan.featured ? 'text-slate-200' : 'text-slate-600'}`}>
                 {plan.features.map((feature) => (
                   <li key={feature} className="flex items-start gap-3">
-                    <span className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                    <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-400 text-[10px] font-black text-slate-950">✓</span>
                     <span>{feature}</span>
                   </li>
                 ))}
               </ul>
 
-              <button className={`mt-8 inline-flex w-full items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition ${
-                plan.featured ? 'bg-emerald-400 text-slate-950 hover:bg-emerald-300' : 'bg-slate-950 text-white hover:bg-slate-800'
-              }`}>
-                Choose plan
-              </button>
-            </div>
+              <Link
+                href="/enquiry"
+                className={`mt-8 inline-flex w-full items-center justify-center rounded-full px-5 py-3 text-sm font-black transition ${
+                  plan.featured ? 'bg-emerald-400 text-slate-950 hover:bg-emerald-300' : 'bg-slate-950 text-white hover:bg-slate-800'
+                }`}
+              >
+                Enquire now
+              </Link>
+            </article>
           ))}
         </div>
       </div>

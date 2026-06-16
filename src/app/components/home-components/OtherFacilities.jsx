@@ -1,35 +1,38 @@
-﻿import React from 'react'
+import React from 'react'
+
+const cards = [
+  { icon: '🚚', title: 'Free Shipping', detail: 'Fast delivery support on eligible orders across India.' },
+  { icon: '🎧', title: 'Store Support', detail: 'Friendly guidance for products, orders, and enquiries.' },
+  { icon: '↩️', title: 'Easy Assistance', detail: 'Helpful support for eligible return and service queries.' },
+  { icon: '🔐', title: 'Secure Checkout', detail: 'Clean checkout flow with clear order summary.' },
+  { icon: '📍', title: 'Fast Local Pickup', detail: 'Collect orders quickly from the Sangli store.' },
+  { icon: '💡', title: 'Expert Consultation', detail: 'Practical phone advice from Mobisphere advisors.' },
+]
 
 export default function OtherFacilities() {
-    const cards = [
-        { title: 'Free Shipping', detail: 'Fast delivery on every order across India.' },
-        { title: '24/7 Support', detail: 'Always available to help with product questions and orders.' },
-        { title: 'Money Back Guarantee', detail: 'Hassle-free returns on eligible devices and accessories.' },
-        { title: 'Secure Payment', detail: 'Easy checkout with trusted payment methods.' },
-        { title: 'Fast Local Pickup', detail: 'Collect your order quickly from our Sangli store.' },
-        { title: 'Expert Consultation', detail: 'Advice from experienced mobile advisors.' },
-    ]
+  return (
+    <section className="bg-slate-950 py-16 text-white sm:py-20">
+      <div className="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-300 sm:text-xs">Facilities</p>
+          <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">Everything a mobile buyer needs</h2>
+          <p className="mt-4 text-sm font-semibold leading-7 text-slate-400 sm:text-base">
+            A simple service layer that makes shopping, pickup, support, and checkout feel professional.
+          </p>
+        </div>
 
-    return (
-        <section className="bg-slate-100 py-12">
-            <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {/* मोबाईल रिस्पॉन्सिव्हिटीसाठी grid-cols-1 आणि sm:grid-cols-2 केले */}
-                    {cards.map((card) => (
-                        <div key={card.title} className="flex h-full flex-col justify-center rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-xl transition hover:-translate-y-1 hover:shadow-2xl">
-                            {/* १. सेवेचे शीर्षक */}
-                            <p className="text-sm sm:text-base md:text-lg font-semibold uppercase tracking-[0.2em] text-slate-950">
-                                {card.title}
-                            </p>
-
-                            {/* २. सेवेचा तपशील (हा नवीन पॅराग्राफ आपण ॲड केला आहे) */}
-                            <p className="mt-2 text-xs text-slate-600 sm:text-sm">
-                                {card.detail}
-                            </p>
-                        </div>
-                    ))}
-                </div>
+        <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {cards.map((card) => (
+            <div key={card.title} className="group rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl backdrop-blur transition hover:-translate-y-1 hover:bg-white/[0.09]">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400 text-xl text-slate-950 shadow-xl transition group-hover:scale-105">
+                {card.icon}
+              </div>
+              <p className="mt-5 text-sm font-black uppercase tracking-[0.18em] text-white">{card.title}</p>
+              <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">{card.detail}</p>
             </div>
-        </section>
-    )
+          ))}
+        </div>
+      </div>
+    </section>
+  )
 }
