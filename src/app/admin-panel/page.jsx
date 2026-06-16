@@ -546,6 +546,8 @@ export default function IntegratedAdminPanelDashboard() {
   })
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false)
   const [profileSaveState, setProfileSaveState] = useState('idle')
+  const [profileMessage, setProfileMessage] = useState('')
+  const [showProfilePasswordFields, setShowProfilePasswordFields] = useState(false)
 
   // 🔄 Supabase Live Data Fetch
   const fetchData = useCallback(async (showFeedback = false) => {
@@ -807,6 +809,8 @@ export default function IntegratedAdminPanelDashboard() {
       newPassword: '',
       confirmNewPassword: '',
     }))
+    setProfileMessage('')
+    setShowProfilePasswordFields(false)
   }, [adminProfile, username])
 
   // Analytics Graph Logic
@@ -1268,10 +1272,12 @@ export default function IntegratedAdminPanelDashboard() {
       [field]: value,
     }))
     setProfileSaveState('idle')
+    setProfileMessage('')
   }
 
   const handleUpdateAdminProfile = async (event) => {
     event.preventDefault()
+    setProfileMessage('')
 
     const fullName = profileForm.fullName.trim()
     const nextEmail = profileForm.email.trim().toLowerCase()
@@ -1279,22 +1285,32 @@ export default function IntegratedAdminPanelDashboard() {
     const confirmNewPassword = profileForm.confirmNewPassword
 
     if (!fullName) {
-      setMessage('Please enter admin full name.')
+      setProfileSaveState('error')
+      setProfileMessage('Please enter admin full name.')
       return
     }
 
     if (!nextEmail || !nextEmail.includes('@')) {
-      setMessage('Please enter a valid email address.')
+      setProfileSaveState('error')
+      setProfileMessage('Please enter a valid email address.')
       return
     }
 
-    if (newPassword && newPassword.length < 6) {
-      setMessage('New password must be at least 6 characters.')
+    if (showProfilePasswordFields && newPassword && newPassword.length < 6) {
+      setProfileSaveState('error')
+      setProfileMessage('New password must be at least 6 characters.')
       return
     }
 
-    if (newPassword && newPassword !== confirmNewPassword) {
-      setMessage('New password and confirm password do not match.')
+    if (showProfilePasswordFields && newPassword && newPassword !== confirmNewPassword) {
+      setProfileSaveState('error')
+      setProfileMessage('New password and confirm password do not match.')
+      return
+    }
+
+    if (showProfilePasswordFields && !newPassword && confirmNewPassword) {
+      setProfileSaveState('error')
+      setProfileMessage('Please enter new password first.')
       return
     }
 
@@ -1312,54 +1328,70 @@ export default function IntegratedAdminPanelDashboard() {
       }
 
       const currentEmail = String(user.email || adminProfile?.email || '').toLowerCase()
+      const currentName = String(adminProfile?.full_name || user.user_metadata?.full_name || username || '').trim()
       const emailChanged = Boolean(nextEmail && nextEmail !== currentEmail)
+      const nameChanged = Boolean(fullName && fullName !== currentName)
+      const passwordChanged = Boolean(showProfilePasswordFields && newPassword)
       const now = new Date().toISOString()
 
-      const profileUpdate = {
-        id: user.id,
-        full_name: fullName,
-        email: currentEmail || nextEmail,
-        role: adminProfile?.role || 'admin',
-        active: adminProfile?.active !== false,
-        email_verified_at: user.email_confirmed_at || user.confirmed_at || adminProfile?.email_verified_at || null,
-        updated_at: now,
+      if (!nameChanged && !emailChanged && !passwordChanged) {
+        setProfileSaveState('idle')
+        setProfileMessage('No changes found to save.')
+        return
       }
 
-      if (emailChanged) {
-        profileUpdate.pending_email = nextEmail
-        profileUpdate.email_change_requested_at = now
-      }
+      let updatedProfile = null
+      let emailChangeRequested = false
 
-      const { data: updatedProfile, error: profileError } = await supabase
-        .from(ADMIN_PROFILES_TABLE_NAME)
-        .upsert(profileUpdate, { onConflict: 'id' })
-        .select('*')
-        .maybeSingle()
-
-      if (profileError) throw profileError
-
-      const { error: metadataError } = await supabase.auth.updateUser({
-        data: {
-          ...(user.user_metadata || {}),
+      if (nameChanged || emailChanged) {
+        const profileUpdate = {
+          id: user.id,
           full_name: fullName,
-        },
-      })
+          email: currentEmail || nextEmail,
+          role: adminProfile?.role || 'admin',
+          active: adminProfile?.active !== false,
+          email_verified_at: user.email_confirmed_at || user.confirmed_at || adminProfile?.email_verified_at || null,
+          updated_at: now,
+        }
 
-      if (metadataError) {
-        console.warn('Admin metadata update warning:', metadataError)
+        if (emailChanged) {
+          profileUpdate.pending_email = nextEmail
+          profileUpdate.email_change_requested_at = now
+        }
+
+        const { data: profileData, error: profileError } = await supabase
+          .from(ADMIN_PROFILES_TABLE_NAME)
+          .upsert(profileUpdate, { onConflict: 'id' })
+          .select('*')
+          .maybeSingle()
+
+        if (profileError) throw profileError
+
+        updatedProfile = profileData || profileUpdate
       }
 
-      if (newPassword) {
+      if (nameChanged) {
+        const { error: metadataError } = await supabase.auth.updateUser({
+          data: {
+            ...(user.user_metadata || {}),
+            full_name: fullName,
+          },
+        })
+
+        if (metadataError) {
+          console.warn('Admin metadata update warning:', metadataError)
+        }
+      }
+
+      if (passwordChanged) {
         const { error: passwordError } = await supabase.auth.updateUser({
           password: newPassword,
         })
 
         if (passwordError) {
-          throw new Error(`Admin name saved, but password update failed: ${getReadableAuthError(passwordError)}`)
+          throw new Error(`Password update failed: ${getReadableAuthError(passwordError)}`)
         }
       }
-
-      let emailChangeRequested = false
 
       if (emailChanged) {
         const { error: emailError } = await supabase.auth.updateUser(
@@ -1372,7 +1404,7 @@ export default function IntegratedAdminPanelDashboard() {
         )
 
         if (emailError) {
-          throw new Error(`Admin name saved, but email verification email could not be sent: ${getReadableAuthError(emailError)}`)
+          throw new Error(`Email verification email could not be sent: ${getReadableAuthError(emailError)}`)
         }
 
         emailChangeRequested = true
@@ -1381,7 +1413,12 @@ export default function IntegratedAdminPanelDashboard() {
       const nextProfile = {
         ...(adminProfile || {}),
         ...(updatedProfile || {}),
-        ...profileUpdate,
+        id: user.id,
+        full_name: fullName,
+        email: (updatedProfile?.email || currentEmail || nextEmail),
+        pending_email: emailChangeRequested ? nextEmail : updatedProfile?.pending_email || adminProfile?.pending_email || null,
+        email_change_requested_at: emailChangeRequested ? now : updatedProfile?.email_change_requested_at || adminProfile?.email_change_requested_at || null,
+        updated_at: now,
       }
 
       setAdminProfile(nextProfile)
@@ -1392,6 +1429,7 @@ export default function IntegratedAdminPanelDashboard() {
         newPassword: '',
         confirmNewPassword: '',
       })
+      setShowProfilePasswordFields(false)
 
       saveJson(ADMIN_SESSION_KEY, {
         userId: user.id,
@@ -1402,19 +1440,25 @@ export default function IntegratedAdminPanelDashboard() {
       })
 
       setProfileSaveState('saved')
-      setMessage(
-        emailChangeRequested
-          ? `✅ Admin name saved. Verification email sent to ${nextEmail}. Confirm that email, then login with the new email.`
-          : '✅ Admin profile saved successfully.'
-      )
+
+      if (emailChangeRequested) {
+        setProfileMessage(`Saved. Verification email sent to ${nextEmail}. Confirm it before using the new email.`)
+      } else if (passwordChanged && nameChanged) {
+        setProfileMessage('Admin name and password saved successfully.')
+      } else if (passwordChanged) {
+        setProfileMessage('Password saved successfully.')
+      } else if (nameChanged) {
+        setProfileMessage('Admin name saved successfully.')
+      } else {
+        setProfileMessage('Profile saved successfully.')
+      }
     } catch (error) {
       console.error('Admin profile update error:', error)
       setProfileSaveState('error')
-      setMessage(error?.message || 'Admin profile update failed.')
+      setProfileMessage(error?.message || 'Admin profile update failed.')
     } finally {
       setIsUpdatingProfile(false)
       setTimeout(() => setProfileSaveState('idle'), 3200)
-      setTimeout(() => setMessage(''), 6500)
     }
   }
 
@@ -2536,6 +2580,18 @@ export default function IntegratedAdminPanelDashboard() {
                       </div>
                     </div>
 
+                    {profileMessage && (
+                      <div className={`mb-4 rounded-2xl border p-3 text-xs font-black ${
+                        profileSaveState === 'error'
+                          ? 'border-rose-200 bg-rose-50 text-rose-700'
+                          : profileSaveState === 'saved'
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            : 'border-slate-200 bg-slate-50 text-slate-700'
+                      }`}>
+                        {profileMessage}
+                      </div>
+                    )}
+
                     <form onSubmit={handleUpdateAdminProfile} className="space-y-4">
                       <div className="grid gap-4 lg:grid-cols-2">
                         <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
@@ -2560,33 +2616,55 @@ export default function IntegratedAdminPanelDashboard() {
                           />
                         </label>
 
-                        <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
-                          <span>New Password</span>
-                          <input
-                            type="password"
-                            value={profileForm.newPassword}
-                            onChange={(event) => handleProfileFormChange('newPassword', event.target.value)}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
-                            placeholder="Leave blank to keep current password"
-                          />
-                        </label>
+                        {showProfilePasswordFields && (
+                          <>
+                            <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
+                              <span>New Password</span>
+                              <input
+                                type="password"
+                                value={profileForm.newPassword}
+                                onChange={(event) => handleProfileFormChange('newPassword', event.target.value)}
+                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+                                placeholder="Enter new password only if you want to change it"
+                              />
+                            </label>
 
-                        <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
-                          <span>Confirm New Password</span>
-                          <input
-                            type="password"
-                            value={profileForm.confirmNewPassword}
-                            onChange={(event) => handleProfileFormChange('confirmNewPassword', event.target.value)}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
-                            placeholder="Repeat new password"
-                          />
-                        </label>
+                            <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
+                              <span>Confirm New Password</span>
+                              <input
+                                type="password"
+                                value={profileForm.confirmNewPassword}
+                                onChange={(event) => handleProfileFormChange('confirmNewPassword', event.target.value)}
+                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+                                placeholder="Repeat new password"
+                              />
+                            </label>
+                          </>
+                        )}
                       </div>
 
                       <div className="flex flex-col gap-3 rounded-3xl border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-xs font-bold leading-5 text-slate-500">
-                          Admin name saves immediately. If email is changed, a verification link is sent first; the new email becomes active only after confirmation.
-                        </p>
+                        <div>
+                          <p className="text-xs font-bold leading-5 text-slate-500">
+                            Change only the field you want. Password changes are optional and hidden until you open them.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowProfilePasswordFields((prev) => !prev)
+                              setProfileForm((prev) => ({
+                                ...prev,
+                                newPassword: '',
+                                confirmNewPassword: '',
+                              }))
+                              setProfileMessage('')
+                              setProfileSaveState('idle')
+                            }}
+                            className="mt-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-[10px] font-black uppercase tracking-wider text-slate-700 transition hover:border-slate-300 hover:bg-slate-100"
+                          >
+                            {showProfilePasswordFields ? 'Cancel Password Change' : 'Change Password'}
+                          </button>
+                        </div>
 
                         <button
                           type="submit"
@@ -2624,7 +2702,7 @@ export default function IntegratedAdminPanelDashboard() {
                                 ? 'Saved!'
                                 : profileSaveState === 'error'
                                   ? 'Try Again'
-                                  : 'Save Changes'}
+                                  : 'Save Profile'}
                           </span>
                         </button>
                       </div>
