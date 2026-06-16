@@ -12,44 +12,7 @@ const SALE_CAMPAIGNS_STORAGE_KEY = 'mobisphereSaleCampaigns'
 const ADMIN_USERS_KEY = 'mobisphereAdminUsers'
 const CART_STORAGE_KEY = 'mobisphereCart'
 const ORDERS_STORAGE_KEY = 'mobisphereOrders'
-const ORDERS_TABLE_NAME = 'mobisphere_orders'
-const COUPONS_TABLE_NAME = 'mobisphere_coupons'
-const SALE_CAMPAIGNS_TABLE_NAME = 'mobisphere_sale_campaigns'
-const ADMIN_PROFILES_TABLE_NAME = 'mobisphere_admin_profiles'
-const ACTIVITY_LOG_STORAGE_KEY = 'mobisphereAdminActivityLogs'
-const ACTIVITY_LOGS_TABLE_NAME = 'mobisphere_admin_activity_logs'
-const PRODUCT_IMAGE_BUCKET = 'mobisphere-product-images'
 const ADMIN_ACCESS_KEY = 'ALT+SHIFT+A'
-
-function getSiteOrigin() {
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin
-  }
-  return 'http://localhost:3000'
-}
-
-function getAdminEmailRedirectUrl() {
-  return `${getSiteOrigin()}/admin-panel`
-}
-
-function isEmailVerified(user) {
-  return Boolean(user?.email_confirmed_at || user?.confirmed_at)
-}
-
-function getReadableAuthError(error) {
-  const message = String(error?.message || '')
-  const lower = message.toLowerCase()
-
-  if (lower.includes('email not confirmed') || lower.includes('not confirmed')) {
-    return 'Please verify your email first. Check your inbox and click the Mobisphere verification link.'
-  }
-
-  if (lower.includes('invalid login credentials')) {
-    return 'Invalid email or password.'
-  }
-
-  return message || 'Authentication failed. Please try again.'
-}
 
 function loadJson(key) {
   if (typeof window === 'undefined') return null
@@ -76,66 +39,6 @@ function fileToDataUrl(file) {
     reader.onerror = () => resolve('')
     reader.readAsDataURL(file)
   })
-}
-
-function slugifyFilePart(value) {
-  return String(value || 'mobisphere-product')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60) || 'mobisphere-product'
-}
-
-function getFileExtension(file) {
-  const nameExtension = String(file?.name || '')
-    .split('.')
-    .pop()
-    ?.toLowerCase()
-
-  if (nameExtension && nameExtension.length <= 5) return nameExtension
-
-  const type = String(file?.type || '')
-
-  if (type.includes('png')) return 'png'
-  if (type.includes('webp')) return 'webp'
-  if (type.includes('jpeg') || type.includes('jpg')) return 'jpg'
-
-  return 'jpg'
-}
-
-async function uploadProductImageToStorage(file, productId, title) {
-  if (!file || file.size === 0) return ''
-
-  if (!supabase?.storage?.from) {
-    return fileToDataUrl(file)
-  }
-
-  const safeProductId = slugifyFilePart(productId || Date.now())
-  const safeTitle = slugifyFilePart(title)
-  const extension = getFileExtension(file)
-  const filePath = `${safeProductId}/${Date.now()}-${safeTitle}.${extension}`
-
-  try {
-    const { error } = await supabase.storage
-      .from(PRODUCT_IMAGE_BUCKET)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: true,
-        contentType: file.type || undefined,
-      })
-
-    if (error) throw error
-
-    const { data } = supabase.storage
-      .from(PRODUCT_IMAGE_BUCKET)
-      .getPublicUrl(filePath)
-
-    return data?.publicUrl || ''
-  } catch (error) {
-    console.error('Mobisphere product image upload error:', error)
-
-    return fileToDataUrl(file)
-  }
 }
 
 function getStockQuantity(product) {
@@ -171,57 +74,6 @@ function getStockStatusDetails(product) {
     className: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
     dotClassName: 'bg-emerald-500'
   }
-}
-
-
-function getRestockPriority(product) {
-  const stockQty = getStockQuantity(product)
-  const minStockAlert = getMinStockAlert(product)
-
-  if (stockQty <= 0) {
-    return {
-      label: 'Restock Now',
-      tone: 'critical',
-      className: 'border-rose-200 bg-rose-50 text-rose-700',
-      badgeClassName: 'bg-rose-600 text-white',
-      icon: '⛔'
-    }
-  }
-
-  if (stockQty <= minStockAlert) {
-    return {
-      label: 'Low Stock',
-      tone: 'warning',
-      className: 'border-amber-200 bg-amber-50 text-amber-700',
-      badgeClassName: 'bg-amber-500 text-slate-950',
-      icon: '⚠️'
-    }
-  }
-
-  return {
-    label: 'Healthy Stock',
-    tone: 'healthy',
-    className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    badgeClassName: 'bg-emerald-500 text-white',
-    icon: '✅'
-  }
-}
-
-function getRestockNeededProducts(products) {
-  const safeProducts = Array.isArray(products) ? products : []
-
-  return safeProducts
-    .filter((product) => {
-      const stockQty = getStockQuantity(product)
-      return stockQty <= 0 || (stockQty > 0 && stockQty <= getMinStockAlert(product))
-    })
-    .sort((a, b) => {
-      const aQty = getStockQuantity(a)
-      const bQty = getStockQuantity(b)
-      if (aQty <= 0 && bQty > 0) return -1
-      if (bQty <= 0 && aQty > 0) return 1
-      return aQty - bQty
-    })
 }
 
 function getOrderDate(order) {
@@ -396,211 +248,10 @@ function getCampaignScopeLabel(campaign) {
   return 'All products'
 }
 
-
-function getOrderProductArray(order) {
-  const products = order?.products || order?.cartItems || order?.itemsList || []
-  return Array.isArray(products) ? products : []
-}
-
-function getOrderItemsCount(order) {
-  const products = getOrderProductArray(order)
-  const productQuantity = products.reduce((sum, item) => {
-    return sum + Math.max(Number(item?.quantity || 1), 1)
-  }, 0)
-
-  return Math.max(Number(order?.items ?? productQuantity ?? 0), 0)
-}
-
-function orderFromSupabase(row) {
-  const products = Array.isArray(row?.products) ? row.products : []
-  const total = Number(row?.total ?? row?.total_amount ?? 0)
-
-  return {
-    id: String(row?.id || `ORD-${Date.now().toString(36).toUpperCase().slice(-5)}`),
-    customer: row?.customer || row?.customer_name || 'Customer',
-    customerName: row?.customer || row?.customer_name || 'Customer',
-    mobileNumber: row?.mobile_number || row?.mobileNumber || row?.mobile || '',
-    address: row?.address || row?.delivery_address || '',
-    date: row?.date || row?.created_at || new Date().toISOString(),
-    createdAt: row?.created_at || row?.date || '',
-    updatedAt: row?.updated_at || '',
-    total,
-    totalAmount: Number(row?.total_amount ?? total),
-    status: row?.status || 'Processing',
-    items: Number(row?.items ?? products.length ?? 0),
-    products,
-    originalItemsTotal: Number(row?.original_items_total || 0),
-    saleDiscountAmount: Number(row?.sale_discount_amount || 0),
-    subtotalAfterSale: Number(row?.subtotal_after_sale || 0),
-    discountPercent: Number(row?.discount_percent || 0),
-    couponCode: row?.coupon_code || '',
-    couponDiscountAmount: Number(row?.coupon_discount_amount || 0),
-    paymentMode: row?.payment_mode || 'Cash on Delivery',
-    note: row?.note || '',
-    stockRestored: row?.stock_restored === true,
-    stockRestoredAt: row?.stock_restored_at || '',
-    enquiryId: row?.enquiry_id || '',
-  }
-}
-
-function orderToSupabase(order) {
-  const products = getOrderProductArray(order)
-  const total = getOrderTotal(order)
-  const date = order?.date || order?.createdAt || new Date().toISOString()
-
-  return {
-    id: String(order?.id || `ORD-${Date.now().toString(36).toUpperCase().slice(-5)}`),
-    customer: getOrderCustomerName(order),
-    mobile_number: getOrderMobile(order) === '—' ? '' : getOrderMobile(order),
-    address: getOrderAddress(order) === '—' ? '' : getOrderAddress(order),
-    date,
-    total,
-    total_amount: Number(order?.totalAmount ?? total),
-    status: order?.status || 'Processing',
-    items: getOrderItemsCount(order),
-    products,
-    original_items_total: Number(order?.originalItemsTotal || order?.original_items_total || 0),
-    sale_discount_amount: Number(order?.saleDiscountAmount || order?.sale_discount_amount || 0),
-    subtotal_after_sale: Number(order?.subtotalAfterSale || order?.subtotal_after_sale || 0),
-    discount_percent: Number(order?.discountPercent || order?.discount_percent || 0),
-    coupon_code: order?.couponCode || order?.coupon_code || '',
-    coupon_discount_amount: Number(order?.couponDiscountAmount || order?.coupon_discount_amount || 0),
-    payment_mode: order?.paymentMode || order?.payment_mode || 'Cash on Delivery',
-    note: order?.note || '',
-    stock_restored: order?.stockRestored === true,
-    stock_restored_at: order?.stockRestoredAt || order?.stock_restored_at || null,
-    enquiry_id: order?.enquiryId || order?.enquiry_id || null,
-    updated_at: new Date().toISOString(),
-  }
-}
-
-function couponFromSupabase(row) {
-  return {
-    id: String(row?.id || Date.now().toString()),
-    code: String(row?.code || '').toUpperCase(),
-    discountPercent: Number(row?.discount_percent ?? row?.discountPercent ?? 0),
-    active: row?.active !== false,
-    expiresAt: row?.expires_at || row?.expiresAt || '',
-    expiryDate: row?.expires_at || row?.expiryDate || '',
-    createdAt: row?.created_at || row?.createdAt || new Date().toISOString(),
-    updatedAt: row?.updated_at || row?.updatedAt || '',
-  }
-}
-
-function couponToSupabase(coupon) {
-  return {
-    id: String(coupon?.id || Date.now().toString()),
-    code: String(coupon?.code || '').toUpperCase(),
-    discount_percent: Number(coupon?.discountPercent ?? coupon?.discount_percent ?? 0),
-    active: coupon?.active !== false,
-    expires_at: coupon?.expiresAt || coupon?.expiryDate || coupon?.expires_at || null,
-    updated_at: new Date().toISOString(),
-  }
-}
-
-function campaignFromSupabase(row) {
-  return {
-    id: String(row?.id || `SALE-${Date.now().toString(36).toUpperCase()}`),
-    title: row?.title || 'Mobisphere Sale',
-    discountType: row?.discount_type || row?.discountType || 'percent',
-    discountValue: Number(row?.discount_value ?? row?.discountValue ?? 0),
-    scope: row?.scope || 'all',
-    brand: row?.brand || '',
-    productId: row?.product_id || row?.productId || '',
-    productTitle: row?.product_title || row?.productTitle || '',
-    startDate: row?.start_date || row?.startDate || getTodayDateString(),
-    endDate: row?.end_date || row?.endDate || '',
-    active: row?.active !== false,
-    createdAt: row?.created_at || row?.createdAt || new Date().toISOString(),
-    updatedAt: row?.updated_at || row?.updatedAt || '',
-  }
-}
-
-function campaignToSupabase(campaign) {
-  return {
-    id: String(campaign?.id || `SALE-${Date.now().toString(36).toUpperCase()}`),
-    title: campaign?.title || 'Mobisphere Sale',
-    discount_type: campaign?.discountType || campaign?.discount_type || 'percent',
-    discount_value: Number(campaign?.discountValue ?? campaign?.discount_value ?? 0),
-    scope: campaign?.scope || 'all',
-    brand: campaign?.brand || '',
-    product_id: campaign?.productId || campaign?.product_id || '',
-    product_title: campaign?.productTitle || campaign?.product_title || '',
-    start_date: campaign?.startDate || campaign?.start_date || getTodayDateString(),
-    end_date: campaign?.endDate || campaign?.end_date || null,
-    active: campaign?.active !== false,
-    updated_at: new Date().toISOString(),
-  }
-}
-
-
-function buildCsvContent(rows) {
-  return rows.map((row) => row.map(sanitizeCsvValue).join(',')).join('\n')
-}
-
-function activityFromSupabase(row) {
-  return {
-    id: String(row?.id || `ACT-${Date.now().toString(36).toUpperCase()}`),
-    type: row?.activity_type || row?.type || 'general',
-    title: row?.title || 'Admin activity',
-    description: row?.description || '',
-    targetType: row?.target_type || row?.targetType || '',
-    targetId: row?.target_id || row?.targetId || '',
-    severity: row?.severity || 'info',
-    adminName: row?.admin_name || row?.adminName || 'Admin',
-    adminEmail: row?.admin_email || row?.adminEmail || '',
-    metadata: row?.metadata || {},
-    createdAt: row?.created_at || row?.createdAt || new Date().toISOString(),
-  }
-}
-
-function activityToSupabase(log) {
-  return {
-    id: String(log?.id || `ACT-${Date.now().toString(36).toUpperCase()}`),
-    activity_type: log?.type || 'general',
-    title: log?.title || 'Admin activity',
-    description: log?.description || '',
-    target_type: log?.targetType || '',
-    target_id: log?.targetId || '',
-    severity: log?.severity || 'info',
-    admin_name: log?.adminName || 'Admin',
-    admin_email: log?.adminEmail || '',
-    metadata: log?.metadata || {},
-    created_at: log?.createdAt || new Date().toISOString(),
-  }
-}
-
-function getActivityIcon(type) {
-  const cleanType = String(type || '').toLowerCase()
-
-  if (cleanType.includes('product')) return '📦'
-  if (cleanType.includes('stock')) return '📥'
-  if (cleanType.includes('order')) return '🛒'
-  if (cleanType.includes('coupon')) return '🎫'
-  if (cleanType.includes('sale')) return '🔥'
-  if (cleanType.includes('profile')) return '👤'
-  if (cleanType.includes('customer')) return '👥'
-  if (cleanType.includes('enquiry')) return '📩'
-  if (cleanType.includes('backup')) return '💾'
-
-  return '⚙️'
-}
-
-function getActivityTone(severity) {
-  const cleanSeverity = String(severity || 'info').toLowerCase()
-
-  if (cleanSeverity === 'success') return 'border-emerald-100 bg-emerald-50 text-emerald-700'
-  if (cleanSeverity === 'warning') return 'border-amber-100 bg-amber-50 text-amber-700'
-  if (cleanSeverity === 'danger') return 'border-rose-100 bg-rose-50 text-rose-700'
-
-  return 'border-slate-100 bg-slate-50 text-slate-700'
-}
-
 export default function IntegratedAdminPanelDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
-  const [, setAdminUsers] = useState([])
-  const [adminProfile, setAdminProfile] = useState(null)
+  const [adminUsers, setAdminUsers] = useState([])
 
   // Admin Login / Signup states
   const [regName, setRegName] = useState('')
@@ -618,13 +269,7 @@ export default function IntegratedAdminPanelDashboard() {
   const [isSyncing, setIsSyncing] = useState(false)
 
   // Product Inventory States (from global context)
-  const {
-    products: localProducts,
-    setProducts: setLocalProducts,
-    refreshProductsFromSupabase,
-    isSyncingProducts,
-    syncError: productSyncError,
-  } = useProductContext()
+  const { products: localProducts, setProducts: setLocalProducts } = useProductContext()
   const [inventoryView, setInventoryView] = useState('brands') // 'brands', 'products', 'form'
   const [selectedBrand, setSelectedBrand] = useState('')
   const [editingProduct, setEditingProduct] = useState(null)
@@ -649,140 +294,39 @@ export default function IntegratedAdminPanelDashboard() {
   const [newCampaignStartDate, setNewCampaignStartDate] = useState(getTodayDateString())
   const [newCampaignEndDate, setNewCampaignEndDate] = useState('')
 
-  const [orders, setOrders] = useState([])
+  const [orders, setOrders] = useState([
+    { id: 'ORD-8X91', customer: 'Rahul Sharma', date: '2024-05-12', total: 125000, status: 'Processing', items: 2 },
+    { id: 'ORD-7V22', customer: 'Sneha Patil', date: '2024-05-11', total: 85000, status: 'Shipped', items: 1 },
+    { id: 'ORD-4M55', customer: 'Amit Desai', date: '2024-05-10', total: 45000, status: 'Delivered', items: 1 },
+    { id: 'ORD-9K33', customer: 'Pooja Joshi', date: '2024-05-09', total: 155000, status: 'Cancelled', items: 2 }
+  ])
   const [orderFilter, setOrderFilter] = useState('All')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [salesReportRange, setSalesReportRange] = useState('all')
-  const [activityLogs, setActivityLogs] = useState([])
-
-  const [profileForm, setProfileForm] = useState({
-    fullName: '',
-    email: '',
-    newPassword: '',
-    confirmNewPassword: '',
-  })
-  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false)
-  const [profileSaveState, setProfileSaveState] = useState('idle')
-  const [profileMessage, setProfileMessage] = useState('')
-  const [showProfilePasswordFields, setShowProfilePasswordFields] = useState(false)
-
-
-  const addActivityLog = useCallback(async ({ type, title, description = '', targetType = '', targetId = '', severity = 'info', metadata = {} }) => {
-    const createdAt = new Date().toISOString()
-    const log = {
-      id: `ACT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
-      type: type || 'general',
-      title: title || 'Admin activity',
-      description,
-      targetType,
-      targetId: targetId ? String(targetId) : '',
-      severity,
-      adminName: adminProfile?.full_name || username || 'Admin',
-      adminEmail: adminProfile?.email || '',
-      metadata,
-      createdAt,
-    }
-
-    setActivityLogs((prev) => {
-      const next = [log, ...(Array.isArray(prev) ? prev : [])].slice(0, 150)
-      saveJson(ACTIVITY_LOG_STORAGE_KEY, next)
-      return next
-    })
-
-    try {
-      await supabase
-        .from(ACTIVITY_LOGS_TABLE_NAME)
-        .insert(activityToSupabase(log))
-    } catch (error) {
-      console.warn('Activity log sync warning:', error)
-    }
-
-    return log
-  }, [adminProfile, username])
 
   // 🔄 Supabase Live Data Fetch
   const fetchData = useCallback(async (showFeedback = false) => {
     if (showFeedback === true) setIsSyncing(true)
-
     try {
-      const { data: cData, error: cError } = await supabase
+      const { data: cData } = await supabase
         .from('customers')
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (cError) throw cError
-
-      const { data: eData, error: eError } = await supabase
+      const { data: eData } = await supabase
         .from('enquiries')
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (eError) throw eError
-
-      const { data: oData, error: oError } = await supabase
-        .from(ORDERS_TABLE_NAME)
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (oError) throw oError
-
-      const { data: couponData, error: couponError } = await supabase
-        .from(COUPONS_TABLE_NAME)
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (couponError) throw couponError
-
-      const { data: campaignData, error: campaignError } = await supabase
-        .from(SALE_CAMPAIGNS_TABLE_NAME)
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (campaignError) throw campaignError
-
-      const serverOrders = Array.isArray(oData) ? oData.map(orderFromSupabase) : []
-      const storedOrders = loadJson(ORDERS_STORAGE_KEY)
-    const storedActivityLogs = loadJson(ACTIVITY_LOG_STORAGE_KEY) || []
-      const localOrders = Array.isArray(storedOrders) ? storedOrders : []
-      const nextOrders = serverOrders.length > 0 ? serverOrders : localOrders
-
-      const serverCoupons = Array.isArray(couponData) ? couponData.map(couponFromSupabase) : []
-      const storedCoupons = loadJson(COUPON_STORAGE_KEY)
-      const localCoupons = Array.isArray(storedCoupons) ? storedCoupons : []
-      const nextCoupons = serverCoupons.length > 0 ? serverCoupons : localCoupons
-
-      const serverCampaigns = Array.isArray(campaignData) ? campaignData.map(campaignFromSupabase) : []
-      const storedSaleCampaigns = loadJson(SALE_CAMPAIGNS_STORAGE_KEY)
-      const localSaleCampaigns = Array.isArray(storedSaleCampaigns) ? storedSaleCampaigns : []
-      const nextCampaigns = serverCampaigns.length > 0 ? serverCampaigns : localSaleCampaigns
-
       setCustomers(cData || [])
       setEnquiries(eData || [])
-      setOrders(nextOrders)
-      setCoupons(nextCoupons)
-      setSaleCampaigns(nextCampaigns)
-
-      saveJson(ORDERS_STORAGE_KEY, nextOrders)
-      saveJson(COUPON_STORAGE_KEY, nextCoupons)
-      saveJson(SALE_CAMPAIGNS_STORAGE_KEY, nextCampaigns)
-
       if (showFeedback === true) {
-        setMessage('✅ Customers, enquiries, orders, coupons, and sale campaigns synced successfully!')
+        setMessage('✅ Live server data synced successfully!')
       }
     } catch (err) {
-      console.error('Supabase fetch error:', err)
-
-      const storedOrders = loadJson(ORDERS_STORAGE_KEY)
-    const storedActivityLogs = loadJson(ACTIVITY_LOG_STORAGE_KEY) || []
-      const storedCoupons = loadJson(COUPON_STORAGE_KEY)
-      const storedSaleCampaigns = loadJson(SALE_CAMPAIGNS_STORAGE_KEY)
-
-      if (Array.isArray(storedOrders)) setOrders(storedOrders)
-      if (Array.isArray(storedCoupons)) setCoupons(storedCoupons)
-      if (Array.isArray(storedSaleCampaigns)) setSaleCampaigns(storedSaleCampaigns)
-
+      console.error("Supabase fetch error:", err)
       if (showFeedback === true) {
-        setMessage('❌ Failed to sync live data. Check Supabase tables and policies.')
+        setMessage('❌ Failed to sync data with server.')
       }
     } finally {
       if (showFeedback === true) {
@@ -791,201 +335,32 @@ export default function IntegratedAdminPanelDashboard() {
       }
     }
   }, [])
-
-  const loadAdminProfile = useCallback(async (user) => {
-    if (!user?.id) return null
-
-    const { data, error } = await supabase
-      .from(ADMIN_PROFILES_TABLE_NAME)
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle()
-
-    if (error) throw error
-
-    if (!data) {
-      await supabase.auth.signOut()
-      localStorage.removeItem(ADMIN_SESSION_KEY)
-      throw new Error('No active admin profile found. Create admin account with the access code.')
-    }
-
-    let profile = data
-
-    if (isEmailVerified(user)) {
-      const verifiedEmail = String(user.email || profile.email || '').toLowerCase()
-      const verifiedUpdate = {
-        email_verified_at: user.email_confirmed_at || user.confirmed_at || new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-
-      if (verifiedEmail) {
-        verifiedUpdate.email = verifiedEmail
-        verifiedUpdate.pending_email = null
-        verifiedUpdate.email_change_requested_at = null
-      }
-
-      const { data: syncedProfile } = await supabase
-        .from(ADMIN_PROFILES_TABLE_NAME)
-        .update(verifiedUpdate)
-        .eq('id', user.id)
-        .select('*')
-        .maybeSingle()
-
-      if (syncedProfile) {
-        profile = syncedProfile
-      } else {
-        profile = {
-          ...profile,
-          ...verifiedUpdate,
-        }
-      }
-    }
-
-    if (profile.active === false) {
-      await supabase.auth.signOut()
-      localStorage.removeItem(ADMIN_SESSION_KEY)
-      throw new Error('This admin account is inactive.')
-    }
-
-    const displayName = profile.full_name || profile.email || user.email || 'Admin'
-
-    setAdminProfile(profile)
-    setUsername(displayName)
-    saveJson(ADMIN_SESSION_KEY, {
-      userId: user.id,
-      email: profile.email || user.email || '',
-      username: profile.email || user.email || '',
-      name: displayName,
-      provider: 'supabase',
-    })
-
-    return profile
-  }, [])
-
-  const handleSyncAllData = useCallback(async (showFeedback = true) => {
-    if (showFeedback === true) setIsSyncing(true)
-
-    try {
-      await fetchData(false)
-
-      if (typeof refreshProductsFromSupabase === 'function') {
-        await refreshProductsFromSupabase()
-      }
-
-      if (showFeedback === true) {
-        setMessage('✅ Customers, enquiries, orders, products, coupons, and sale campaigns synced successfully!')
-      }
-    } catch (err) {
-      console.error('Mobisphere full sync error:', err)
-      if (showFeedback === true) {
-        setMessage('❌ Failed to sync complete admin data. Check Supabase connection.')
-      }
-    } finally {
-      if (showFeedback === true) {
-        setIsSyncing(false)
-        setTimeout(() => setMessage(''), 3000)
-      }
-    }
-  }, [fetchData, refreshProductsFromSupabase])
 
   useEffect(() => {
-    let isMounted = true
-
+    const session = loadJson(ADMIN_SESSION_KEY)
     const storedAdmins = loadJson(ADMIN_USERS_KEY)
     const storedCoupons = loadJson(COUPON_STORAGE_KEY) || []
     const storedSaleCampaigns = loadJson(SALE_CAMPAIGNS_STORAGE_KEY) || []
     const storedOrders = loadJson(ORDERS_STORAGE_KEY)
-    const storedActivityLogs = loadJson(ACTIVITY_LOG_STORAGE_KEY) || []
 
-    queueMicrotask(async () => {
+    queueMicrotask(() => {
+      if (session) {
+        setIsLoggedIn(true)
+        setUsername(session.username || 'Admin')
+      }
       setAdminUsers(Array.isArray(storedAdmins) ? storedAdmins : [])
       setCoupons(Array.isArray(storedCoupons) ? storedCoupons.map((coupon) => ({ active: coupon.active !== false, expiresAt: coupon.expiresAt || coupon.expiryDate || '', ...coupon })) : [])
       setSaleCampaigns(Array.isArray(storedSaleCampaigns) ? storedSaleCampaigns.map((campaign) => ({ active: campaign.active !== false, scope: campaign.scope || 'all', discountType: campaign.discountType || 'percent', ...campaign })) : [])
-
       if (Array.isArray(storedOrders) && storedOrders.length > 0) {
         setOrders(storedOrders)
       }
-
-      if (Array.isArray(storedActivityLogs)) {
-        setActivityLogs(storedActivityLogs)
-      }
-
-      try {
-        const { data, error } = await supabase.auth.getSession()
-
-        if (error) throw error
-
-        const session = data?.session
-
-        if (session?.user) {
-          if (!isEmailVerified(session.user)) {
-            await supabase.auth.signOut()
-            localStorage.removeItem(ADMIN_SESSION_KEY)
-            if (isMounted) {
-              setIsLoggedIn(false)
-              setAdminProfile(null)
-              setMessage('Please verify your admin email first. Check your inbox for the Mobisphere verification link.')
-            }
-            return
-          }
-
-          await loadAdminProfile(session.user)
-          if (isMounted) setIsLoggedIn(true)
-          await fetchData(false)
-
-          try {
-            const { data: logData, error: logError } = await supabase
-              .from(ACTIVITY_LOGS_TABLE_NAME)
-              .select('*')
-              .order('created_at', { ascending: false })
-              .limit(80)
-
-            if (!logError && Array.isArray(logData)) {
-              const nextLogs = logData.map(activityFromSupabase)
-              setActivityLogs(nextLogs)
-              saveJson(ACTIVITY_LOG_STORAGE_KEY, nextLogs)
-            }
-          } catch (logError) {
-            console.warn('Activity log fetch warning:', logError)
-          }
-        } else {
-          localStorage.removeItem(ADMIN_SESSION_KEY)
-          if (isMounted) {
-            setIsLoggedIn(false)
-            setAdminProfile(null)
-          }
-        }
-      } catch (error) {
-        console.error('Supabase admin session check error:', error)
-        localStorage.removeItem(ADMIN_SESSION_KEY)
-        if (isMounted) {
-          setIsLoggedIn(false)
-          setAdminProfile(null)
-          setMessage(error?.message || 'Admin session could not be verified.')
-        }
-      } finally {
-        if (isMounted) setHydrated(true)
-      }
+      setHydrated(true)
     })
 
-    return () => {
-      isMounted = false
+    if (session) {
+      queueMicrotask(() => fetchData())
     }
-  }, [fetchData, loadAdminProfile])
-
-  useEffect(() => {
-    if (!adminProfile) return
-
-    setProfileForm((prev) => ({
-      ...prev,
-      fullName: adminProfile.full_name || '',
-      email: adminProfile.email || username || '',
-      newPassword: '',
-      confirmNewPassword: '',
-    }))
-    setProfileMessage('')
-    setShowProfilePasswordFields(false)
-  }, [adminProfile, username])
+  }, [fetchData])
 
   // Analytics Graph Logic
   const chartAnalytics = useMemo(() => {
@@ -1222,34 +597,6 @@ export default function IntegratedAdminPanelDashboard() {
     }
   }, [hydrated, orders, localProducts, customers.length, enquiries.length, coupons.length])
 
-  const restockInsights = useMemo(() => {
-    const safeProducts = Array.isArray(localProducts) ? localProducts : []
-    const restockNeeded = getRestockNeededProducts(safeProducts)
-    const outOfStock = restockNeeded.filter((product) => getStockQuantity(product) <= 0)
-    const lowStock = restockNeeded.filter((product) => getStockQuantity(product) > 0)
-    const totalRequiredUnits = restockNeeded.reduce((sum, product) => {
-      const minStockAlert = getMinStockAlert(product)
-      const stockQty = getStockQuantity(product)
-      return sum + Math.max(minStockAlert - stockQty + 1, 1)
-    }, 0)
-
-    return {
-      restockNeeded,
-      outOfStock,
-      lowStock,
-      totalRequiredUnits,
-      topRestockProducts: restockNeeded.slice(0, 6),
-    }
-  }, [localProducts])
-
-  const openRestockProduct = (product) => {
-    if (!product) return
-    setActiveTab(2)
-    setSelectedBrand(product.brand || 'Other Models')
-    setInventoryView('products')
-    handleOpenStockModal(product)
-  }
-
   const greeting = useMemo(() => {
     const hour = new Date().getHours()
     if (hour < 12) return 'Good Morning'
@@ -1282,184 +629,6 @@ export default function IntegratedAdminPanelDashboard() {
     }
   }, [salesReportOrders])
 
-
-  const activityStats = useMemo(() => {
-    const safeLogs = Array.isArray(activityLogs) ? activityLogs : []
-    const today = new Date()
-    const todayLogs = safeLogs.filter((log) => isSameCalendarDay(new Date(log.createdAt || log.created_at || 0), today))
-
-    return {
-      total: safeLogs.length,
-      today: todayLogs.length,
-      latest: safeLogs.slice(0, 6),
-    }
-  }, [activityLogs])
-
-  const handleExportProductsBackup = () => {
-    const rows = [
-      ['ID', 'Brand', 'Product', 'Selling Price', 'Purchase Price', 'Stock', 'Minimum Alert', 'Supplier', 'Status', 'Image'],
-      ...(Array.isArray(localProducts) ? localProducts : []).map((product) => [
-        product.id || '',
-        product.brand || 'Other Models',
-        product.title || 'Mobisphere Product',
-        Number(product.price || 0),
-        Number(product.purchasePrice || 0),
-        getStockQuantity(product),
-        getMinStockAlert(product),
-        product.supplierName || '',
-        getStockStatusDetails(product).label,
-        product.image || '',
-      ])
-    ]
-
-    downloadTextFile(`mobisphere-products-backup-${new Date().toISOString().slice(0, 10)}.csv`, buildCsvContent(rows), 'text/csv;charset=utf-8')
-    setMessage('Products backup CSV downloaded.')
-    addActivityLog({ type: 'backup_export', title: 'Products backup exported', description: 'Products inventory CSV backup downloaded.', targetType: 'products', severity: 'success' })
-  }
-
-  const handleExportOrdersBackup = () => {
-    const rows = [
-      ['Order ID', 'Customer', 'Mobile', 'Address', 'Date', 'Total', 'Status', 'Items', 'Coupon', 'Payment Mode'],
-      ...(Array.isArray(orders) ? orders : []).map((order) => [
-        order.id || '',
-        getOrderCustomerName(order),
-        getOrderMobile(order),
-        getOrderAddress(order),
-        order.date || order.createdAt || '',
-        getOrderTotal(order),
-        order.status || 'Processing',
-        getOrderItemsCount(order),
-        order.couponCode || order.coupon_code || '',
-        order.paymentMode || order.payment_mode || 'Cash on Delivery',
-      ])
-    ]
-
-    downloadTextFile(`mobisphere-orders-backup-${new Date().toISOString().slice(0, 10)}.csv`, buildCsvContent(rows), 'text/csv;charset=utf-8')
-    setMessage('Orders backup CSV downloaded.')
-    addActivityLog({ type: 'backup_export', title: 'Orders backup exported', description: 'Customer orders CSV backup downloaded.', targetType: 'orders', severity: 'success' })
-  }
-
-  const handleExportCustomersBackup = () => {
-    const rows = [
-      ['ID', 'Full Name', 'Email', 'Mobile', 'Address', 'Created At'],
-      ...(Array.isArray(customers) ? customers : []).map((customer) => [
-        customer.id || '',
-        customer.full_name || customer.fullName || '',
-        customer.email || '',
-        customer.mobile_number || customer.mobileNumber || '',
-        customer.address || '',
-        customer.created_at || customer.createdAt || '',
-      ])
-    ]
-
-    downloadTextFile(`mobisphere-customers-backup-${new Date().toISOString().slice(0, 10)}.csv`, buildCsvContent(rows), 'text/csv;charset=utf-8')
-    setMessage('Customers backup CSV downloaded.')
-    addActivityLog({ type: 'backup_export', title: 'Customers backup exported', description: 'Customer records CSV backup downloaded.', targetType: 'customers', severity: 'success' })
-  }
-
-  const handleExportEnquiriesBackup = () => {
-    const rows = [
-      ['ID', 'Full Name', 'Mobile', 'Address', 'Message', 'Status', 'Admin Note', 'Created At'],
-      ...(Array.isArray(enquiries) ? enquiries : []).map((enquiry) => [
-        enquiry.id || '',
-        enquiry.full_name || enquiry.fullName || '',
-        enquiry.mobile_number || enquiry.mobileNumber || '',
-        enquiry.address || '',
-        enquiry.message || '',
-        enquiry.status || '',
-        enquiry.admin_note || enquiry.adminNote || '',
-        enquiry.created_at || enquiry.createdAt || '',
-      ])
-    ]
-
-    downloadTextFile(`mobisphere-enquiries-backup-${new Date().toISOString().slice(0, 10)}.csv`, buildCsvContent(rows), 'text/csv;charset=utf-8')
-    setMessage('Enquiries backup CSV downloaded.')
-    addActivityLog({ type: 'backup_export', title: 'Enquiries backup exported', description: 'Enquiry records CSV backup downloaded.', targetType: 'enquiries', severity: 'success' })
-  }
-
-  const handleExportOffersBackup = () => {
-    const rows = [
-      ['Type', 'ID', 'Title/Code', 'Discount', 'Scope', 'Status', 'Start/Expiry', 'End Date'],
-      ...(Array.isArray(coupons) ? coupons : []).map((coupon) => [
-        'Coupon',
-        coupon.id || '',
-        coupon.code || '',
-        `${Number(coupon.discountPercent || 0)}%`,
-        'Coupon code',
-        coupon.active === false ? 'Inactive' : 'Active',
-        coupon.expiresAt || coupon.expiryDate || '',
-        '',
-      ]),
-      ...(Array.isArray(saleCampaigns) ? saleCampaigns : []).map((campaign) => [
-        'Sale Campaign',
-        campaign.id || '',
-        campaign.title || '',
-        formatCampaignDiscount(campaign),
-        getCampaignScopeLabel(campaign),
-        getCampaignStatus(campaign).label,
-        campaign.startDate || '',
-        campaign.endDate || '',
-      ])
-    ]
-
-    downloadTextFile(`mobisphere-offers-backup-${new Date().toISOString().slice(0, 10)}.csv`, buildCsvContent(rows), 'text/csv;charset=utf-8')
-    setMessage('Coupons and sale campaigns backup CSV downloaded.')
-    addActivityLog({ type: 'backup_export', title: 'Offers backup exported', description: 'Coupons and festival sale campaigns CSV backup downloaded.', targetType: 'offers', severity: 'success' })
-  }
-
-  const handleExportActivityLogBackup = () => {
-    const rows = [
-      ['ID', 'Type', 'Title', 'Description', 'Target Type', 'Target ID', 'Severity', 'Admin Name', 'Admin Email', 'Created At'],
-      ...(Array.isArray(activityLogs) ? activityLogs : []).map((log) => [
-        log.id || '',
-        log.type || '',
-        log.title || '',
-        log.description || '',
-        log.targetType || '',
-        log.targetId || '',
-        log.severity || 'info',
-        log.adminName || '',
-        log.adminEmail || '',
-        log.createdAt || '',
-      ])
-    ]
-
-    downloadTextFile(`mobisphere-activity-log-${new Date().toISOString().slice(0, 10)}.csv`, buildCsvContent(rows), 'text/csv;charset=utf-8')
-    setMessage('Activity log CSV downloaded.')
-    addActivityLog({ type: 'backup_export', title: 'Activity log exported', description: 'Admin activity log CSV backup downloaded.', targetType: 'activity_logs', severity: 'success' })
-  }
-
-  const handleExportFullBackupJson = () => {
-    const backup = {
-      exportedAt: new Date().toISOString(),
-      store: 'Mobisphere Mobile Shop',
-      admin: {
-        name: adminProfile?.full_name || username || 'Admin',
-        email: adminProfile?.email || '',
-      },
-      products: Array.isArray(localProducts) ? localProducts : [],
-      orders: Array.isArray(orders) ? orders : [],
-      customers: Array.isArray(customers) ? customers : [],
-      enquiries: Array.isArray(enquiries) ? enquiries : [],
-      coupons: Array.isArray(coupons) ? coupons : [],
-      saleCampaigns: Array.isArray(saleCampaigns) ? saleCampaigns : [],
-      activityLogs: Array.isArray(activityLogs) ? activityLogs : [],
-    }
-
-    downloadTextFile(`mobisphere-full-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(backup, null, 2), 'application/json;charset=utf-8')
-    setMessage('Full JSON backup downloaded.')
-    addActivityLog({ type: 'backup_export', title: 'Full admin backup exported', description: 'Complete Mobisphere JSON backup downloaded.', targetType: 'full_backup', severity: 'success' })
-  }
-
-  const handleClearActivityLogs = async () => {
-    const confirmed = typeof window !== 'undefined' ? window.confirm('Clear local activity log from this admin panel? Supabase records may remain unless deleted from Supabase.') : false
-    if (!confirmed) return
-
-    setActivityLogs([])
-    saveJson(ACTIVITY_LOG_STORAGE_KEY, [])
-    setMessage('Local activity log cleared.')
-  }
-
   // Admin Sign Up / Login Logic
   const resetAuthForm = () => {
     setRegName('')
@@ -1476,388 +645,94 @@ export default function IntegratedAdminPanelDashboard() {
     resetAuthForm()
   }
 
-  const handleAuthSubmit = async (e) => {
+  const handleAuthSubmit = (e) => {
     e.preventDefault()
-
-    const email = username.trim().toLowerCase()
+    const uname = username.trim()
     const cleanName = regName.trim()
     const cleanAccessKey = adminAccessKey.trim().toUpperCase()
 
-    if (!email || !password) {
-      setMessage('Please enter email and password.')
+    if (!uname || !password) {
+      setMessage('Please enter username and password.')
       return
     }
 
-    if (!email.includes('@')) {
-      setMessage('Please enter a valid email address.')
-      return
-    }
-
-    try {
-      setMessage('')
-
-      if (isRegistering) {
-        if (!cleanName) {
-          setMessage('Please enter admin full name.')
-          return
-        }
-
-        if (password.length < 6) {
-          setMessage('Password must be at least 6 characters.')
-          return
-        }
-
-        if (password !== confirmPassword) {
-          setMessage('Passwords do not match.')
-          return
-        }
-
-        if (cleanAccessKey !== ADMIN_ACCESS_KEY) {
-          setMessage('Invalid admin access code.')
-          return
-        }
-
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: getAdminEmailRedirectUrl(),
-            data: {
-              full_name: cleanName,
-              role: 'admin',
-            },
-          },
-        })
-
-        if (error) throw error
-
-        const user = data?.user
-
-        if (!user?.id) {
-          setMessage('Admin account could not be created. Try again.')
-          return
-        }
-
-        const profileRow = {
-          id: user.id,
-          full_name: cleanName,
-          email,
-          role: 'admin',
-          active: true,
-          email_verified_at: user.email_confirmed_at || user.confirmed_at || null,
-          updated_at: new Date().toISOString(),
-        }
-
-        const { error: profileError } = await supabase
-          .from(ADMIN_PROFILES_TABLE_NAME)
-          .upsert(profileRow, { onConflict: 'id' })
-
-        if (profileError) throw profileError
-
-        if (!isEmailVerified(user) || !data?.session) {
-          await supabase.auth.signOut()
-          localStorage.removeItem(ADMIN_SESSION_KEY)
-          setIsRegistering(false)
-          setPassword('')
-          setConfirmPassword('')
-          setAdminAccessKey('')
-          setMessage(`✅ Verification link sent to ${email}. Please verify your email, then login again.`)
-          return
-        }
-
-        await loadAdminProfile(user)
-        setIsLoggedIn(true)
-        setMessage('')
-        await fetchData(false)
+    if (isRegistering) {
+      if (!cleanName) {
+        setMessage('Please enter admin full name.')
         return
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+      if (password.length < 6) {
+        setMessage('Password must be at least 6 characters.')
+        return
+      }
+
+      if (password !== confirmPassword) {
+        setMessage('Passwords do not match.')
+        return
+      }
+
+      if (cleanAccessKey !== ADMIN_ACCESS_KEY) {
+        setMessage('Invalid admin access code.')
+        return
+      }
+
+      const exists = adminUsers.some((admin) => String(admin.username || '').toLowerCase() === uname.toLowerCase())
+      if (exists) {
+        setMessage('This username already exists. Use another username.')
+        return
+      }
+
+      const newAdmin = {
+        id: Date.now().toString(),
+        name: cleanName,
+        username: uname,
         password,
-      })
-
-      if (error) throw error
-
-      const user = data?.user
-
-      if (!user?.id) {
-        setMessage('Admin login failed. Try again.')
-        return
+        createdAt: new Date().toISOString()
       }
+      const updatedAdmins = [...adminUsers, newAdmin]
 
-      if (!isEmailVerified(user)) {
-        await supabase.auth.signOut()
-        localStorage.removeItem(ADMIN_SESSION_KEY)
-        setMessage('Please verify your admin email first. Check your inbox for the Mobisphere verification link.')
-        return
-      }
-
-      await loadAdminProfile(user)
+      setAdminUsers(updatedAdmins)
+      saveJson(ADMIN_USERS_KEY, updatedAdmins)
+      saveJson(ADMIN_SESSION_KEY, { username: uname, name: cleanName })
       setIsLoggedIn(true)
-      setPassword('')
+      setUsername(uname)
       setMessage('')
-      await fetchData(false)
-    } catch (error) {
-      console.error('Supabase admin auth error:', error)
-      setIsLoggedIn(false)
-      setAdminProfile(null)
-      localStorage.removeItem(ADMIN_SESSION_KEY)
-      setMessage(getReadableAuthError(error))
-    }
-  }
-
-  const handleResendAdminVerification = async () => {
-    const email = username.trim().toLowerCase()
-
-    if (!email || !email.includes('@')) {
-      setMessage('Enter your admin email first, then resend verification link.')
+      fetchData()
       return
     }
 
-    try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email,
-        options: {
-          emailRedirectTo: getAdminEmailRedirectUrl(),
-        },
-      })
-
-      if (error) throw error
-
-      setMessage(`✅ Verification link resent to ${email}. Check your inbox.`)
-    } catch (error) {
-      console.error('Admin verification resend error:', error)
-      setMessage(getReadableAuthError(error))
+    if (!Array.isArray(adminUsers) || adminUsers.length === 0) {
+      setMessage('No admin account found. Create admin account using Sign Up.')
+      return
     }
+
+    const validAdmin = adminUsers.find(
+      (admin) => String(admin.username || '').toLowerCase() === uname.toLowerCase() && admin.password === password
+    )
+
+    if (!validAdmin) {
+      setMessage('Invalid username or password.')
+      return
+    }
+
+    saveJson(ADMIN_SESSION_KEY, { username: validAdmin.username, name: validAdmin.name || validAdmin.username })
+    setIsLoggedIn(true)
+    setUsername(validAdmin.username)
+    setMessage('')
+    fetchData()
   }
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut()
-    } catch (error) {
-      console.error('Supabase logout error:', error)
-    }
-
+  const handleLogout = () => {
     localStorage.removeItem(ADMIN_SESSION_KEY)
     setIsLoggedIn(false)
-    setAdminProfile(null)
     resetAuthForm()
-  }
-
-  const handleProfileFormChange = (field, value) => {
-    setProfileForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }))
-    setProfileSaveState('idle')
-    setProfileMessage('')
-  }
-
-  const handleUpdateAdminProfile = async (event) => {
-    event.preventDefault()
-    setProfileMessage('')
-
-    const fullName = profileForm.fullName.trim()
-    const nextEmail = profileForm.email.trim().toLowerCase()
-    const newPassword = profileForm.newPassword
-    const confirmNewPassword = profileForm.confirmNewPassword
-
-    if (!fullName) {
-      setProfileSaveState('error')
-      setProfileMessage('Please enter admin full name.')
-      return
-    }
-
-    if (!nextEmail || !nextEmail.includes('@')) {
-      setProfileSaveState('error')
-      setProfileMessage('Please enter a valid email address.')
-      return
-    }
-
-    if (showProfilePasswordFields && newPassword && newPassword.length < 6) {
-      setProfileSaveState('error')
-      setProfileMessage('New password must be at least 6 characters.')
-      return
-    }
-
-    if (showProfilePasswordFields && newPassword && newPassword !== confirmNewPassword) {
-      setProfileSaveState('error')
-      setProfileMessage('New password and confirm password do not match.')
-      return
-    }
-
-    if (showProfilePasswordFields && !newPassword && confirmNewPassword) {
-      setProfileSaveState('error')
-      setProfileMessage('Please enter new password first.')
-      return
-    }
-
-    setIsUpdatingProfile(true)
-    setProfileSaveState('saving')
-
-    try {
-      const { data: userData, error: userError } = await supabase.auth.getUser()
-      if (userError) throw userError
-
-      const user = userData?.user
-
-      if (!user?.id) {
-        throw new Error('Admin session expired. Please login again.')
-      }
-
-      const currentEmail = String(user.email || adminProfile?.email || '').toLowerCase()
-      const currentName = String(adminProfile?.full_name || user.user_metadata?.full_name || username || '').trim()
-      const emailChanged = Boolean(nextEmail && nextEmail !== currentEmail)
-      const nameChanged = Boolean(fullName && fullName !== currentName)
-      const passwordChanged = Boolean(showProfilePasswordFields && newPassword)
-      const now = new Date().toISOString()
-
-      if (!nameChanged && !emailChanged && !passwordChanged) {
-        setProfileSaveState('idle')
-        setProfileMessage('No changes found to save.')
-        return
-      }
-
-      let updatedProfile = null
-      let emailChangeRequested = false
-
-      if (nameChanged || emailChanged) {
-        const profileUpdate = {
-          id: user.id,
-          full_name: fullName,
-          email: currentEmail || nextEmail,
-          role: adminProfile?.role || 'admin',
-          active: adminProfile?.active !== false,
-          email_verified_at: user.email_confirmed_at || user.confirmed_at || adminProfile?.email_verified_at || null,
-          updated_at: now,
-        }
-
-        if (emailChanged) {
-          profileUpdate.pending_email = nextEmail
-          profileUpdate.email_change_requested_at = now
-        }
-
-        const { data: profileData, error: profileError } = await supabase
-          .from(ADMIN_PROFILES_TABLE_NAME)
-          .upsert(profileUpdate, { onConflict: 'id' })
-          .select('*')
-          .maybeSingle()
-
-        if (profileError) throw profileError
-
-        updatedProfile = profileData || profileUpdate
-      }
-
-      if (nameChanged) {
-        const { error: metadataError } = await supabase.auth.updateUser({
-          data: {
-            ...(user.user_metadata || {}),
-            full_name: fullName,
-          },
-        })
-
-        if (metadataError) {
-          console.warn('Admin metadata update warning:', metadataError)
-        }
-      }
-
-      if (passwordChanged) {
-        const { error: passwordError } = await supabase.auth.updateUser({
-          password: newPassword,
-        })
-
-        if (passwordError) {
-          throw new Error(`Password update failed: ${getReadableAuthError(passwordError)}`)
-        }
-      }
-
-      if (emailChanged) {
-        const { error: emailError } = await supabase.auth.updateUser(
-          {
-            email: nextEmail,
-          },
-          {
-            emailRedirectTo: getAdminEmailRedirectUrl(),
-          }
-        )
-
-        if (emailError) {
-          throw new Error(`Email verification email could not be sent: ${getReadableAuthError(emailError)}`)
-        }
-
-        emailChangeRequested = true
-      }
-
-      const nextProfile = {
-        ...(adminProfile || {}),
-        ...(updatedProfile || {}),
-        id: user.id,
-        full_name: fullName,
-        email: (updatedProfile?.email || currentEmail || nextEmail),
-        pending_email: emailChangeRequested ? nextEmail : updatedProfile?.pending_email || adminProfile?.pending_email || null,
-        email_change_requested_at: emailChangeRequested ? now : updatedProfile?.email_change_requested_at || adminProfile?.email_change_requested_at || null,
-        updated_at: now,
-      }
-
-      setAdminProfile(nextProfile)
-      setUsername(fullName)
-      setProfileForm({
-        fullName,
-        email: nextProfile.email || currentEmail || nextEmail,
-        newPassword: '',
-        confirmNewPassword: '',
-      })
-      setShowProfilePasswordFields(false)
-
-      saveJson(ADMIN_SESSION_KEY, {
-        userId: user.id,
-        email: nextProfile.email || currentEmail || nextEmail,
-        username: nextProfile.email || currentEmail || nextEmail,
-        name: fullName,
-        provider: 'supabase',
-      })
-
-      setProfileSaveState('saved')
-
-      if (emailChangeRequested) {
-        setProfileMessage(`Saved. Verification email sent to ${nextEmail}. Confirm it before using the new email.`)
-      } else if (passwordChanged && nameChanged) {
-        setProfileMessage('Admin name and password saved successfully.')
-      } else if (passwordChanged) {
-        setProfileMessage('Password saved successfully.')
-      } else if (nameChanged) {
-        setProfileMessage('Admin name saved successfully.')
-      } else {
-        setProfileMessage('Profile saved successfully.')
-      }
-
-      addActivityLog({
-        type: 'profile_update',
-        title: 'Admin profile updated',
-        description: emailChangeRequested ? `Profile updated. Verification email sent to ${nextEmail}.` : 'Admin profile details updated.',
-        targetType: 'admin_profile',
-        targetId: user.id,
-        severity: 'success',
-        metadata: { nameChanged, emailChanged, passwordChanged },
-      })
-    } catch (error) {
-      console.error('Admin profile update error:', error)
-      setProfileSaveState('error')
-      setProfileMessage(error?.message || 'Admin profile update failed.')
-    } finally {
-      setIsUpdatingProfile(false)
-      setTimeout(() => setProfileSaveState('idle'), 3200)
-    }
   }
 
   const handleCustomerDelete = async (id) => {
     await supabase.from('customers').delete().eq('id', id)
-    const deletedCustomer = customers.find((customer) => customer.id === id)
     setCustomers(customers.filter(c => c.id !== id))
     setMessage('Customer deleted successfully.')
-    addActivityLog({ type: 'customer_delete', title: 'Customer deleted', description: `${deletedCustomer?.full_name || deletedCustomer?.fullName || 'Customer'} removed from customer records.`, targetType: 'customer', targetId: id, severity: 'danger' })
   }
 
   const handleEnquiryFieldChange = (enquiryId, field, value) => {
@@ -1872,7 +747,6 @@ export default function IntegratedAdminPanelDashboard() {
       admin_note: target.admin_note
     }).eq('id', id)
     setMessage(`✅ Progress Saved for Enquiry ID: ${id}`)
-    addActivityLog({ type: 'enquiry_update', title: 'Enquiry progress saved', description: `Progress saved for enquiry ${id}.`, targetType: 'enquiry', targetId: id, severity: 'success' })
     alert('Changes saved to Supabase!')
   }
 
@@ -1880,17 +754,13 @@ export default function IntegratedAdminPanelDashboard() {
     await supabase.from('enquiries').delete().eq('id', id)
     setEnquiries(enquiries.filter(e => e.id !== id))
     setMessage('Enquiry removed.')
-    addActivityLog({ type: 'enquiry_delete', title: 'Enquiry removed', description: `Enquiry ${id} removed.`, targetType: 'enquiry', targetId: id, severity: 'danger' })
   }
 
-  const handleCreateCoupon = async (e) => {
+  const handleCreateCoupon = (e) => {
     e.preventDefault()
     const code = newCouponCode.trim().toUpperCase()
     const percent = Number(newDiscountPercent)
-    if (!code || percent <= 0 || percent > 100) {
-      setMessage('Please enter a valid coupon code and discount percent.')
-      return
-    }
+    if (!code || percent <= 0 || percent > 100) return
 
     const newCoupon = {
       id: Date.now().toString(),
@@ -1898,81 +768,30 @@ export default function IntegratedAdminPanelDashboard() {
       discountPercent: percent,
       active: true,
       expiresAt: newCouponExpiryDate || '',
-      expiryDate: newCouponExpiryDate || '',
       createdAt: new Date().toISOString()
     }
 
-    const next = [newCoupon, ...coupons.filter((coupon) => String(coupon.code || '').toUpperCase() !== code)]
+    const next = [...coupons, newCoupon]
     setCoupons(next)
     saveJson(COUPON_STORAGE_KEY, next)
-
-    try {
-      const { error } = await supabase
-        .from(COUPONS_TABLE_NAME)
-        .upsert(couponToSupabase(newCoupon), { onConflict: 'id' })
-
-      if (error) throw error
-      setMessage('Coupon code saved to Supabase!')
-    } catch (error) {
-      console.error('Coupon save error:', error)
-      setMessage('Coupon saved locally, but Supabase sync failed.')
-    }
-
-    addActivityLog({ type: 'coupon_create', title: 'Coupon created', description: `Coupon ${code} created with ${percent}% discount.`, targetType: 'coupon', targetId: newCoupon.id, severity: 'success' })
-
     setNewCouponCode('')
     setNewDiscountPercent('')
     setNewCouponExpiryDate('')
+    setMessage('Coupon code activated!')
   }
 
-  const handleToggleCouponActive = async (id) => {
-    let updatedCoupon = null
-    const next = coupons.map((coupon) => {
-      if (coupon.id !== id) return coupon
-      updatedCoupon = { ...coupon, active: coupon.active === false ? true : false }
-      return updatedCoupon
-    })
-
+  const handleToggleCouponActive = (id) => {
+    const next = coupons.map((coupon) =>
+      coupon.id === id ? { ...coupon, active: coupon.active === false ? true : false } : coupon
+    )
     setCoupons(next)
     saveJson(COUPON_STORAGE_KEY, next)
-
-    if (!updatedCoupon) return
-
-    try {
-      const { error } = await supabase
-        .from(COUPONS_TABLE_NAME)
-        .update({ active: updatedCoupon.active, updated_at: new Date().toISOString() })
-        .eq('id', id)
-
-      if (error) throw error
-      setMessage('Coupon status updated on Supabase.')
-    } catch (error) {
-      console.error('Coupon status update error:', error)
-      setMessage('Coupon status changed locally, but Supabase sync failed.')
-    }
-
-    addActivityLog({ type: 'coupon_update', title: 'Coupon status changed', description: `${updatedCoupon.code} is now ${updatedCoupon.active ? 'active' : 'inactive'}.`, targetType: 'coupon', targetId: id, severity: 'info' })
   }
 
-  const handleDeleteCoupon = async (id) => {
+  const handleDeleteCoupon = (id) => {
     const next = coupons.filter(c => c.id !== id)
     setCoupons(next)
     saveJson(COUPON_STORAGE_KEY, next)
-
-    try {
-      const { error } = await supabase
-        .from(COUPONS_TABLE_NAME)
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
-      setMessage('Coupon removed from Supabase.')
-    } catch (error) {
-      console.error('Coupon delete error:', error)
-      setMessage('Coupon removed locally, but Supabase sync failed.')
-    }
-
-    addActivityLog({ type: 'coupon_delete', title: 'Coupon deleted', description: `Coupon ${id} deleted.`, targetType: 'coupon', targetId: id, severity: 'danger' })
   }
 
   const resetSaleCampaignForm = () => {
@@ -1986,7 +805,7 @@ export default function IntegratedAdminPanelDashboard() {
     setNewCampaignEndDate('')
   }
 
-  const handleCreateSaleCampaign = async (e) => {
+  const handleCreateSaleCampaign = (e) => {
     e.preventDefault()
 
     const title = newCampaignTitle.trim()
@@ -2039,71 +858,23 @@ export default function IntegratedAdminPanelDashboard() {
     const next = [newCampaign, ...saleCampaigns]
     setSaleCampaigns(next)
     saveJson(SALE_CAMPAIGNS_STORAGE_KEY, next)
-
-    try {
-      const { error } = await supabase
-        .from(SALE_CAMPAIGNS_TABLE_NAME)
-        .upsert(campaignToSupabase(newCampaign), { onConflict: 'id' })
-
-      if (error) throw error
-      setMessage('Festival sale campaign saved to Supabase!')
-    } catch (error) {
-      console.error('Sale campaign save error:', error)
-      setMessage('Sale campaign saved locally, but Supabase sync failed.')
-    }
-
-    addActivityLog({ type: 'sale_campaign_create', title: 'Sale campaign created', description: `${newCampaign.title} created with ${formatCampaignDiscount(newCampaign)}.`, targetType: 'sale_campaign', targetId: newCampaign.id, severity: 'success' })
     resetSaleCampaignForm()
+    setMessage('Festival sale campaign created successfully!')
   }
 
-  const handleToggleSaleCampaign = async (id) => {
-    let updatedCampaign = null
-    const next = saleCampaigns.map((campaign) => {
-      if (campaign.id !== id) return campaign
-      updatedCampaign = { ...campaign, active: campaign.active === false ? true : false }
-      return updatedCampaign
-    })
-
+  const handleToggleSaleCampaign = (id) => {
+    const next = saleCampaigns.map((campaign) =>
+      campaign.id === id ? { ...campaign, active: campaign.active === false ? true : false } : campaign
+    )
     setSaleCampaigns(next)
     saveJson(SALE_CAMPAIGNS_STORAGE_KEY, next)
-
-    if (!updatedCampaign) return
-
-    try {
-      const { error } = await supabase
-        .from(SALE_CAMPAIGNS_TABLE_NAME)
-        .update({ active: updatedCampaign.active, updated_at: new Date().toISOString() })
-        .eq('id', id)
-
-      if (error) throw error
-      setMessage('Sale campaign status updated on Supabase.')
-    } catch (error) {
-      console.error('Sale campaign status update error:', error)
-      setMessage('Sale campaign status changed locally, but Supabase sync failed.')
-    }
-
-    addActivityLog({ type: 'sale_campaign_update', title: 'Sale campaign status changed', description: `${updatedCampaign.title} is now ${updatedCampaign.active ? 'active' : 'inactive'}.`, targetType: 'sale_campaign', targetId: id, severity: 'info' })
   }
 
-  const handleDeleteSaleCampaign = async (id) => {
+  const handleDeleteSaleCampaign = (id) => {
     const next = saleCampaigns.filter((campaign) => campaign.id !== id)
     setSaleCampaigns(next)
     saveJson(SALE_CAMPAIGNS_STORAGE_KEY, next)
-
-    try {
-      const { error } = await supabase
-        .from(SALE_CAMPAIGNS_TABLE_NAME)
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
-      setMessage('Sale campaign removed from Supabase.')
-    } catch (error) {
-      console.error('Sale campaign delete error:', error)
-      setMessage('Sale campaign removed locally, but Supabase sync failed.')
-    }
-
-    addActivityLog({ type: 'sale_campaign_delete', title: 'Sale campaign removed', description: `Sale campaign ${id} removed.`, targetType: 'sale_campaign', targetId: id, severity: 'danger' })
+    setMessage('Sale campaign removed.')
   }
 
   const handleExportStockReport = () => {
@@ -2128,7 +899,6 @@ export default function IntegratedAdminPanelDashboard() {
     const csv = rows.map((row) => row.map(sanitizeCsvValue).join(',')).join('\n')
     downloadTextFile(`mobisphere-stock-report-${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv;charset=utf-8')
     setMessage('Stock report downloaded successfully.')
-    addActivityLog({ type: 'backup_export', title: 'Stock report exported', description: 'Inventory stock report CSV downloaded.', targetType: 'stock_report', severity: 'success' })
   }
 
   const handlePrintInvoice = (order) => {
@@ -2185,14 +955,13 @@ export default function IntegratedAdminPanelDashboard() {
       setCustomers((prev) => [createdCustomer, ...prev])
       setEnquiries((prev) => prev.map((item) => item.id === enquiry.id ? { ...item, status: 'Converted', admin_note: 'Converted to customer.' } : item))
       setMessage('✅ Enquiry converted to customer successfully.')
-      addActivityLog({ type: 'customer_create', title: 'Enquiry converted to customer', description: `${createdCustomer.full_name || 'Visitor'} added as customer.`, targetType: 'customer', targetId: createdCustomer.id, severity: 'success' })
     } catch (error) {
       console.error('Convert enquiry error:', error)
       setMessage('❌ Could not convert enquiry to customer. Check Supabase customer table fields.')
     }
   }
 
-  const handleCreateOrderFromEnquiry = async (enquiry) => {
+  const handleCreateOrderFromEnquiry = (enquiry) => {
     if (!enquiry) return
 
     const order = {
@@ -2202,35 +971,22 @@ export default function IntegratedAdminPanelDashboard() {
       address: enquiry.address || '',
       date: new Date().toISOString(),
       total: 0,
-      totalAmount: 0,
       status: 'Processing',
       items: 0,
       products: [],
       enquiryId: enquiry.id,
-      note: enquiry.message || 'Order created from enquiry.',
-      paymentMode: 'Cash on Delivery'
+      note: enquiry.message || 'Order created from enquiry.'
     }
 
-    const nextOrders = [order, ...(Array.isArray(orders) ? orders : [])]
-    setOrders(nextOrders)
-    saveJson(ORDERS_STORAGE_KEY, nextOrders)
-
-    try {
-      const { error } = await supabase
-        .from(ORDERS_TABLE_NAME)
-        .upsert([orderToSupabase(order)], { onConflict: 'id' })
-
-      if (error) throw error
-
-      setMessage(`✅ Order ${order.id} created from enquiry and synced to Supabase.`)
-    } catch (error) {
-      console.error('Create order from enquiry error:', error)
-      setMessage(`⚠️ Order ${order.id} created locally. Supabase sync failed.`)
-    }
+    setOrders((prev) => {
+      const next = [order, ...(Array.isArray(prev) ? prev : [])]
+      saveJson(ORDERS_STORAGE_KEY, next)
+      return next
+    })
 
     setEnquiries((prev) => prev.map((item) => item.id === enquiry.id ? { ...item, status: 'Converted to Order', admin_note: `Order ${order.id} created from enquiry.` } : item))
     setSelectedOrder(order)
-    addActivityLog({ type: 'order_create', title: 'Order created from enquiry', description: `Order ${order.id} created from enquiry.`, targetType: 'order', targetId: order.id, severity: 'success' })
+    setMessage(`✅ Order ${order.id} created from enquiry.`)
   }
 
 
@@ -2294,29 +1050,24 @@ export default function IntegratedAdminPanelDashboard() {
     )
 
     setMessage(`✅ ${quantityToAdd} units added to ${stockProduct.title}.`)
-    addActivityLog({ type: 'stock_add', title: 'Stock added', description: `${quantityToAdd} units added to ${stockProduct.title}.`, targetType: 'product', targetId: stockProduct.id, severity: 'success', metadata: { quantityToAdd, supplier: stockSupplier.trim() || 'Not specified' } })
     handleCloseStockModal()
   }
 
   const handleSaveProduct = async (e) => {
     e.preventDefault()
-
     const formData = new FormData(e.target)
     const imageFile = formData.get('image')
+    const uploadedImage = imageFile && imageFile.size > 0 ? await fileToDataUrl(imageFile) : ''
+    const imageUrl = uploadedImage || editingProduct?.image || '/images/IPhone 16 Pro Max.png'
     const brand = String(formData.get('brand') || 'Other Models').trim()
     const title = String(formData.get('title') || 'Untitled Product').trim()
-    const productId = editingProduct ? String(editingProduct.id) : Date.now().toString()
-    const uploadedImage = imageFile && imageFile.size > 0
-      ? await uploadProductImageToStorage(imageFile, productId, title)
-      : ''
-    const imageUrl = uploadedImage || editingProduct?.image || '/images/IPhone 16 Pro Max.png'
     const stockQty = Math.max(Number(formData.get('stockQty') || editingProduct?.stockQty || 0), 0)
     const minStockAlert = Math.max(Number(formData.get('minStockAlert') || editingProduct?.minStockAlert || 3), 0)
     const purchasePrice = Math.max(Number(formData.get('purchasePrice') || editingProduct?.purchasePrice || 0), 0)
     const supplierName = String(formData.get('supplierName') || editingProduct?.supplierName || '').trim()
 
     const newProd = {
-      id: productId,
+      id: editingProduct ? editingProduct.id : Date.now().toString(),
       title,
       brand,
       price: Number(formData.get('price')),
@@ -2339,13 +1090,11 @@ export default function IntegratedAdminPanelDashboard() {
         Tools: formData.get('tools')
       }
     }
-
-    setLocalProducts(prev => editingProduct ? prev.map(p => String(p.id) === String(newProd.id) ? newProd : p) : [...prev, newProd])
+    setLocalProducts(prev => editingProduct ? prev.map(p => p.id === newProd.id ? newProd : p) : [...prev, newProd])
     setSelectedBrand(brand)
     setInventoryView('products')
     setEditingProduct(null)
-    setMessage(`Product ${editingProduct ? 'updated' : 'added'} successfully${uploadedImage ? ' with Supabase Storage image' : ''}!`)
-    addActivityLog({ type: editingProduct ? 'product_update' : 'product_create', title: editingProduct ? 'Product updated' : 'Product added', description: `${title} ${editingProduct ? 'updated' : 'added'} in inventory.`, targetType: 'product', targetId: newProd.id, severity: 'success' })
+    setMessage(`Product ${editingProduct ? 'updated' : 'added'} successfully!`)
   }
 
   const handleDeleteProduct = (id) => {
@@ -2354,10 +1103,12 @@ export default function IntegratedAdminPanelDashboard() {
       handleCloseStockModal()
     }
     setMessage('Product deleted successfully.')
-    addActivityLog({ type: 'product_delete', title: 'Product deleted', description: `Product ${id} removed from inventory.`, targetType: 'product', targetId: id, severity: 'danger' })
   }
 
-  const getOrderProducts = (order) => getOrderProductArray(order)
+  const getOrderProducts = (order) => {
+    const orderProducts = order?.products || order?.cartItems || order?.itemsList || []
+    return Array.isArray(orderProducts) ? orderProducts : []
+  }
 
   const restoreStockForCancelledOrder = (order) => {
     const orderProducts = getOrderProducts(order)
@@ -2406,64 +1157,48 @@ export default function IntegratedAdminPanelDashboard() {
     return true
   }
 
-  const handleOrderStatusChange = async (id, status) => {
+  const handleOrderStatusChange = (id, status) => {
     let restoredStock = false
     let changedOrder = null
-    const safeOrders = Array.isArray(orders) ? orders : []
 
-    const nextOrders = safeOrders.map(order => {
-      if (order.id !== id) return order
+    setOrders(prev => {
+      const next = prev.map(order => {
+        if (order.id !== id) return order
 
-      const oldStatus = String(order.status || '')
-      const shouldRestoreStock =
-        status === 'Cancelled' &&
-        oldStatus !== 'Cancelled' &&
-        order.stockRestored !== true
+        const oldStatus = String(order.status || '')
+        const shouldRestoreStock =
+          status === 'Cancelled' &&
+          oldStatus !== 'Cancelled' &&
+          order.stockRestored !== true
 
-      if (shouldRestoreStock) {
-        restoredStock = restoreStockForCancelledOrder(order)
-      }
+        if (shouldRestoreStock) {
+          restoredStock = restoreStockForCancelledOrder(order)
+        }
 
-      changedOrder = {
-        ...order,
-        status,
-        stockRestored: shouldRestoreStock ? restoredStock : order.stockRestored,
-        stockRestoredAt: shouldRestoreStock && restoredStock ? new Date().toISOString() : order.stockRestoredAt,
-        updatedAt: new Date().toISOString()
-      }
+        changedOrder = {
+          ...order,
+          status,
+          stockRestored: shouldRestoreStock ? restoredStock : order.stockRestored,
+          stockRestoredAt: shouldRestoreStock && restoredStock ? new Date().toISOString() : order.stockRestoredAt
+        }
 
-      return changedOrder
+        return changedOrder
+      })
+
+      saveJson(ORDERS_STORAGE_KEY, next)
+      return next
     })
-
-    setOrders(nextOrders)
-    saveJson(ORDERS_STORAGE_KEY, nextOrders)
 
     if (selectedOrder && selectedOrder.id === id && changedOrder) {
       setSelectedOrder(changedOrder)
     }
 
-    if (changedOrder) {
-      try {
-        const { error } = await supabase
-          .from(ORDERS_TABLE_NAME)
-          .upsert([orderToSupabase(changedOrder)], { onConflict: 'id' })
-
-        if (error) throw error
-      } catch (error) {
-        console.error('Order status Supabase update error:', error)
-        setMessage(`⚠️ Order ${id} status changed locally, but Supabase sync failed.`)
-        return
-      }
-    }
-
     if (status === 'Cancelled') {
-      setMessage(restoredStock ? `Order ${id} cancelled, stock restored, and Supabase synced!` : `Order ${id} cancelled and Supabase synced.`)
-      addActivityLog({ type: 'order_status_update', title: 'Order cancelled', description: restoredStock ? `Order ${id} cancelled and stock restored.` : `Order ${id} cancelled.`, targetType: 'order', targetId: id, severity: restoredStock ? 'warning' : 'danger' })
+      setMessage(restoredStock ? `Order ${id} cancelled and stock restored automatically!` : `Order ${id} cancelled.`)
       return
     }
 
-    setMessage(`Order ${id} status updated and synced to Supabase!`)
-    addActivityLog({ type: 'order_status_update', title: 'Order status updated', description: `Order ${id} status changed to ${status}.`, targetType: 'order', targetId: id, severity: 'info' })
+    setMessage(`Order ${id} status updated!`)
   }
 
   if (!hydrated) return null
@@ -2555,14 +1290,14 @@ export default function IntegratedAdminPanelDashboard() {
                 )}
 
                 <div>
-                  <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Email Address</label>
+                  <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Username</label>
                   <input
-                    type="email"
+                    type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className="w-full rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm font-bold text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10"
-                    placeholder="Enter admin email"
-                    autoComplete="email"
+                    placeholder="Enter admin username"
+                    autoComplete="username"
                     required
                   />
                 </div>
@@ -2624,18 +1359,10 @@ export default function IntegratedAdminPanelDashboard() {
                 >
                   {isRegistering ? 'Create Admin Account' : 'Login to Dashboard'}
                 </button>
-
-                <button
-                  type="button"
-                  onClick={handleResendAdminVerification}
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 py-3 text-xs font-black text-emerald-200 transition hover:border-emerald-300/40 hover:bg-emerald-300/10 hover:text-emerald-100"
-                >
-                  Resend verification email
-                </button>
               </form>
 
               <p className="mt-5 text-center text-[11px] font-semibold leading-5 text-slate-500">
-                Admin access is protected with Supabase Auth, email verification, and the private access code.
+                This is a local admin login system. For real production security, connect proper backend authentication later.
               </p>
             </div>
           </div>
@@ -2645,72 +1372,137 @@ export default function IntegratedAdminPanelDashboard() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-10 pt-28 sm:px-6 font-sans text-slate-900">
+    <main className="min-h-screen bg-slate-100 px-4 py-8 pt-28 font-sans text-slate-900 sm:px-6 lg:px-8">
+      <div className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-72 bg-gradient-to-b from-slate-950 via-slate-900 to-transparent" />
+      <div className="mx-auto max-w-[1440px]">
 
-      {/* 👑 Welcome Header Banner */}
-      <div className="mb-8 rounded-[2rem] bg-white p-8 shadow-xl border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
-        <div>
-          <p className="text-xs uppercase tracking-widest text-emerald-500 font-bold">● System Dashboard Live</p>
-          <h1 className="text-4xl font-black text-slate-900 mt-2">✨ {greeting}, {adminProfile?.full_name || username}! 👋</h1>
-          <p className="text-sm text-slate-500 mt-2 italic">Welcome back! Your store insights and controls are waiting.</p>
-        </div>
-        <div className="flex flex-col items-end gap-3">
-          <div className="rounded-full bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow-lg">
-            Customers: {customers.length} • Enquiries: {enquiries.length}
+      {/* 👑 Professional Welcome Header */}
+      <section className="mb-8 overflow-hidden rounded-[2.2rem] border border-white/10 bg-slate-950 text-white shadow-2xl shadow-slate-950/20">
+        <div className="relative p-5 sm:p-7 lg:p-8">
+          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-emerald-400/20 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-28 left-20 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl" />
+
+          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-2xl font-black shadow-inner">
+                M
+              </div>
+
+              <div>
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.24em] text-emerald-300">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_16px_rgba(52,211,153,0.9)]" />
+                  System Dashboard Live
+                </div>
+                <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl lg:text-5xl">
+                  {greeting}, {username}
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-300">
+                  Welcome back! Your store insights and controls are waiting.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[520px]">
+              <div className="rounded-3xl border border-white/10 bg-white/[0.08] p-4 backdrop-blur">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Customers</p>
+                <p className="mt-2 text-2xl font-black text-white">{customers.length}</p>
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-white/[0.08] p-4 backdrop-blur">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Enquiries</p>
+                <p className="mt-2 text-2xl font-black text-white">{enquiries.length}</p>
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-white/[0.08] p-4 backdrop-blur">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Products</p>
+                <p className="mt-2 text-2xl font-black text-emerald-300">{chartAnalytics.totalProducts}</p>
+              </div>
+            </div>
           </div>
-          <button onClick={handleLogout} className="text-xs font-bold text-rose-600 hover:underline">Logout Session</button>
+
+          <div className="relative mt-6 flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs font-semibold text-slate-400">
+              Secure workspace for products, stock, orders, customers, campaigns and reports.
+            </p>
+            <button
+              onClick={handleLogout}
+              className="inline-flex w-fit items-center justify-center rounded-full border border-rose-400/20 bg-rose-500/10 px-5 py-2.5 text-xs font-black uppercase tracking-wider text-rose-200 transition hover:border-rose-300/40 hover:bg-rose-500/20"
+            >
+              Logout Session
+            </button>
+          </div>
         </div>
-      </div>
+      </section>
 
       {message && (
-        <div className="mb-4 rounded-2xl bg-slate-100 p-4 text-xs font-bold text-slate-800 border border-slate-200">
+        <div className="mb-5 rounded-3xl border border-slate-200 bg-white px-5 py-4 text-xs font-black text-slate-800 shadow-sm">
           {message}
         </div>
       )}
 
-      {productSyncError && (
-        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-bold text-amber-800">
-          ⚠️ Product sync warning: {productSyncError}
-        </div>
-      )}
-
       {/* Main Layout Divided into Sidebar & Dashboard Panels */}
-      <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
+      <div className="grid gap-7 lg:grid-cols-[300px_minmax(0,1fr)]">
 
-        {/* 📋 Sidebar Links (7 Tabs System) */}
-        <aside className="space-y-2">
-          <p className="text-[10px] font-black uppercase text-slate-400 px-4 mb-4 tracking-wider">Navigation Menu</p>
-          {[
-            { id: 1, icon: '📊', name: 'Dashboard & Analytics' },
-            { id: 2, icon: '📦', name: 'Inventory & Stock' },
-            { id: 3, icon: '🛒', name: 'Orders & Tracking' },
-            { id: 4, icon: '👥', name: 'Customer Accounts' },
-            { id: 5, icon: '🎫', name: 'Coupons & Offers' },
-            { id: 6, icon: '📈', name: 'Sales Reports' },
-            { id: 7, icon: '📩', name: 'Enquiry Center' },
-            { id: 8, icon: '💾', name: 'Activity & Backup' },
-          ].map(tab => (
-            <button key={tab.id} onClick={() => { setActiveTab(tab.id); setMessage(''); }} className={`flex w-full items-center gap-3 rounded-2xl px-5 py-4 text-sm font-bold transition-all ${activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg scale-105' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100'}`}>
-              <span>{tab.icon}</span> {tab.name}
-            </button>
-          ))}
+        {/* 📋 Professional Sidebar Links */}
+        <aside className="lg:sticky lg:top-28 lg:self-start">
+          <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+            <div className="border-b border-slate-100 bg-gradient-to-br from-white to-slate-50 p-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-lg font-black text-white shadow-lg">M</div>
+                <div>
+                  <h2 className="text-sm font-black text-slate-950">Mobisphere Admin</h2>
+                  <p className="mt-0.5 text-[11px] font-bold text-slate-500">Production workspace</p>
+                </div>
+              </div>
+            </div>
 
-          {/* Dark Quick Actions Info Box */}
-          <div className="mt-8 rounded-3xl bg-slate-950 p-6 text-white shadow-xl">
-            <h3 className="text-sm font-bold border-b border-slate-800 pb-2 mb-3 flex justify-between items-center">
-              Quick Actions <span className="text-[9px] text-emerald-400 font-mono bg-emerald-400/10 px-2 py-0.5 rounded-full">v2.3</span>
-            </h3>
-            <p className="text-[11px] leading-relaxed text-slate-400">Control panel for adding devices, inventory analytics sync, and customer resolution pathways.</p>
+            <nav className="space-y-1.5 p-3">
+              <p className="px-3 pb-2 pt-1 text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Navigation</p>
+              {[
+                { id: 1, icon: '📊', name: 'Dashboard & Analytics' },
+                { id: 2, icon: '📦', name: 'Inventory & Stock' },
+                { id: 3, icon: '🛒', name: 'Orders & Tracking' },
+                { id: 4, icon: '👥', name: 'Customer Accounts' },
+                { id: 5, icon: '🎫', name: 'Coupons & Offers' },
+                { id: 6, icon: '📈', name: 'Sales Reports' },
+                { id: 7, icon: '📩', name: 'Enquiry Center' },
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => { setActiveTab(tab.id); setMessage(''); }}
+                  className={`group flex w-full items-center justify-between rounded-2xl px-4 py-3.5 text-left text-sm font-black transition-all ${activeTab === tab.id ? 'bg-slate-950 text-white shadow-lg shadow-slate-950/15' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'}`}
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base ${activeTab === tab.id ? 'bg-white/10' : 'bg-slate-100 group-hover:bg-white'}`}>{tab.icon}</span>
+                    <span className="truncate">{tab.name}</span>
+                  </span>
+                  {activeTab === tab.id && <span className="h-2 w-2 rounded-full bg-emerald-400" />}
+                </button>
+              ))}
+            </nav>
+
+            <div className="m-3 rounded-3xl bg-slate-950 p-5 text-white">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-black">Quick Actions</h3>
+                <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-emerald-300">v2.3</span>
+              </div>
+              <p className="mt-3 text-[11px] font-semibold leading-5 text-slate-400">
+                Manage inventory, orders, customers and reports from one clean workspace.
+              </p>
+              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                <button type="button" onClick={() => { setEditingProduct(null); setInventoryView('form'); setActiveTab(2); }} className="rounded-2xl bg-white/10 p-3 text-lg transition hover:bg-white/15">＋</button>
+                <button type="button" onClick={() => setActiveTab(3)} className="rounded-2xl bg-white/10 p-3 text-lg transition hover:bg-white/15">🛒</button>
+                <button type="button" onClick={() => fetchData(true)} className="rounded-2xl bg-emerald-400 p-3 text-lg transition hover:bg-emerald-300">🔄</button>
+              </div>
+            </div>
           </div>
         </aside>
 
         {/* 💻 Active Workspace View */}
-        <div className="space-y-8">
+        <section className="min-w-0 space-y-8">
 
           {/* TAB 1: Dashboard & Analytics */}
           {activeTab === 1 && (
             <div className="space-y-7">
-              <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 text-white shadow-2xl">
+              <section className="overflow-hidden rounded-[2.2rem] border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white shadow-2xl shadow-slate-950/20">
                 <div className="relative p-6 sm:p-8 lg:p-10">
                   <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-emerald-400/20 blur-3xl" />
                   <div className="pointer-events-none absolute -bottom-24 left-1/3 h-64 w-64 rounded-full bg-blue-400/10 blur-3xl" />
@@ -2723,7 +1515,7 @@ export default function IntegratedAdminPanelDashboard() {
                       </div>
 
                       <h2 className="text-3xl font-black leading-tight tracking-tight sm:text-4xl lg:text-5xl">
-                        Store command center
+                        Mobisphere command center
                       </h2>
 
                       <p className="mt-3 max-w-xl text-sm font-semibold leading-6 text-slate-300">
@@ -2743,12 +1535,12 @@ export default function IntegratedAdminPanelDashboard() {
                         <p className="mt-2 text-lg font-black text-white">{chartAnalytics.lastUpdated || 'Just now'}</p>
                         <button
                           type="button"
-                          onClick={() => handleSyncAllData(true)}
-                          disabled={isSyncing || isSyncingProducts}
+                          onClick={() => fetchData(true)}
+                          disabled={isSyncing}
                           className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-400 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          <span className={isSyncing || isSyncingProducts ? 'inline-block animate-spin' : 'inline-block'}>🔄</span>
-                          {isSyncing || isSyncingProducts ? 'Syncing...' : 'Sync Data'}
+                          <span className={isSyncing ? 'inline-block animate-spin' : 'inline-block'}>🔄</span>
+                          {isSyncing ? 'Syncing...' : 'Sync Data'}
                         </button>
                       </div>
                     </div>
@@ -2782,105 +1574,40 @@ export default function IntegratedAdminPanelDashboard() {
                 ))}
               </section>
 
-              <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl">
-                <div className="grid gap-0 xl:grid-cols-[0.95fr_1.35fr]">
-                  <div className="relative bg-slate-950 p-6 text-white sm:p-7">
-                    <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-amber-400/20 blur-3xl" />
-                    <div className="relative">
-                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-amber-300">Low Stock Notification</p>
-                      <h3 className="mt-3 text-2xl font-black">Restock needed list</h3>
-                      <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">
-                        Products with low or zero stock are tracked here, so you can restock before customer orders get delayed.
+              {(chartAnalytics.lowStockProducts > 0 || chartAnalytics.outOfStockProducts > 0) && (
+                <section className="rounded-[2rem] border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-5 shadow-sm sm:p-6">
+                  <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-amber-700">Inventory Attention</p>
+                      <h3 className="mt-2 text-2xl font-black text-slate-950">Stock needs review</h3>
+                      <p className="mt-1 text-sm font-bold text-amber-800">
+                        {chartAnalytics.lowStockProducts} low stock products • {chartAnalytics.outOfStockProducts} out of stock products
                       </p>
+                    </div>
 
-                      <div className="mt-6 grid grid-cols-3 gap-3">
-                        <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                          <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Total</p>
-                          <p className="mt-2 text-2xl font-black text-white">{restockInsights.restockNeeded.length}</p>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                          <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Out</p>
-                          <p className="mt-2 text-2xl font-black text-rose-300">{restockInsights.outOfStock.length}</p>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                          <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Low</p>
-                          <p className="mt-2 text-2xl font-black text-amber-300">{restockInsights.lowStock.length}</p>
-                        </div>
-                      </div>
-
+                    <div className="flex flex-wrap gap-2">
+                      {(Array.isArray(localProducts) ? localProducts : [])
+                        .filter((product) => getStockQuantity(product) <= 0 || (getStockQuantity(product) > 0 && getStockQuantity(product) <= getMinStockAlert(product)))
+                        .slice(0, 3)
+                        .map((product) => (
+                          <span key={product.id} className="rounded-full bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-700 shadow-sm">
+                            {product.title || 'Product'}
+                          </span>
+                        ))}
                       <button
                         type="button"
                         onClick={() => {
                           setActiveTab(2)
                           setInventoryView('brands')
                         }}
-                        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-[11px] font-black uppercase tracking-wider text-slate-950 shadow-xl transition hover:-translate-y-0.5 hover:bg-amber-300"
+                        className="rounded-full bg-slate-950 px-5 py-2.5 text-[10px] font-black uppercase tracking-wider text-white shadow-lg transition hover:bg-slate-800"
                       >
-                        Open Inventory Dashboard <span>→</span>
+                        Open Inventory
                       </button>
                     </div>
                   </div>
-
-                  <div className="p-5 sm:p-7">
-                    {restockInsights.restockNeeded.length === 0 ? (
-                      <div className="flex h-full min-h-[260px] flex-col items-center justify-center rounded-3xl border border-emerald-100 bg-emerald-50 p-8 text-center">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-600 text-2xl text-white shadow-lg">✓</div>
-                        <h4 className="mt-4 text-xl font-black text-slate-950">All stock levels look healthy</h4>
-                        <p className="mt-2 max-w-md text-sm font-semibold leading-6 text-emerald-800">
-                          No product is below its minimum stock alert right now.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Priority queue</p>
-                            <h4 className="mt-1 text-xl font-black text-slate-950">Products to restock first</h4>
-                          </div>
-                          <p className="rounded-full bg-slate-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-600">
-                            Suggested units: {restockInsights.totalRequiredUnits}
-                          </p>
-                        </div>
-
-                        <div className="grid gap-3 lg:grid-cols-2">
-                          {restockInsights.topRestockProducts.map((product) => {
-                            const priority = getRestockPriority(product)
-                            const stockQty = getStockQuantity(product)
-                            const minStockAlert = getMinStockAlert(product)
-
-                            return (
-                              <article key={product.id} className={`rounded-3xl border p-4 shadow-sm ${priority.className}`}>
-                                <div className="flex items-center gap-4">
-                                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white p-1 shadow-inner">
-                                    {product.image ? <img src={product.image} alt={product.title} className="h-full w-full object-contain" /> : '📱'}
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="line-clamp-1 text-sm font-black text-slate-950">{product.title || 'Mobisphere Product'}</p>
-                                    <p className="mt-1 text-[10px] font-black uppercase tracking-wider opacity-70">{product.brand || 'Other Models'} • Min {minStockAlert}</p>
-                                  </div>
-                                  <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider ${priority.badgeClassName}`}>
-                                    {priority.label}
-                                  </span>
-                                </div>
-                                <div className="mt-4 flex items-center justify-between gap-3">
-                                  <p className="text-xs font-black text-slate-800">Current stock: <span className="text-lg">{stockQty}</span></p>
-                                  <button
-                                    type="button"
-                                    onClick={() => openRestockProduct(product)}
-                                    className="rounded-full bg-slate-950 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white transition hover:-translate-y-0.5 hover:bg-emerald-600"
-                                  >
-                                    Add Stock
-                                  </button>
-                                </div>
-                              </article>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </section>
+                </section>
+              )}
 
               <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
                 <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
@@ -2986,248 +1713,16 @@ export default function IntegratedAdminPanelDashboard() {
 
                       <button
                         type="button"
-                        onClick={() => handleSyncAllData(true)}
-                        disabled={isSyncing || isSyncingProducts}
+                        onClick={() => fetchData(true)}
+                        disabled={isSyncing}
                         className="flex items-center justify-between rounded-2xl bg-emerald-400 px-4 py-3 text-left text-sm font-black text-slate-950 transition hover:bg-emerald-300 disabled:opacity-60"
                       >
-                        <span>{isSyncing || isSyncingProducts ? 'Syncing...' : 'Sync live data'}</span>
+                        <span>{isSyncing ? 'Syncing...' : 'Sync live data'}</span>
                         <span>🔄</span>
                       </button>
                     </div>
                   </div>
                 </div>
-              </section>
-
-              <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl">
-                <div className="grid gap-0 xl:grid-cols-[0.85fr_1.15fr]">
-                  <div className="relative overflow-hidden bg-slate-950 p-6 text-white sm:p-7">
-                    <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-emerald-400/20 blur-3xl" />
-                    <div className="pointer-events-none absolute -bottom-20 left-8 h-44 w-44 rounded-full bg-blue-400/10 blur-3xl" />
-
-                    <div className="relative">
-                      <div className="mb-5 inline-flex rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.24em] text-emerald-300">
-                        Account Security
-                      </div>
-
-                      <div className="flex items-center gap-4">
-                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl border border-white/10 bg-white/10 text-2xl font-black shadow-inner">
-                          {(profileForm.fullName || username || 'A').slice(0, 1).toUpperCase()}
-                        </div>
-
-                        <div className="min-w-0">
-                          <h3 className="truncate text-xl font-black text-white">
-                            {profileForm.fullName || adminProfile?.full_name || username || 'Admin'}
-                          </h3>
-                          <p className="mt-1 truncate text-xs font-bold text-slate-400">
-                            {profileForm.email || adminProfile?.email || 'admin@mobisphere.com'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-6 grid grid-cols-2 gap-3">
-                        <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                          <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Role</p>
-                          <p className="mt-1 text-sm font-black capitalize text-white">{adminProfile?.role || 'admin'}</p>
-                        </div>
-
-                        <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                          <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Status</p>
-                          <p className="mt-1 text-sm font-black text-emerald-300">
-                            {adminProfile?.active === false ? 'Inactive' : 'Active'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <p className="mt-5 text-xs font-semibold leading-6 text-slate-400">
-                        Manage admin name, email, and password from one secure Supabase-powered profile card.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="p-5 sm:p-7">
-                    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-violet-600">Admin Profile</p>
-                        <h3 className="mt-1 text-2xl font-black text-slate-950">Profile settings</h3>
-                        <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-                          Update profile details without disturbing dashboard analytics or store data.
-                        </p>
-                      </div>
-
-                      <div className="w-fit rounded-full bg-slate-100 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-slate-700">
-                        Supabase Auth
-                      </div>
-                    </div>
-
-                    {profileMessage && (
-                      <div className={`mb-4 rounded-2xl border p-3 text-xs font-black ${
-                        profileSaveState === 'error'
-                          ? 'border-rose-200 bg-rose-50 text-rose-700'
-                          : profileSaveState === 'saved'
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                            : 'border-slate-200 bg-slate-50 text-slate-700'
-                      }`}>
-                        {profileMessage}
-                      </div>
-                    )}
-
-                    <form onSubmit={handleUpdateAdminProfile} className="space-y-4">
-                      <div className="grid gap-4 lg:grid-cols-2">
-                        <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
-                          <span>Admin Name</span>
-                          <input
-                            type="text"
-                            value={profileForm.fullName}
-                            onChange={(event) => handleProfileFormChange('fullName', event.target.value)}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
-                            placeholder="Admin full name"
-                          />
-                        </label>
-
-                        <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
-                          <span>Email Address</span>
-                          <input
-                            type="email"
-                            value={profileForm.email}
-                            onChange={(event) => handleProfileFormChange('email', event.target.value)}
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
-                            placeholder="admin@example.com"
-                          />
-                        </label>
-
-                        {showProfilePasswordFields && (
-                          <>
-                            <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
-                              <span>New Password</span>
-                              <input
-                                type="password"
-                                value={profileForm.newPassword}
-                                onChange={(event) => handleProfileFormChange('newPassword', event.target.value)}
-                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
-                                placeholder="Enter new password only if you want to change it"
-                              />
-                            </label>
-
-                            <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
-                              <span>Confirm New Password</span>
-                              <input
-                                type="password"
-                                value={profileForm.confirmNewPassword}
-                                onChange={(event) => handleProfileFormChange('confirmNewPassword', event.target.value)}
-                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
-                                placeholder="Repeat new password"
-                              />
-                            </label>
-                          </>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col gap-3 rounded-3xl border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <p className="text-xs font-bold leading-5 text-slate-500">
-                            Change only the field you want. Password changes are optional and hidden until you open them.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowProfilePasswordFields((prev) => !prev)
-                              setProfileForm((prev) => ({
-                                ...prev,
-                                newPassword: '',
-                                confirmNewPassword: '',
-                              }))
-                              setProfileMessage('')
-                              setProfileSaveState('idle')
-                            }}
-                            className="mt-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-[10px] font-black uppercase tracking-wider text-slate-700 transition hover:border-slate-300 hover:bg-slate-100"
-                          >
-                            {showProfilePasswordFields ? 'Cancel Password Change' : 'Change Password'}
-                          </button>
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={isUpdatingProfile}
-                          className={`group relative inline-flex shrink-0 items-center justify-center gap-2 overflow-hidden rounded-full px-6 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-80 ${
-                            profileSaveState === 'saved'
-                              ? 'bg-emerald-600 shadow-emerald-200 ring-4 ring-emerald-100'
-                              : profileSaveState === 'error'
-                                ? 'bg-rose-600 shadow-rose-200 ring-4 ring-rose-100'
-                                : 'bg-slate-950 hover:bg-emerald-600 hover:shadow-emerald-200'
-                          }`}
-                        >
-                          <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-
-                          {profileSaveState === 'saving' && (
-                            <span className="relative h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                          )}
-
-                          {profileSaveState === 'saved' && (
-                            <span className="relative flex h-5 w-5 animate-pulse items-center justify-center rounded-full bg-white text-emerald-600">
-                              ✓
-                            </span>
-                          )}
-
-                          {profileSaveState === 'error' && (
-                            <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-white text-rose-600">
-                              !
-                            </span>
-                          )}
-
-                          <span className="relative">
-                            {profileSaveState === 'saving'
-                              ? 'Saving...'
-                              : profileSaveState === 'saved'
-                                ? 'Saved!'
-                                : profileSaveState === 'error'
-                                  ? 'Try Again'
-                                  : 'Save Profile'}
-                          </span>
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              </section>
-
-
-              <section className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
-                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-violet-600">Admin Activity</p>
-                    <h3 className="mt-1 text-xl font-black text-slate-950">Recent admin actions</h3>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">Latest store changes, exports, stock updates, and order actions.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab(8)}
-                    className="w-fit rounded-full bg-slate-950 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white transition hover:bg-slate-800"
-                  >
-                    Open Activity Log
-                  </button>
-                </div>
-
-                {activityStats.latest.length === 0 ? (
-                  <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
-                    <p className="text-sm font-black text-slate-900">No admin activity recorded yet.</p>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">Activity will appear after product, stock, order, coupon, or backup actions.</p>
-                  </div>
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {activityStats.latest.map((log) => (
-                      <div key={log.id} className={`rounded-3xl border p-4 ${getActivityTone(log.severity)}`}>
-                        <div className="flex items-start gap-3">
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-lg shadow-inner">{getActivityIcon(log.type)}</span>
-                          <div className="min-w-0">
-                            <p className="line-clamp-1 text-sm font-black">{log.title}</p>
-                            <p className="mt-1 line-clamp-2 text-[11px] font-bold opacity-80">{log.description || 'Admin activity recorded.'}</p>
-                            <p className="mt-2 text-[10px] font-black uppercase tracking-wider opacity-60">{log.createdAt ? new Date(log.createdAt).toLocaleString('en-IN') : 'Just now'}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </section>
 
               <section className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
@@ -3625,39 +2120,6 @@ export default function IntegratedAdminPanelDashboard() {
                 )}
               </div>
 
-              {inventoryView !== 'form' && (
-                <div className={`mb-6 rounded-[1.75rem] border p-5 shadow-sm ${restockInsights.restockNeeded.length > 0 ? 'border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50' : 'border-emerald-100 bg-emerald-50'}`}>
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                    <div>
-                      <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${restockInsights.restockNeeded.length > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
-                        {restockInsights.restockNeeded.length > 0 ? 'Restock notification active' : 'Inventory healthy'}
-                      </p>
-                      <h3 className="mt-2 text-xl font-black text-slate-950">
-                        {restockInsights.restockNeeded.length > 0 ? `${restockInsights.restockNeeded.length} products need stock attention` : 'No restock action needed right now'}
-                      </h3>
-                      <p className="mt-1 text-sm font-bold text-slate-600">
-                        {restockInsights.outOfStock.length} out of stock • {restockInsights.lowStock.length} low stock • Suggested refill units: {restockInsights.totalRequiredUnits}
-                      </p>
-                    </div>
-
-                    {restockInsights.restockNeeded.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {restockInsights.topRestockProducts.slice(0, 4).map((product) => (
-                          <button
-                            key={product.id}
-                            type="button"
-                            onClick={() => openRestockProduct(product)}
-                            className="rounded-full bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-950 hover:text-white"
-                          >
-                            {product.title || 'Product'} • {getStockQuantity(product)} left
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {inventoryView === 'brands' && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                   {uniqueBrands.map(brand => {
@@ -3706,7 +2168,7 @@ export default function IntegratedAdminPanelDashboard() {
                           const stockStatus = getStockStatusDetails(product)
 
                           return (
-                            <tr key={product.id} className={`transition group ${stockQty <= 0 ? 'bg-rose-50/70 hover:bg-rose-50' : stockQty <= minStockAlert ? 'bg-amber-50/70 hover:bg-amber-50' : 'hover:bg-slate-50/80'}`}>
+                            <tr key={product.id} className="hover:bg-slate-50/80 transition group">
                               <td className="p-4 text-xs font-mono font-bold text-slate-400">#{product.id}</td>
                               <td className="p-4 text-sm font-bold text-slate-900">
                                 <div className="flex items-center gap-3">
@@ -3786,13 +2248,12 @@ export default function IntegratedAdminPanelDashboard() {
                         <textarea name="description" rows="4" defaultValue={editingProduct?.description || ''} placeholder="Describe the phone features..." className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white"></textarea>
                       </div>
                       <div className="md:col-span-2">
-                        <label className="text-[10px] font-black uppercase text-slate-400">Product Image (Supabase Storage)</label>
+                        <label className="text-[10px] font-black uppercase text-slate-400">Product Image (Local File)</label>
                         <div className="mt-1 flex items-center gap-4">
                           {editingProduct?.image && (
                             <img src={editingProduct.image} alt="Preview" className="h-12 w-12 rounded-lg border border-slate-200 bg-slate-50 object-contain p-1 shadow-sm" />
                           )}
                           <input type="file" name="image" accept="image/*" className="w-full p-2 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 bg-white cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 transition" />
-                          <p className="text-[10px] font-bold text-slate-500">Image will upload to Supabase Storage bucket: mobisphere-product-images.</p>
                         </div>
                       </div>
                     </div>
@@ -4054,142 +2515,8 @@ export default function IntegratedAdminPanelDashboard() {
             </div>
           )}
 
-
-          {/* 💾 TAB 8: Activity Log & Backup */}
-          {activeTab === 8 && (
-            <div className="space-y-6">
-              <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 text-white shadow-2xl">
-                <div className="relative p-6 sm:p-8">
-                  <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-emerald-400/20 blur-3xl" />
-                  <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-300">Activity & Backup</p>
-                      <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Admin activity control room</h2>
-                      <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-300">
-                        Track important admin actions and download clean backups of products, orders, customers, enquiries, offers, and complete store data.
-                      </p>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[340px]">
-                      <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur">
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Total Logs</p>
-                        <p className="mt-2 text-3xl font-black text-white">{activityStats.total}</p>
-                      </div>
-                      <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur">
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Today</p>
-                        <p className="mt-2 text-3xl font-black text-emerald-300">{activityStats.today}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {[
-                  ['Products CSV', 'Inventory, price, stock, supplier, and product images.', '📦', handleExportProductsBackup],
-                  ['Orders CSV', 'Order IDs, customer details, totals, status, and payment mode.', '🛒', handleExportOrdersBackup],
-                  ['Customers CSV', 'Customer names, email, mobile, address, and timestamps.', '👥', handleExportCustomersBackup],
-                  ['Enquiries CSV', 'Lead details, status, admin notes, and enquiry history.', '📩', handleExportEnquiriesBackup],
-                  ['Coupons & Sales CSV', 'Coupon codes and festival sale campaign details.', '🎫', handleExportOffersBackup],
-                  ['Activity Log CSV', 'Admin actions, timestamps, targets, and severity.', '🧾', handleExportActivityLogBackup],
-                ].map(([title, description, icon, onClick]) => (
-                  <button
-                    key={title}
-                    type="button"
-                    onClick={onClick}
-                    className="group rounded-[2rem] border border-slate-100 bg-white p-5 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-2xl shadow-inner transition group-hover:bg-slate-950">{icon}</span>
-                      <span className="rounded-full bg-slate-950 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-white">Export</span>
-                    </div>
-                    <h3 className="mt-5 text-lg font-black text-slate-950">{title}</h3>
-                    <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">{description}</p>
-                  </button>
-                ))}
-              </section>
-
-              <section className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-                <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl">
-                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-600">Full Backup</p>
-                  <h3 className="mt-2 text-2xl font-black text-slate-950">Download complete JSON backup</h3>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                    Best for emergency restore/reference. This includes products, orders, customers, enquiries, coupons, sale campaigns, and activity logs.
-                  </p>
-
-                  <div className="mt-5 grid gap-3">
-                    <button
-                      type="button"
-                      onClick={handleExportFullBackupJson}
-                      className="rounded-2xl bg-slate-950 px-5 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800"
-                    >
-                      💾 Download Full JSON Backup
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSyncAllData}
-                      disabled={isSyncing || isSyncingProducts}
-                      className="rounded-2xl bg-emerald-500 px-5 py-4 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isSyncing || isSyncingProducts ? 'Syncing...' : 'Sync Before Backup'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleClearActivityLogs}
-                      className="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4 text-sm font-black text-rose-700 transition hover:bg-rose-600 hover:text-white"
-                    >
-                      Clear Local Activity Log
-                    </button>
-                  </div>
-                </div>
-
-                <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl">
-                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-violet-600">Activity Timeline</p>
-                      <h3 className="mt-1 text-2xl font-black text-slate-950">Recent admin activity</h3>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">Latest 50 admin actions are shown here.</p>
-                    </div>
-                    <span className="w-fit rounded-full bg-slate-100 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-slate-600">
-                      {activityLogs.length} records
-                    </span>
-                  </div>
-
-                  {activityLogs.length === 0 ? (
-                    <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
-                      <p className="text-sm font-black text-slate-900">No activity records yet.</p>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">Start adding products, updating stock, changing orders, or exporting backups.</p>
-                    </div>
-                  ) : (
-                    <div className="max-h-[580px] space-y-3 overflow-y-auto pr-1">
-                      {activityLogs.slice(0, 50).map((log) => (
-                        <div key={log.id} className={`rounded-3xl border p-4 ${getActivityTone(log.severity)}`}>
-                          <div className="flex items-start gap-3">
-                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-xl shadow-inner">{getActivityIcon(log.type)}</span>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                                <div className="min-w-0">
-                                  <p className="line-clamp-1 text-sm font-black">{log.title}</p>
-                                  <p className="mt-1 line-clamp-2 text-xs font-bold opacity-80">{log.description || 'Admin activity recorded.'}</p>
-                                </div>
-                                <span className="shrink-0 rounded-full bg-white px-3 py-1 text-[9px] font-black uppercase tracking-wider shadow-sm">{log.type || 'activity'}</span>
-                              </div>
-                              <p className="mt-3 text-[10px] font-black uppercase tracking-wider opacity-60">
-                                {log.adminName || 'Admin'} • {log.createdAt ? new Date(log.createdAt).toLocaleString('en-IN') : 'Just now'}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </section>
-            </div>
-          )}
-
-
-        </div>
+        </section>
+      </div>
       </div>
 
       {selectedOrder && (
