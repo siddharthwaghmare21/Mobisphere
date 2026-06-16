@@ -515,6 +515,7 @@ export default function IntegratedAdminPanelDashboard() {
     confirmNewPassword: '',
   })
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false)
+  const [profileSaveState, setProfileSaveState] = useState('idle')
 
   // 🔄 Supabase Live Data Fetch
   const fetchData = useCallback(async (showFeedback = false) => {
@@ -1158,6 +1159,7 @@ export default function IntegratedAdminPanelDashboard() {
       ...prev,
       [field]: value,
     }))
+    setProfileSaveState('idle')
   }
 
   const handleUpdateAdminProfile = async (event) => {
@@ -1189,6 +1191,7 @@ export default function IntegratedAdminPanelDashboard() {
     }
 
     setIsUpdatingProfile(true)
+    setProfileSaveState('saving')
 
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser()
@@ -1200,7 +1203,12 @@ export default function IntegratedAdminPanelDashboard() {
         throw new Error('Admin session expired. Please login again.')
       }
 
-      const authUpdates = {}
+      const authUpdates = {
+        data: {
+          ...(user.user_metadata || {}),
+          full_name: fullName,
+        },
+      }
 
       if (nextEmail && nextEmail !== String(user.email || '').toLowerCase()) {
         authUpdates.email = nextEmail
@@ -1210,21 +1218,21 @@ export default function IntegratedAdminPanelDashboard() {
         authUpdates.password = newPassword
       }
 
-      if (Object.keys(authUpdates).length > 0) {
-        const { error: updateAuthError } = await supabase.auth.updateUser(authUpdates)
-        if (updateAuthError) throw updateAuthError
-      }
+      const { error: updateAuthError } = await supabase.auth.updateUser(authUpdates)
+      if (updateAuthError) throw updateAuthError
 
       const profileUpdate = {
+        id: user.id,
         full_name: fullName,
         email: nextEmail,
+        role: adminProfile?.role || 'admin',
+        active: adminProfile?.active !== false,
         updated_at: new Date().toISOString(),
       }
 
       const { data: updatedProfile, error: profileError } = await supabase
         .from(ADMIN_PROFILES_TABLE_NAME)
-        .update(profileUpdate)
-        .eq('id', user.id)
+        .upsert(profileUpdate, { onConflict: 'id' })
         .select('*')
         .maybeSingle()
 
@@ -1234,7 +1242,6 @@ export default function IntegratedAdminPanelDashboard() {
         ...(adminProfile || {}),
         ...(updatedProfile || {}),
         ...profileUpdate,
-        id: user.id,
       }
 
       setAdminProfile(nextProfile)
@@ -1254,16 +1261,19 @@ export default function IntegratedAdminPanelDashboard() {
         provider: 'supabase',
       })
 
+      setProfileSaveState('saved')
       setMessage(
         authUpdates.email
-          ? '✅ Admin profile updated. Email change may need confirmation from your inbox.'
-          : '✅ Admin profile updated successfully.'
+          ? '✅ Admin profile saved. Email change may need confirmation from your inbox.'
+          : '✅ Admin profile saved successfully.'
       )
     } catch (error) {
       console.error('Admin profile update error:', error)
+      setProfileSaveState('error')
       setMessage(error?.message || 'Admin profile update failed.')
     } finally {
       setIsUpdatingProfile(false)
+      setTimeout(() => setProfileSaveState('idle'), 2600)
       setTimeout(() => setMessage(''), 4500)
     }
   }
@@ -2433,9 +2443,41 @@ export default function IntegratedAdminPanelDashboard() {
                         <button
                           type="submit"
                           disabled={isUpdatingProfile}
-                          className="shrink-0 rounded-full bg-slate-950 px-6 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                          className={`group relative inline-flex shrink-0 items-center justify-center gap-2 overflow-hidden rounded-full px-6 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-80 ${
+                            profileSaveState === 'saved'
+                              ? 'bg-emerald-600 shadow-emerald-200 ring-4 ring-emerald-100'
+                              : profileSaveState === 'error'
+                                ? 'bg-rose-600 shadow-rose-200 ring-4 ring-rose-100'
+                                : 'bg-slate-950 hover:bg-emerald-600 hover:shadow-emerald-200'
+                          }`}
                         >
-                          {isUpdatingProfile ? 'Updating...' : 'Save Changes'}
+                          <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+
+                          {profileSaveState === 'saving' && (
+                            <span className="relative h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                          )}
+
+                          {profileSaveState === 'saved' && (
+                            <span className="relative flex h-5 w-5 animate-pulse items-center justify-center rounded-full bg-white text-emerald-600">
+                              ✓
+                            </span>
+                          )}
+
+                          {profileSaveState === 'error' && (
+                            <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-white text-rose-600">
+                              !
+                            </span>
+                          )}
+
+                          <span className="relative">
+                            {profileSaveState === 'saving'
+                              ? 'Saving...'
+                              : profileSaveState === 'saved'
+                                ? 'Saved!'
+                                : profileSaveState === 'error'
+                                  ? 'Try Again'
+                                  : 'Save Changes'}
+                          </span>
                         </button>
                       </div>
                     </form>
