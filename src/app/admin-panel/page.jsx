@@ -19,6 +19,36 @@ const ADMIN_PROFILES_TABLE_NAME = 'mobisphere_admin_profiles'
 const PRODUCT_IMAGE_BUCKET = 'mobisphere-product-images'
 const ADMIN_ACCESS_KEY = 'ALT+SHIFT+A'
 
+function getSiteOrigin() {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin
+  }
+  return 'http://localhost:3000'
+}
+
+function getAdminEmailRedirectUrl() {
+  return `${getSiteOrigin()}/admin-panel`
+}
+
+function isEmailVerified(user) {
+  return Boolean(user?.email_confirmed_at || user?.confirmed_at)
+}
+
+function getReadableAuthError(error) {
+  const message = String(error?.message || '')
+  const lower = message.toLowerCase()
+
+  if (lower.includes('email not confirmed') || lower.includes('not confirmed')) {
+    return 'Please verify your email first. Check your inbox and click the Mobisphere verification link.'
+  }
+
+  if (lower.includes('invalid login credentials')) {
+    return 'Invalid email or password.'
+  }
+
+  return message || 'Authentication failed. Please try again.'
+}
+
 function loadJson(key) {
   if (typeof window === 'undefined') return null
   try {
@@ -626,6 +656,16 @@ export default function IntegratedAdminPanelDashboard() {
 
     const profile = data
 
+    if (isEmailVerified(user)) {
+      await supabase
+        .from(ADMIN_PROFILES_TABLE_NAME)
+        .update({
+          email_verified_at: user.email_confirmed_at || user.confirmed_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id)
+    }
+
     if (profile.active === false) {
       await supabase.auth.signOut()
       localStorage.removeItem(ADMIN_SESSION_KEY)
@@ -698,6 +738,17 @@ export default function IntegratedAdminPanelDashboard() {
         const session = data?.session
 
         if (session?.user) {
+          if (!isEmailVerified(session.user)) {
+            await supabase.auth.signOut()
+            localStorage.removeItem(ADMIN_SESSION_KEY)
+            if (isMounted) {
+              setIsLoggedIn(false)
+              setAdminProfile(null)
+              setMessage('Please verify your admin email first. Check your inbox for the Mobisphere verification link.')
+            }
+            return
+          }
+
           await loadAdminProfile(session.user)
           if (isMounted) setIsLoggedIn(true)
           await fetchData(false)
@@ -1066,6 +1117,7 @@ export default function IntegratedAdminPanelDashboard() {
           email,
           password,
           options: {
+            emailRedirectTo: getAdminEmailRedirectUrl(),
             data: {
               full_name: cleanName,
               role: 'admin',
@@ -1088,6 +1140,7 @@ export default function IntegratedAdminPanelDashboard() {
           email,
           role: 'admin',
           active: true,
+          email_verified_at: user.email_confirmed_at || user.confirmed_at || null,
           updated_at: new Date().toISOString(),
         }
 
@@ -1097,12 +1150,14 @@ export default function IntegratedAdminPanelDashboard() {
 
         if (profileError) throw profileError
 
-        if (!data?.session) {
+        if (!isEmailVerified(user) || !data?.session) {
+          await supabase.auth.signOut()
+          localStorage.removeItem(ADMIN_SESSION_KEY)
           setIsRegistering(false)
           setPassword('')
           setConfirmPassword('')
           setAdminAccessKey('')
-          setMessage('Admin account created. Please login with your email and password.')
+          setMessage(`✅ Verification link sent to ${email}. Please verify your email, then login again.`)
           return
         }
 
@@ -1127,6 +1182,13 @@ export default function IntegratedAdminPanelDashboard() {
         return
       }
 
+      if (!isEmailVerified(user)) {
+        await supabase.auth.signOut()
+        localStorage.removeItem(ADMIN_SESSION_KEY)
+        setMessage('Please verify your admin email first. Check your inbox for the Mobisphere verification link.')
+        return
+      }
+
       await loadAdminProfile(user)
       setIsLoggedIn(true)
       setPassword('')
@@ -1137,7 +1199,33 @@ export default function IntegratedAdminPanelDashboard() {
       setIsLoggedIn(false)
       setAdminProfile(null)
       localStorage.removeItem(ADMIN_SESSION_KEY)
-      setMessage(error?.message || 'Admin authentication failed.')
+      setMessage(getReadableAuthError(error))
+    }
+  }
+
+  const handleResendAdminVerification = async () => {
+    const email = username.trim().toLowerCase()
+
+    if (!email || !email.includes('@')) {
+      setMessage('Enter your admin email first, then resend verification link.')
+      return
+    }
+
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: {
+          emailRedirectTo: getAdminEmailRedirectUrl(),
+        },
+      })
+
+      if (error) throw error
+
+      setMessage(`✅ Verification link resent to ${email}. Check your inbox.`)
+    } catch (error) {
+      console.error('Admin verification resend error:', error)
+      setMessage(getReadableAuthError(error))
     }
   }
 
@@ -2027,10 +2115,18 @@ export default function IntegratedAdminPanelDashboard() {
                 >
                   {isRegistering ? 'Create Admin Account' : 'Login to Dashboard'}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={handleResendAdminVerification}
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 py-3 text-xs font-black text-emerald-200 transition hover:border-emerald-300/40 hover:bg-emerald-300/10 hover:text-emerald-100"
+                >
+                  Resend verification email
+                </button>
               </form>
 
               <p className="mt-5 text-center text-[11px] font-semibold leading-5 text-slate-500">
-                Admin access is protected with Supabase Auth and the private access code.
+                Admin access is protected with Supabase Auth, email verification, and the private access code.
               </p>
             </div>
           </div>
