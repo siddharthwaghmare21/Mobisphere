@@ -2317,78 +2317,130 @@ export default function IntegratedAdminPanelDashboard() {
                 </div>
               </section>
 
-              <section className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
-                <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-violet-600">Admin Security</p>
-                    <h3 className="mt-1 text-xl font-black text-slate-950">Admin Profile Settings</h3>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">Update your admin name, email address, or password securely through Supabase Auth.</p>
+              <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl">
+                <div className="grid gap-0 xl:grid-cols-[0.85fr_1.15fr]">
+                  <div className="relative overflow-hidden bg-slate-950 p-6 text-white sm:p-7">
+                    <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-emerald-400/20 blur-3xl" />
+                    <div className="pointer-events-none absolute -bottom-20 left-8 h-44 w-44 rounded-full bg-blue-400/10 blur-3xl" />
+
+                    <div className="relative">
+                      <div className="mb-5 inline-flex rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.24em] text-emerald-300">
+                        Account Security
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl border border-white/10 bg-white/10 text-2xl font-black shadow-inner">
+                          {(profileForm.fullName || username || 'A').slice(0, 1).toUpperCase()}
+                        </div>
+
+                        <div className="min-w-0">
+                          <h3 className="truncate text-xl font-black text-white">
+                            {profileForm.fullName || adminProfile?.full_name || username || 'Admin'}
+                          </h3>
+                          <p className="mt-1 truncate text-xs font-bold text-slate-400">
+                            {profileForm.email || adminProfile?.email || 'admin@mobisphere.com'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 grid grid-cols-2 gap-3">
+                        <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                          <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Role</p>
+                          <p className="mt-1 text-sm font-black capitalize text-white">{adminProfile?.role || 'admin'}</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                          <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Status</p>
+                          <p className="mt-1 text-sm font-black text-emerald-300">
+                            {adminProfile?.active === false ? 'Inactive' : 'Active'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <p className="mt-5 text-xs font-semibold leading-6 text-slate-400">
+                        Manage admin name, email, and password from one secure Supabase-powered profile card.
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="w-fit rounded-full bg-slate-950 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white">
-                    {adminProfile?.role || 'admin'} • {adminProfile?.active === false ? 'Inactive' : 'Active'}
+                  <div className="p-5 sm:p-7">
+                    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-violet-600">Admin Profile</p>
+                        <h3 className="mt-1 text-2xl font-black text-slate-950">Profile settings</h3>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                          Update profile details without disturbing dashboard analytics or store data.
+                        </p>
+                      </div>
+
+                      <div className="w-fit rounded-full bg-slate-100 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-slate-700">
+                        Supabase Auth
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleUpdateAdminProfile} className="space-y-4">
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
+                          <span>Admin Name</span>
+                          <input
+                            type="text"
+                            value={profileForm.fullName}
+                            onChange={(event) => handleProfileFormChange('fullName', event.target.value)}
+                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+                            placeholder="Admin full name"
+                          />
+                        </label>
+
+                        <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
+                          <span>Email Address</span>
+                          <input
+                            type="email"
+                            value={profileForm.email}
+                            onChange={(event) => handleProfileFormChange('email', event.target.value)}
+                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+                            placeholder="admin@example.com"
+                          />
+                        </label>
+
+                        <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
+                          <span>New Password</span>
+                          <input
+                            type="password"
+                            value={profileForm.newPassword}
+                            onChange={(event) => handleProfileFormChange('newPassword', event.target.value)}
+                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+                            placeholder="Leave blank to keep current password"
+                          />
+                        </label>
+
+                        <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
+                          <span>Confirm New Password</span>
+                          <input
+                            type="password"
+                            value={profileForm.confirmNewPassword}
+                            onChange={(event) => handleProfileFormChange('confirmNewPassword', event.target.value)}
+                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+                            placeholder="Repeat new password"
+                          />
+                        </label>
+                      </div>
+
+                      <div className="flex flex-col gap-3 rounded-3xl border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs font-bold leading-5 text-slate-500">
+                          Email changes may need inbox confirmation depending on Supabase Auth settings. Password change applies to this logged-in admin.
+                        </p>
+
+                        <button
+                          type="submit"
+                          disabled={isUpdatingProfile}
+                          className="shrink-0 rounded-full bg-slate-950 px-6 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isUpdatingProfile ? 'Updating...' : 'Save Changes'}
+                        </button>
+                      </div>
+                    </form>
                   </div>
                 </div>
-
-                <form onSubmit={handleUpdateAdminProfile} className="grid gap-4 lg:grid-cols-2">
-                  <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
-                    <span>Admin Name</span>
-                    <input
-                      type="text"
-                      value={profileForm.fullName}
-                      onChange={(event) => handleProfileFormChange('fullName', event.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-slate-900"
-                      placeholder="Admin full name"
-                    />
-                  </label>
-
-                  <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
-                    <span>Email Address</span>
-                    <input
-                      type="email"
-                      value={profileForm.email}
-                      onChange={(event) => handleProfileFormChange('email', event.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-slate-900"
-                      placeholder="admin@example.com"
-                    />
-                  </label>
-
-                  <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
-                    <span>New Password</span>
-                    <input
-                      type="password"
-                      value={profileForm.newPassword}
-                      onChange={(event) => handleProfileFormChange('newPassword', event.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-slate-900"
-                      placeholder="Leave blank to keep current password"
-                    />
-                  </label>
-
-                  <label className="space-y-2 text-xs font-black uppercase tracking-wider text-slate-500">
-                    <span>Confirm New Password</span>
-                    <input
-                      type="password"
-                      value={profileForm.confirmNewPassword}
-                      onChange={(event) => handleProfileFormChange('confirmNewPassword', event.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none transition focus:border-slate-900"
-                      placeholder="Repeat new password"
-                    />
-                  </label>
-
-                  <div className="lg:col-span-2 flex flex-col gap-3 rounded-3xl border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-xs font-bold leading-5 text-slate-500">
-                      Email change can require inbox confirmation depending on your Supabase Auth settings. Password change applies to the currently logged-in admin.
-                    </p>
-
-                    <button
-                      type="submit"
-                      disabled={isUpdatingProfile}
-                      className="shrink-0 rounded-full bg-slate-950 px-6 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isUpdatingProfile ? 'Updating...' : 'Update Profile'}
-                    </button>
-                  </div>
-                </form>
               </section>
 
               <section className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
