@@ -2239,7 +2239,7 @@ export default function IntegratedAdminPanelDashboard() {
         <div>
           <p className="text-xs uppercase tracking-widest text-emerald-500 font-bold">● System Dashboard Live</p>
           <h1 className="text-4xl font-black text-slate-900 mt-2">✨ {greeting}, {adminProfile?.full_name || username}! 👋</h1>
-          <p className="text-sm text-slate-500 mt-2 italic">Use this panel to manage customers and enquiries. Shortcut: Alt + Shift + A</p>
+          <p className="text-sm text-slate-500 mt-2 italic">Welcome back! Your store insights and controls are waiting.</p>
         </div>
         <div className="flex flex-col items-end gap-3">
           <div className="rounded-full bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow-lg">
