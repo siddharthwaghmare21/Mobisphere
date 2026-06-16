@@ -171,6 +171,57 @@ function getStockStatusDetails(product) {
   }
 }
 
+
+function getRestockPriority(product) {
+  const stockQty = getStockQuantity(product)
+  const minStockAlert = getMinStockAlert(product)
+
+  if (stockQty <= 0) {
+    return {
+      label: 'Restock Now',
+      tone: 'critical',
+      className: 'border-rose-200 bg-rose-50 text-rose-700',
+      badgeClassName: 'bg-rose-600 text-white',
+      icon: '⛔'
+    }
+  }
+
+  if (stockQty <= minStockAlert) {
+    return {
+      label: 'Low Stock',
+      tone: 'warning',
+      className: 'border-amber-200 bg-amber-50 text-amber-700',
+      badgeClassName: 'bg-amber-500 text-slate-950',
+      icon: '⚠️'
+    }
+  }
+
+  return {
+    label: 'Healthy Stock',
+    tone: 'healthy',
+    className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    badgeClassName: 'bg-emerald-500 text-white',
+    icon: '✅'
+  }
+}
+
+function getRestockNeededProducts(products) {
+  const safeProducts = Array.isArray(products) ? products : []
+
+  return safeProducts
+    .filter((product) => {
+      const stockQty = getStockQuantity(product)
+      return stockQty <= 0 || (stockQty > 0 && stockQty <= getMinStockAlert(product))
+    })
+    .sort((a, b) => {
+      const aQty = getStockQuantity(a)
+      const bQty = getStockQuantity(b)
+      if (aQty <= 0 && bQty > 0) return -1
+      if (bQty <= 0 && aQty > 0) return 1
+      return aQty - bQty
+    })
+}
+
 function getOrderDate(order) {
   const rawDate = order?.date || order?.createdAt || order?.created_at || order?.orderDate
   const date = new Date(rawDate || 0)
@@ -1047,6 +1098,34 @@ export default function IntegratedAdminPanelDashboard() {
       ]
     }
   }, [hydrated, orders, localProducts, customers.length, enquiries.length, coupons.length])
+
+  const restockInsights = useMemo(() => {
+    const safeProducts = Array.isArray(localProducts) ? localProducts : []
+    const restockNeeded = getRestockNeededProducts(safeProducts)
+    const outOfStock = restockNeeded.filter((product) => getStockQuantity(product) <= 0)
+    const lowStock = restockNeeded.filter((product) => getStockQuantity(product) > 0)
+    const totalRequiredUnits = restockNeeded.reduce((sum, product) => {
+      const minStockAlert = getMinStockAlert(product)
+      const stockQty = getStockQuantity(product)
+      return sum + Math.max(minStockAlert - stockQty + 1, 1)
+    }, 0)
+
+    return {
+      restockNeeded,
+      outOfStock,
+      lowStock,
+      totalRequiredUnits,
+      topRestockProducts: restockNeeded.slice(0, 6),
+    }
+  }, [localProducts])
+
+  const openRestockProduct = (product) => {
+    if (!product) return
+    setActiveTab(2)
+    setSelectedBrand(product.brand || 'Other Models')
+    setInventoryView('products')
+    handleOpenStockModal(product)
+  }
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours()
@@ -2368,40 +2447,105 @@ export default function IntegratedAdminPanelDashboard() {
                 ))}
               </section>
 
-              {(chartAnalytics.lowStockProducts > 0 || chartAnalytics.outOfStockProducts > 0) && (
-                <section className="rounded-[2rem] border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-5 shadow-sm sm:p-6">
-                  <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-amber-700">Inventory Attention</p>
-                      <h3 className="mt-2 text-2xl font-black text-slate-950">Stock needs review</h3>
-                      <p className="mt-1 text-sm font-bold text-amber-800">
-                        {chartAnalytics.lowStockProducts} low stock products • {chartAnalytics.outOfStockProducts} out of stock products
+              <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl">
+                <div className="grid gap-0 xl:grid-cols-[0.95fr_1.35fr]">
+                  <div className="relative bg-slate-950 p-6 text-white sm:p-7">
+                    <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-amber-400/20 blur-3xl" />
+                    <div className="relative">
+                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-amber-300">Low Stock Notification</p>
+                      <h3 className="mt-3 text-2xl font-black">Restock needed list</h3>
+                      <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">
+                        Products with low or zero stock are tracked here, so you can restock before customer orders get delayed.
                       </p>
-                    </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {(Array.isArray(localProducts) ? localProducts : [])
-                        .filter((product) => getStockQuantity(product) <= 0 || (getStockQuantity(product) > 0 && getStockQuantity(product) <= getMinStockAlert(product)))
-                        .slice(0, 3)
-                        .map((product) => (
-                          <span key={product.id} className="rounded-full bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-700 shadow-sm">
-                            {product.title || 'Product'}
-                          </span>
-                        ))}
+                      <div className="mt-6 grid grid-cols-3 gap-3">
+                        <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                          <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Total</p>
+                          <p className="mt-2 text-2xl font-black text-white">{restockInsights.restockNeeded.length}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                          <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Out</p>
+                          <p className="mt-2 text-2xl font-black text-rose-300">{restockInsights.outOfStock.length}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                          <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Low</p>
+                          <p className="mt-2 text-2xl font-black text-amber-300">{restockInsights.lowStock.length}</p>
+                        </div>
+                      </div>
+
                       <button
                         type="button"
                         onClick={() => {
                           setActiveTab(2)
                           setInventoryView('brands')
                         }}
-                        className="rounded-full bg-slate-950 px-5 py-2.5 text-[10px] font-black uppercase tracking-wider text-white shadow-lg transition hover:bg-slate-800"
+                        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-[11px] font-black uppercase tracking-wider text-slate-950 shadow-xl transition hover:-translate-y-0.5 hover:bg-amber-300"
                       >
-                        Open Inventory
+                        Open Inventory Dashboard <span>→</span>
                       </button>
                     </div>
                   </div>
-                </section>
-              )}
+
+                  <div className="p-5 sm:p-7">
+                    {restockInsights.restockNeeded.length === 0 ? (
+                      <div className="flex h-full min-h-[260px] flex-col items-center justify-center rounded-3xl border border-emerald-100 bg-emerald-50 p-8 text-center">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-600 text-2xl text-white shadow-lg">✓</div>
+                        <h4 className="mt-4 text-xl font-black text-slate-950">All stock levels look healthy</h4>
+                        <p className="mt-2 max-w-md text-sm font-semibold leading-6 text-emerald-800">
+                          No product is below its minimum stock alert right now.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Priority queue</p>
+                            <h4 className="mt-1 text-xl font-black text-slate-950">Products to restock first</h4>
+                          </div>
+                          <p className="rounded-full bg-slate-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-600">
+                            Suggested units: {restockInsights.totalRequiredUnits}
+                          </p>
+                        </div>
+
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          {restockInsights.topRestockProducts.map((product) => {
+                            const priority = getRestockPriority(product)
+                            const stockQty = getStockQuantity(product)
+                            const minStockAlert = getMinStockAlert(product)
+
+                            return (
+                              <article key={product.id} className={`rounded-3xl border p-4 shadow-sm ${priority.className}`}>
+                                <div className="flex items-center gap-4">
+                                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white p-1 shadow-inner">
+                                    {product.image ? <img src={product.image} alt={product.title} className="h-full w-full object-contain" /> : '📱'}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="line-clamp-1 text-sm font-black text-slate-950">{product.title || 'Mobisphere Product'}</p>
+                                    <p className="mt-1 text-[10px] font-black uppercase tracking-wider opacity-70">{product.brand || 'Other Models'} • Min {minStockAlert}</p>
+                                  </div>
+                                  <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider ${priority.badgeClassName}`}>
+                                    {priority.label}
+                                  </span>
+                                </div>
+                                <div className="mt-4 flex items-center justify-between gap-3">
+                                  <p className="text-xs font-black text-slate-800">Current stock: <span className="text-lg">{stockQty}</span></p>
+                                  <button
+                                    type="button"
+                                    onClick={() => openRestockProduct(product)}
+                                    className="rounded-full bg-slate-950 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white transition hover:-translate-y-0.5 hover:bg-emerald-600"
+                                  >
+                                    Add Stock
+                                  </button>
+                                </div>
+                              </article>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
 
               <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
                 <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-xl sm:p-7">
@@ -3106,6 +3250,39 @@ export default function IntegratedAdminPanelDashboard() {
                 )}
               </div>
 
+              {inventoryView !== 'form' && (
+                <div className={`mb-6 rounded-[1.75rem] border p-5 shadow-sm ${restockInsights.restockNeeded.length > 0 ? 'border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50' : 'border-emerald-100 bg-emerald-50'}`}>
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div>
+                      <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${restockInsights.restockNeeded.length > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                        {restockInsights.restockNeeded.length > 0 ? 'Restock notification active' : 'Inventory healthy'}
+                      </p>
+                      <h3 className="mt-2 text-xl font-black text-slate-950">
+                        {restockInsights.restockNeeded.length > 0 ? `${restockInsights.restockNeeded.length} products need stock attention` : 'No restock action needed right now'}
+                      </h3>
+                      <p className="mt-1 text-sm font-bold text-slate-600">
+                        {restockInsights.outOfStock.length} out of stock • {restockInsights.lowStock.length} low stock • Suggested refill units: {restockInsights.totalRequiredUnits}
+                      </p>
+                    </div>
+
+                    {restockInsights.restockNeeded.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {restockInsights.topRestockProducts.slice(0, 4).map((product) => (
+                          <button
+                            key={product.id}
+                            type="button"
+                            onClick={() => openRestockProduct(product)}
+                            className="rounded-full bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-950 hover:text-white"
+                          >
+                            {product.title || 'Product'} • {getStockQuantity(product)} left
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {inventoryView === 'brands' && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                   {uniqueBrands.map(brand => {
@@ -3154,7 +3331,7 @@ export default function IntegratedAdminPanelDashboard() {
                           const stockStatus = getStockStatusDetails(product)
 
                           return (
-                            <tr key={product.id} className="hover:bg-slate-50/80 transition group">
+                            <tr key={product.id} className={`transition group ${stockQty <= 0 ? 'bg-rose-50/70 hover:bg-rose-50' : stockQty <= minStockAlert ? 'bg-amber-50/70 hover:bg-amber-50' : 'hover:bg-slate-50/80'}`}>
                               <td className="p-4 text-xs font-mono font-bold text-slate-400">#{product.id}</td>
                               <td className="p-4 text-sm font-bold text-slate-900">
                                 <div className="flex items-center gap-3">
