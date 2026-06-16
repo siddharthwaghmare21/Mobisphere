@@ -136,6 +136,42 @@ function getOrderTotal(order) {
   return Number(order?.total || order?.totalAmount || order?.amount || 0)
 }
 
+function getOrderPaymentMode(order) {
+  return order?.paymentMode || order?.payment_mode || order?.paymentMethod || order?.payment_method || 'Cash on Delivery / Pay at Store'
+}
+
+function getOrderPaymentStatus(order) {
+  return order?.paymentStatus || order?.payment_status || 'Pending / Pay at Store'
+}
+
+function getOrderTransactionId(order) {
+  return order?.transactionId || order?.transaction_id || order?.utr || order?.paymentReference || ''
+}
+
+function getPaymentStatusClassName(status) {
+  const value = String(status || '').toLowerCase()
+
+  if (value.includes('paid')) return 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+  if (value.includes('verification')) return 'bg-blue-100 text-blue-700 border border-blue-200'
+  if (value.includes('failed')) return 'bg-rose-100 text-rose-700 border border-rose-200'
+  if (value.includes('gateway')) return 'bg-violet-100 text-violet-700 border border-violet-200'
+
+  return 'bg-amber-100 text-amber-700 border border-amber-200'
+}
+
+function getPaymentModeShortLabel(order) {
+  const mode = getOrderPaymentMode(order)
+  const value = String(mode || '').toLowerCase()
+
+  if (value.includes('upi')) return 'UPI'
+  if (value.includes('bank')) return 'Bank Transfer'
+  if (value.includes('card')) return 'Card'
+  if (value.includes('store')) return 'Pay at Store'
+  if (value.includes('cash')) return 'COD'
+
+  return mode || 'COD'
+}
+
 function sanitizeCsvValue(value) {
   const text = String(value ?? '').replace(/"/g, '""')
   return `"${text}"`
@@ -181,7 +217,14 @@ function buildInvoiceText(order, orderProducts = []) {
 
   lines.push('----------------------------------------')
   lines.push(`Grand Total: ₹${getOrderTotal(order).toLocaleString()}`)
-  lines.push('Payment Mode: Cash on Delivery')
+  lines.push(`Payment Mode: ${getOrderPaymentMode(order)}`)
+  lines.push(`Payment Status: ${getOrderPaymentStatus(order)}`)
+
+  const transactionId = getOrderTransactionId(order)
+  if (transactionId) {
+    lines.push(`Transaction ID: ${transactionId}`)
+  }
+
   lines.push('Thank you for shopping with Mobisphere!')
 
   return lines.join('\n')
@@ -248,18 +291,6 @@ function getCampaignScopeLabel(campaign) {
   return 'All products'
 }
 
-function getEnquiryEmail(enquiry) {
-  return String(enquiry?.email || enquiry?.email_address || '').trim()
-}
-
-function getEnquiryMobile(enquiry) {
-  return String(enquiry?.mobile_number || enquiry?.mobileNumber || enquiry?.mobile || '').trim()
-}
-
-function isCompletedEnquiry(enquiry) {
-  return String(enquiry?.status || '').trim().toLowerCase() === 'completed'
-}
-
 export default function IntegratedAdminPanelDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
@@ -279,7 +310,6 @@ export default function IntegratedAdminPanelDashboard() {
   const [message, setMessage] = useState('')
   const [hydrated, setHydrated] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
-  const [enquirySaveState, setEnquirySaveState] = useState({})
 
   // Product Inventory States (from global context)
   const { products: localProducts, setProducts: setLocalProducts } = useProductContext()
@@ -617,21 +647,6 @@ export default function IntegratedAdminPanelDashboard() {
     return 'Good Evening'
   }, [])
 
-  const adminDisplayName = useMemo(() => {
-    const session = loadJson(ADMIN_SESSION_KEY) || {}
-    const savedName = session.name || session.fullName || session.full_name || session.adminName
-
-    if (savedName && String(savedName).trim()) {
-      return String(savedName).trim()
-    }
-
-    if (username && !String(username).includes('@')) {
-      return username
-    }
-
-    return 'Admin'
-  }, [username])
-
 
   const salesReportOrders = useMemo(() => {
     return filterOrdersByRange(orders, salesReportRange)
@@ -770,77 +785,12 @@ export default function IntegratedAdminPanelDashboard() {
   const handleSaveEnquiry = async (id) => {
     const target = enquiries.find(e => e.id === id)
     if (!target) return
-
-    const nextStatus = target.status || 'New'
-    const nextNote = target.admin_note || ''
-    const enquiryEmail = getEnquiryEmail(target)
-    const enquiryMobile = getEnquiryMobile(target)
-
-    setEnquirySaveState((prev) => ({
-      ...prev,
-      [id]: { type: 'loading', text: 'Saving enquiry...' }
-    }))
-
-    try {
-      const { error } = await supabase.from('enquiries').update({
-        status: nextStatus,
-        admin_note: nextNote
-      }).eq('id', id)
-
-      if (error) throw error
-
-      let feedbackText = '✅ Enquiry saved successfully.'
-
-      if (String(nextStatus).trim().toLowerCase() === 'completed') {
-        if (enquiryEmail) {
-          const response = await fetch('/api/otp', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              action: 'enquiry-completed',
-              email: enquiryEmail,
-              mobile: enquiryMobile,
-              name: target.full_name || 'Customer',
-              enquiryId: id,
-              adminNote: nextNote
-            })
-          })
-
-          const result = await response.json().catch(() => ({}))
-
-          if (!response.ok || result?.error) {
-            feedbackText = '✅ Enquiry saved, but completion email could not be sent.'
-          } else {
-            feedbackText = result?.emailSent === false
-              ? '✅ Enquiry saved. Email service is not configured, so completion email was not sent.'
-              : '✅ Enquiry saved and completion email sent.'
-          }
-        } else if (enquiryMobile) {
-          feedbackText = '✅ Enquiry saved. Email not available; mobile/SMS notification will be added later.'
-        } else {
-          feedbackText = '✅ Enquiry saved. Email/mobile not available for notification.'
-        }
-      }
-
-      setEnquiries((prev) => prev.map((item) => (
-        item.id === id
-          ? { ...item, status: nextStatus, admin_note: nextNote, updated_at: new Date().toISOString() }
-          : item
-      )))
-
-      setEnquirySaveState((prev) => ({
-        ...prev,
-        [id]: { type: 'success', text: feedbackText }
-      }))
-    } catch (error) {
-      console.error('Save enquiry error:', error)
-      setEnquirySaveState((prev) => ({
-        ...prev,
-        [id]: { type: 'error', text: `❌ ${error.message || 'Could not save enquiry.'}` }
-      }))
-    }
+    await supabase.from('enquiries').update({
+      status: target.status,
+      admin_note: target.admin_note
+    }).eq('id', id)
+    setMessage(`✅ Progress Saved for Enquiry ID: ${id}`)
+    alert('Changes saved to Supabase!')
   }
 
   const handleEnquiryDelete = async (id) => {
@@ -1065,6 +1015,9 @@ export default function IntegratedAdminPanelDashboard() {
       date: new Date().toISOString(),
       total: 0,
       status: 'Processing',
+      paymentMode: 'Admin Created Order',
+      paymentStatus: 'Not Required',
+      transactionId: '',
       items: 0,
       products: [],
       enquiryId: enquiry.id,
@@ -1471,8 +1424,8 @@ export default function IntegratedAdminPanelDashboard() {
       <div className="mb-8 rounded-[2rem] bg-white p-8 shadow-xl border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
         <div>
           <p className="text-xs uppercase tracking-widest text-emerald-500 font-bold">● System Dashboard Live</p>
-          <h1 className="text-4xl font-black text-slate-900 mt-2">✨ {greeting}, {adminDisplayName}! 👋</h1>
-          <p className="text-sm text-slate-500 mt-2 italic">Welcome back! Your store insights and controls are waiting.</p>
+          <h1 className="text-4xl font-black text-slate-900 mt-2">✨ {greeting}, {username}! 👋</h1>
+          <p className="text-sm text-slate-500 mt-2 italic">Hello Admin!! How are you?</p>
         </div>
         <div className="flex flex-col items-end gap-3">
           <div className="rounded-full bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow-lg">
@@ -2330,7 +2283,7 @@ export default function IntegratedAdminPanelDashboard() {
               </div>
 
               <div className="overflow-x-auto rounded-2xl border border-slate-100">
-                <table className="w-full text-left border-collapse min-w-[800px]">
+                <table className="w-full text-left border-collapse min-w-[980px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500">
                       <th className="p-4 font-black">Order ID</th>
@@ -2338,6 +2291,7 @@ export default function IntegratedAdminPanelDashboard() {
                       <th className="p-4 font-black">Date</th>
                       <th className="p-4 font-black text-center">Items</th>
                       <th className="p-4 font-black">Total Amount</th>
+                      <th className="p-4 font-black text-center">Payment</th>
                       <th className="p-4 font-black text-center">Status</th>
                       <th className="p-4 font-black text-right">Actions</th>
                     </tr>
@@ -2351,7 +2305,17 @@ export default function IntegratedAdminPanelDashboard() {
                           <td className="p-4 text-sm font-bold text-slate-700">{order.customer}</td>
                           <td className="p-4 text-xs font-semibold text-slate-500">{order.date}</td>
                           <td className="p-4 text-sm font-bold text-slate-700 text-center">{order.items}</td>
-                          <td className="p-4 text-sm font-black text-emerald-600">₹{order.total.toLocaleString()}</td>
+                          <td className="p-4 text-sm font-black text-emerald-600">₹{Number(order.total || order.totalAmount || 0).toLocaleString()}</td>
+                          <td className="p-4 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              <span className="rounded-full bg-slate-100 px-3 py-1 text-[9px] font-black uppercase tracking-wider text-slate-700">
+                                {getPaymentModeShortLabel(order)}
+                              </span>
+                              <span className={`rounded-full px-2.5 py-0.5 text-[8px] font-black uppercase tracking-wider ${getPaymentStatusClassName(getOrderPaymentStatus(order))}`}>
+                                {getOrderPaymentStatus(order)}
+                              </span>
+                            </div>
+                          </td>
                           <td className="p-4 text-center">
                             <select value={order.status} onChange={(e) => { handleOrderStatusChange(order.id, e.target.value); }} className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full outline-none cursor-pointer border-2 ${order.status === 'Processing' ? 'bg-amber-50 text-amber-700 border-amber-200' : order.status === 'Shipped' ? 'bg-blue-50 text-blue-700 border-blue-200' : order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
                               <option value="Processing">Processing</option>
@@ -2396,25 +2360,11 @@ export default function IntegratedAdminPanelDashboard() {
                           <p className="text-xs text-slate-500 font-mono mt-0.5">Email: {e.email || '—'} | Received: {e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</p>
                           <p className="text-sm text-slate-900 font-medium italic mt-3 bg-white p-3 rounded-xl border border-slate-100">{e.message || '—'}</p>
                         </div>
-                        <div className="flex flex-col gap-2 self-end sm:self-start">
-                          <div className="flex flex-wrap gap-2 justify-end">
-                            <button
-                              type="button"
-                              onClick={() => handleSaveEnquiry(e.id)}
-                              disabled={enquirySaveState[e.id]?.type === 'loading'}
-                              className="px-4 py-2 bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 transition font-bold text-xs disabled:cursor-not-allowed disabled:bg-slate-300"
-                            >
-                              {enquirySaveState[e.id]?.type === 'loading' ? 'Saving...' : isCompletedEnquiry(e) ? 'Save & Notify' : 'Save Changes'}
-                            </button>
-                            <button onClick={() => handleConvertEnquiryToCustomer(e)} className="px-4 py-2 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 transition font-bold text-xs">Convert Customer</button>
-                            <button onClick={() => handleCreateOrderFromEnquiry(e)} className="px-4 py-2 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs">Create Order</button>
-                            <button onClick={() => handleEnquiryDelete(e.id)} className="px-4 py-2 bg-rose-600 text-white rounded-xl shadow-md hover:bg-rose-700 transition font-bold text-xs">Delete</button>
-                          </div>
-                          {enquirySaveState[e.id]?.text && (
-                            <p className={`text-[11px] font-bold ${enquirySaveState[e.id]?.type === 'error' ? 'text-rose-600' : 'text-emerald-700'}`}>
-                              {enquirySaveState[e.id].text}
-                            </p>
-                          )}
+                        <div className="flex gap-2 self-end sm:self-start">
+                          <button onClick={() => handleSaveEnquiry(e.id)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 transition font-bold text-xs">Save Changes</button>
+                          <button onClick={() => handleConvertEnquiryToCustomer(e)} className="px-4 py-2 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 transition font-bold text-xs">Convert Customer</button>
+                          <button onClick={() => handleCreateOrderFromEnquiry(e)} className="px-4 py-2 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition font-bold text-xs">Create Order</button>
+                          <button onClick={() => handleEnquiryDelete(e.id)} className="px-4 py-2 bg-rose-600 text-white rounded-xl shadow-md hover:bg-rose-700 transition font-bold text-xs">Delete</button>
                         </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-200/80">
@@ -2579,7 +2529,7 @@ export default function IntegratedAdminPanelDashboard() {
               </button>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Amount</p>
                 <p className="mt-1 text-xl font-black text-emerald-600">₹{Number(selectedOrder.total || selectedOrder.totalAmount || 0).toLocaleString()}</p>
@@ -2593,6 +2543,14 @@ export default function IntegratedAdminPanelDashboard() {
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Status</p>
                 <p className="mt-1 text-xl font-black text-slate-950">{selectedOrder.status || 'Processing'}</p>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Payment</p>
+                <p className="mt-1 text-sm font-black text-slate-950">{getPaymentModeShortLabel(selectedOrder)}</p>
+                <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-[8px] font-black uppercase tracking-wider ${getPaymentStatusClassName(getOrderPaymentStatus(selectedOrder))}`}>
+                  {getOrderPaymentStatus(selectedOrder)}
+                </span>
               </div>
 
               <div className="rounded-2xl bg-slate-50 p-4">
@@ -2611,6 +2569,17 @@ export default function IntegratedAdminPanelDashboard() {
                 <p>Name: {selectedOrder.customer || selectedOrder.customerName || '—'}</p>
                 <p>Mobile: {selectedOrder.mobileNumber || selectedOrder.mobile || '—'}</p>
                 <p className="sm:col-span-2">Address: {selectedOrder.address || '—'}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-[1.5rem] border border-blue-100 bg-blue-50 p-5">
+              <h4 className="text-sm font-black uppercase tracking-wider text-blue-950">
+                Payment Information
+              </h4>
+              <div className="mt-3 grid gap-3 text-sm font-bold text-blue-900 sm:grid-cols-2">
+                <p>Mode: {getOrderPaymentMode(selectedOrder)}</p>
+                <p>Status: {getOrderPaymentStatus(selectedOrder)}</p>
+                <p className="sm:col-span-2">Transaction ID: {getOrderTransactionId(selectedOrder) || '—'}</p>
               </div>
             </div>
 

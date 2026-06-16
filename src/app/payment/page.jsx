@@ -1,29 +1,139 @@
 "use client"
 
-import React, { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useProductContext } from '@/app/context/ProductContext'
+import React, { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
+import { useProductContext } from "@/app/context/ProductContext"
 
-const initialForm = { fullName: '', mobileNumber: '', address: '', couponCode: '' }
+const CART_STORAGE_KEY = "mobisphereCart"
+const ORDERS_STORAGE_KEY = "mobisphereOrders"
+
+const STORE_UPI_ID = "siddharthwaghmare2145-2@oksbi"
+
+const initialForm = {
+  fullName: "",
+  mobileNumber: "",
+  address: "",
+  couponCode: "",
+}
+
+const paymentOptions = [
+  {
+    id: "cod",
+    title: "Cash on Delivery / Pay at Store",
+    badge: "Recommended",
+    icon: "🏬",
+    description: "Pay after delivery or while picking up your order from Mobisphere.",
+    status: "Pending / Pay at Store",
+  },
+  {
+    id: "upi",
+    title: "UPI Payment",
+    badge: "Manual verification",
+    icon: "📲",
+    description: "Pay using UPI and enter your UTR / transaction ID for verification.",
+    status: "Verification Pending",
+  },
+  {
+    id: "card",
+    title: "Credit / Debit Card",
+    badge: "Coming soon",
+    icon: "💳",
+    description: "Card payment will be available after payment gateway integration.",
+    status: "Gateway Required",
+    disabled: true,
+  },
+]
 
 function safeJson(key, fallback) {
-  if (typeof window === 'undefined') return fallback
+  if (typeof window === "undefined") return fallback
+
   try {
-    const parsed = JSON.parse(localStorage.getItem(key) || 'null')
+    const parsed = JSON.parse(localStorage.getItem(key) || "null")
     return parsed ?? fallback
   } catch {
     return fallback
   }
 }
 
-function normalizeCartItem(item) {
+function getStockQuantity(product) {
+  const value =
+    product?.stockQty ??
+    product?.stockQuantity ??
+    product?.stockAvailable ??
+    product?.stock ??
+    0
+
+  const stock = Number(value)
+  return Number.isFinite(stock) ? Math.max(stock, 0) : 0
+}
+
+function getMinimumStockAlert(product) {
+  const value =
+    product?.minStockAlert ??
+    product?.minimumStockAlert ??
+    product?.minStock ??
+    product?.lowStockLimit ??
+    3
+
+  const minStock = Number(value)
+  return Number.isFinite(minStock) ? Math.max(minStock, 1) : 3
+}
+
+function getStockStatusFromNumbers(stock, minStock) {
+  if (stock <= 0) {
+    return {
+      type: "out",
+      label: "Out of Stock",
+      className: "border-rose-200 bg-rose-50 text-rose-700",
+    }
+  }
+
+  if (stock <= minStock) {
+    return {
+      type: "low",
+      label: "Low Stock",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+    }
+  }
+
   return {
-    productId: item.productId,
-    title: item.title || 'Product',
-    image: item.image || '/images/IPhone 16 Pro Max.png',
-    description: item.description || '',
-    price: Number(item.price) || 0,
-    quantity: Number(item.quantity) || 1,
+    type: "in",
+    label: "In Stock",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  }
+}
+
+function findProductById(products, productId) {
+  if (!Array.isArray(products)) return null
+
+  return (
+    products.find((item) => String(item.id) === String(productId)) || null
+  )
+}
+
+function normalizeCartItem(item, latestProduct = null) {
+  const productId = item.productId || item.id || latestProduct?.id
+  const source = latestProduct || item
+  const quantity = Math.max(Number(item.quantity) || 1, 1)
+  const stockQty = getStockQuantity(source)
+  const minStockAlert = getMinimumStockAlert(source)
+  const stockStatus = getStockStatusFromNumbers(stockQty, minStockAlert)
+
+  return {
+    productId,
+    title: latestProduct?.title || item.title || "Mobisphere Product",
+    brand: latestProduct?.brand || item.brand || "Mobisphere",
+    image:
+      latestProduct?.image ||
+      item.image ||
+      "/images/IPhone 16 Pro Max.png",
+    description: latestProduct?.description || item.description || "",
+    price: Number(latestProduct?.price ?? item.price) || 0,
+    quantity,
+    stockQty,
+    minStockAlert,
+    stockStatus: stockStatus.label,
+    stockStatusType: stockStatus.type,
   }
 }
 
@@ -31,79 +141,284 @@ function makeOrderId() {
   return `ORD-${Date.now().toString(36).toUpperCase().slice(-5)}`
 }
 
+function getPaymentOption(methodId) {
+  return paymentOptions.find((option) => option.id === methodId) || paymentOptions[0]
+}
+
+function getPaymentStatus(methodId) {
+  return getPaymentOption(methodId).status
+}
+
+function isManualPayment(methodId) {
+  return methodId === "upi"
+}
+
 export default function PaymentPage() {
   const router = useRouter()
-  const { products, hydrated: productsHydrated } = useProductContext()
+  const {
+    products,
+    setProducts,
+    hydrated: productsHydrated,
+  } = useProductContext()
+
   const [formData, setFormData] = useState(initialForm)
-  const [checkoutMode, setCheckoutMode] = useState({ cart: false, productId: null })
+  const [checkoutMode, setCheckoutMode] = useState({
+    cart: false,
+    productId: null,
+  })
   const [cartItems, setCartItems] = useState([])
   const [discount, setDiscount] = useState(0)
-  const [couponError, setCouponError] = useState('')
-  const [couponSuccess, setCouponSuccess] = useState('')
+  const [couponError, setCouponError] = useState("")
+  const [couponSuccess, setCouponSuccess] = useState("")
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [lastOrder, setLastOrder] = useState(null)
   const [isHydrated, setIsHydrated] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState("cod")
+  const [transactionId, setTransactionId] = useState("")
+  const [paymentError, setPaymentError] = useState("")
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false)
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
+    if (typeof window === "undefined") return
+
     const queryParams = new URLSearchParams(window.location.search)
-    const rawPid = queryParams.get('productId')
-    const cartMode = queryParams.get('cart') === '1'
-    const loggedInUser = safeJson('mobisphereLoggedIn', null)
-    const storedCart = safeJson('mobisphereCart', [])
+    const rawPid = queryParams.get("productId")
+    const cartMode = queryParams.get("cart") === "1"
+
+    const loggedInUser = safeJson("mobisphereLoggedIn", null)
+    const storedCart = safeJson(CART_STORAGE_KEY, [])
 
     queueMicrotask(() => {
-      setCheckoutMode({ cart: cartMode, productId: rawPid })
-      setCartItems(Array.isArray(storedCart) ? storedCart.map(normalizeCartItem) : [])
+      setCheckoutMode({
+        cart: cartMode,
+        productId: rawPid,
+      })
+
+      setCartItems(Array.isArray(storedCart) ? storedCart : [])
+
       if (loggedInUser) {
-        setFormData((prev) => ({ ...prev, fullName: loggedInUser.fullName || '', mobileNumber: loggedInUser.mobileNumber || '', address: loggedInUser.address || '' }))
+        setFormData((prev) => ({
+          ...prev,
+          fullName: loggedInUser.fullName || "",
+          mobileNumber: loggedInUser.mobileNumber || "",
+          address: loggedInUser.address || "",
+        }))
       }
+
       setIsHydrated(true)
     })
   }, [])
 
   const selectedProduct = useMemo(() => {
-    if (!checkoutMode.productId) return null
-    return products.find((item) => String(item.id) === String(checkoutMode.productId)) || null
+    if (!checkoutMode.productId || !Array.isArray(products)) return null
+
+    return findProductById(products, checkoutMode.productId)
   }, [checkoutMode.productId, products])
 
-  const checkoutItems = useMemo(() => checkoutMode.cart ? cartItems : selectedProduct ? [normalizeCartItem(selectedProduct)] : [], [cartItems, checkoutMode.cart, selectedProduct])
-  const basePrice = checkoutItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 1), 0)
+  const checkoutItems = useMemo(() => {
+    if (checkoutMode.cart) {
+      return cartItems.map((item) => {
+        const productId = item.productId || item.id
+        const latestProduct = findProductById(products, productId)
+
+        return normalizeCartItem(item, latestProduct)
+      })
+    }
+
+    return selectedProduct
+      ? [normalizeCartItem(selectedProduct, selectedProduct)]
+      : []
+  }, [cartItems, checkoutMode.cart, selectedProduct, products])
+
+  const stockValidation = useMemo(() => {
+    const quantityByProduct = new Map()
+    const itemByProduct = new Map()
+
+    checkoutItems.forEach((item) => {
+      if (!item.productId) return
+
+      const key = String(item.productId)
+      const quantity = Number(item.quantity || 1)
+
+      quantityByProduct.set(key, (quantityByProduct.get(key) || 0) + quantity)
+
+      if (!itemByProduct.has(key)) {
+        itemByProduct.set(key, item)
+      }
+    })
+
+    const issues = []
+
+    quantityByProduct.forEach((orderedQuantity, productId) => {
+      const item = itemByProduct.get(productId)
+      const availableStock = getStockQuantity(item)
+
+      if (availableStock <= 0) {
+        issues.push(`${item?.title || "Product"} is out of stock.`)
+        return
+      }
+
+      if (orderedQuantity > availableStock) {
+        issues.push(
+          `${item?.title || "Product"} has only ${availableStock} units available.`
+        )
+      }
+    })
+
+    return {
+      hasIssue: issues.length > 0,
+      issues,
+    }
+  }, [checkoutItems])
+
+  const basePrice = checkoutItems.reduce((sum, item) => {
+    return sum + Number(item.price || 0) * Number(item.quantity || 1)
+  }, 0)
+
   const discountAmount = Math.round((basePrice * discount) / 100)
   const finalPrice = Math.max(basePrice - discountAmount, 0)
+  const selectedPayment = getPaymentOption(paymentMethod)
 
-  const handleInputChange = (field, value) => setFormData((prev) => ({ ...prev, [field]: value }))
+  const handleInputChange = (field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
+  }
 
-  const handleApplyCoupon = () => {
-    setCouponError('')
-    setCouponSuccess('')
-    const code = formData.couponCode.trim().toUpperCase()
-    if (!code) {
-      setCouponError('Please enter a coupon code.')
+  const handlePaymentMethodChange = (methodId) => {
+    const nextMethod = getPaymentOption(methodId)
+
+    if (nextMethod.disabled) {
+      setPaymentError("Credit / Debit Card payment needs a payment gateway. We will add it later.")
       return
     }
-    const storedCoupons = safeJson('mobisphereCoupons', [])
-    const found = Array.isArray(storedCoupons) ? storedCoupons.find((c) => String(c.code).toUpperCase() === code && c.active !== false) : null
+
+    setPaymentMethod(methodId)
+    setPaymentError("")
+
+    if (!isManualPayment(methodId)) {
+      setTransactionId("")
+    }
+  }
+
+  const applyCoupon = () => {
+    setCouponError("")
+    setCouponSuccess("")
+
+    const code = formData.couponCode.trim().toUpperCase()
+
+    if (!code) {
+      setCouponError("Please enter a coupon code.")
+      return
+    }
+
+    const storedCoupons = safeJson("mobisphereCoupons", [])
+
+    const found = Array.isArray(storedCoupons)
+      ? storedCoupons.find(
+          (coupon) => String(coupon.code).toUpperCase() === code
+        )
+      : null
+
     if (!found) {
-      setCouponError('Invalid coupon code. Try another one.')
+      setCouponError("Invalid coupon code. Try another one.")
       setDiscount(0)
       return
     }
+
     const percent = Number(found.discountPercent) || 0
+
+    if (percent <= 0 || percent > 100) {
+      setCouponError("This coupon is not valid.")
+      setDiscount(0)
+      return
+    }
+
     setDiscount(percent)
     setCouponSuccess(`Coupon applied! You got ${percent}% off.`)
   }
 
+  const reduceProductStock = (orderedItems) => {
+    if (typeof setProducts !== "function") return
+
+    const quantityByProduct = new Map()
+
+    orderedItems.forEach((item) => {
+      if (!item.productId) return
+
+      const key = String(item.productId)
+      const quantity = Math.max(Number(item.quantity) || 1, 1)
+
+      quantityByProduct.set(key, (quantityByProduct.get(key) || 0) + quantity)
+    })
+
+    setProducts((prevProducts) => {
+      const safeProducts = Array.isArray(prevProducts) ? prevProducts : []
+
+      return safeProducts.map((product) => {
+        const orderedQuantity = quantityByProduct.get(String(product.id))
+
+        if (!orderedQuantity) return product
+
+        const currentStock = getStockQuantity(product)
+        const minStockAlert = getMinimumStockAlert(product)
+        const nextStock = Math.max(currentStock - orderedQuantity, 0)
+        const nextStatus = getStockStatusFromNumbers(nextStock, minStockAlert)
+
+        return {
+          ...product,
+          stockQty: nextStock,
+          minStockAlert,
+          minStock: minStockAlert,
+          stockStatus: nextStatus.label,
+          stockUpdatedAt: new Date().toISOString(),
+        }
+      })
+    })
+  }
+
   const handlePlaceOrder = (event) => {
     event.preventDefault()
-    if (!formData.fullName.trim() || !formData.mobileNumber.trim() || !formData.address.trim()) {
-      alert('Please fill out your name, mobile number, and delivery address.')
+
+    if (isPlacingOrder) return
+
+    if (
+      !formData.fullName.trim() ||
+      !formData.mobileNumber.trim() ||
+      !formData.address.trim()
+    ) {
+      alert("Please fill out your name, mobile number, and delivery address.")
       return
     }
+
     if (checkoutItems.length === 0) {
-      alert('No product selected for checkout.')
+      alert("No product selected for checkout.")
       return
     }
+
+    if (stockValidation.hasIssue) {
+      alert(stockValidation.issues.join("\n"))
+      return
+    }
+
+    if (selectedPayment.disabled) {
+      setPaymentError("Please choose another payment method. Card payment is coming soon.")
+      return
+    }
+
+    if (isManualPayment(paymentMethod) && !transactionId.trim()) {
+      setPaymentError("Please enter UTR / Transaction ID after completing the UPI payment.")
+      return
+    }
+
+    setPaymentError("")
+    setIsPlacingOrder(true)
+
+    const orderProducts = checkoutItems.map((item) => ({
+      ...item,
+      availableStockBeforeOrder: item.stockQty,
+    }))
 
     const order = {
       id: makeOrderId(),
@@ -112,34 +427,76 @@ export default function PaymentPage() {
       address: formData.address.trim(),
       date: new Date().toISOString(),
       total: finalPrice,
-      status: 'Processing',
-      items: checkoutItems.length,
-      products: checkoutItems,
+      originalItemsTotal: basePrice,
       discountPercent: discount,
+      couponCode: formData.couponCode.trim().toUpperCase(),
+      couponDiscountAmount: discountAmount,
+      status: "Processing",
+      paymentMode: selectedPayment.title,
+      paymentModeId: paymentMethod,
+      paymentStatus: getPaymentStatus(paymentMethod),
+      transactionId: transactionId.trim(),
+      items: orderProducts.reduce(
+        (sum, item) => sum + Number(item.quantity || 1),
+        0
+      ),
+      products: orderProducts,
     }
 
-    const existingOrders = safeJson('mobisphereOrders', [])
-    const nextOrders = Array.isArray(existingOrders) ? [order, ...existingOrders] : [order]
-    localStorage.setItem('mobisphereOrders', JSON.stringify(nextOrders))
+    const existingOrders = safeJson(ORDERS_STORAGE_KEY, [])
+    const nextOrders = Array.isArray(existingOrders)
+      ? [order, ...existingOrders]
+      : [order]
+
+    localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(nextOrders))
+
+    reduceProductStock(orderProducts)
+
     if (checkoutMode.cart) {
-      localStorage.setItem('mobisphereCart', JSON.stringify([]))
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify([]))
       setCartItems([])
     }
+
     setLastOrder(order)
     setOrderPlaced(true)
+    setIsPlacingOrder(false)
   }
 
   if (!isHydrated || !productsHydrated) {
-    return <main className="px-4 py-24 text-center font-black text-slate-500">Loading checkout...</main>
+    return (
+      <main className="mx-auto max-w-5xl px-4 py-20 pt-32 text-center">
+        <div className="rounded-[2rem] border border-slate-100 bg-white p-10 shadow-xl">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-500" />
+
+          <p className="text-sm font-black uppercase tracking-[0.25em] text-slate-500">
+            Loading Checkout
+          </p>
+        </div>
+      </main>
+    )
   }
 
   if (checkoutItems.length === 0) {
     return (
-      <main className="mx-auto max-w-md px-4 py-20 text-center">
-        <div className="rounded-[2rem] border border-slate-100 bg-white p-10 shadow-xl">
-          <p className="text-5xl">🛍️</p>
-          <h1 className="mt-4 text-2xl font-black text-slate-950">No product selected</h1>
-          <button type="button" onClick={() => router.push('/product')} className="mt-6 rounded-full bg-slate-950 px-6 py-3 text-xs font-black uppercase tracking-wider text-white hover:bg-slate-800">Browse products</button>
+      <main className="mx-auto max-w-md px-4 py-20 pt-32 text-center">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+          <div className="mb-4 text-5xl">🛒</div>
+
+          <p className="text-xl font-black text-slate-950">
+            No product selected
+          </p>
+
+          <p className="mt-2 text-sm font-bold text-slate-500">
+            Select a product or checkout from cart.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => router.push("/product")}
+            className="mt-6 rounded-full bg-slate-950 px-6 py-2.5 text-xs font-black text-white transition hover:bg-slate-800"
+          >
+            Browse Products
+          </button>
         </div>
       </main>
     )
@@ -147,101 +504,368 @@ export default function PaymentPage() {
 
   if (orderPlaced) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
-        <section className="overflow-hidden rounded-[2rem] border border-emerald-100 bg-white text-center shadow-2xl">
-          <div className="bg-slate-950 p-8 text-white">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400 text-3xl font-black text-slate-950">✓</div>
-            <h1 className="mt-5 text-3xl font-black">Order placed successfully</h1>
-            <p className="mt-2 text-sm font-semibold text-slate-400">Thank you, {formData.fullName}. Your order is now in processing.</p>
+      <main className="mx-auto max-w-xl px-4 py-20 pt-32 text-center">
+        <div className="rounded-[2rem] border border-emerald-200 bg-emerald-50 p-8 text-emerald-900 shadow-sm">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-xl font-black text-emerald-600">
+            ✓
           </div>
-          <div className="p-8">
-            <div className="rounded-[1.5rem] bg-slate-50 p-5 text-left">
-              <p className="text-xs font-black uppercase tracking-wider text-slate-400">Order ID</p>
-              <p className="mt-2 text-2xl font-black text-slate-950">{lastOrder?.id}</p>
-              <p className="mt-3 text-sm font-semibold text-slate-600">Total: ₹{Number(lastOrder?.total || 0).toLocaleString()}</p>
-            </div>
-            <button type="button" onClick={() => router.push('/')} className="mt-7 rounded-full bg-slate-950 px-7 py-3 text-xs font-black uppercase tracking-wider text-white transition hover:bg-slate-800">Return home</button>
+
+          <h1 className="mt-4 text-2xl font-black">Order Placed!</h1>
+
+          <p className="mt-2 text-sm font-bold text-emerald-700">
+            Thank you, {formData.fullName}. Your order {lastOrder?.id} has been
+            received.
+          </p>
+
+          <div className="mt-5 rounded-2xl bg-white/70 p-4 text-left text-xs font-bold text-emerald-900">
+            <p>Order ID: {lastOrder?.id}</p>
+
+            <p className="mt-1">
+              Total: ₹{Number(lastOrder?.total || 0).toLocaleString()}
+            </p>
+
+            <p className="mt-1">Payment Method: {lastOrder?.paymentMode || "—"}</p>
+
+            <p className="mt-1">Payment Status: {lastOrder?.paymentStatus || "—"}</p>
+
+            {lastOrder?.transactionId && (
+              <p className="mt-1">Transaction ID: {lastOrder.transactionId}</p>
+            )}
+
+            <p className="mt-1">
+              Stock updated automatically after order confirmation.
+            </p>
           </div>
-        </section>
+
+          <div className="mt-5 rounded-2xl border border-emerald-200 bg-white/80 p-4 text-left text-xs font-bold text-emerald-800">
+            {lastOrder?.paymentModeId === "cod" ? (
+              <p>Our team will confirm your order and collect payment during delivery or pickup.</p>
+            ) : (
+              <p>Your UPI payment is marked as verification pending. Mobisphere will verify your transaction ID before dispatch.</p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            className="mt-6 rounded-full bg-slate-950 px-6 py-2.5 text-xs font-black text-white transition hover:bg-slate-800"
+          >
+            Return Home
+          </button>
+        </div>
       </main>
     )
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <section className="mb-8 overflow-hidden rounded-[2.2rem] bg-slate-950 p-6 text-white shadow-2xl sm:p-8">
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-300">Secure checkout</p>
-        <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Details → Review → Confirm</h1>
-        <p className="mt-3 max-w-2xl text-sm font-semibold leading-7 text-slate-400">Complete your delivery details and confirm your Mobisphere order with cash on delivery support.</p>
-      </section>
+    <main className="mx-auto max-w-6xl px-3 py-8 pt-28 sm:px-6 sm:py-10 lg:px-8">
+      <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:rounded-[2rem] sm:p-8">
+          <p className="text-xs font-black uppercase tracking-[0.28em] text-emerald-600 sm:text-sm">
+            Checkout Details
+          </p>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_410px]">
-        <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl sm:p-8">
-          <div className="mb-6 grid gap-3 sm:grid-cols-3">
-            {['1 Details', '2 Review', '3 Confirm'].map((step, index) => (
-              <div key={step} className={`rounded-full px-4 py-3 text-center text-xs font-black uppercase tracking-wider ${index === 0 ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-500'}`}>{step}</div>
-            ))}
-          </div>
+          <h1 className="mt-2 text-3xl font-black text-slate-950 sm:text-4xl">
+            Shipping & Payment
+          </h1>
 
-          <form onSubmit={handlePlaceOrder} className="space-y-5">
-            <label className="block space-y-2 text-sm font-bold text-slate-700">
-              <span>Full name</span>
-              <input type="text" value={formData.fullName} onChange={(e) => handleInputChange('fullName', e.target.value)} className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100" placeholder="Receiver name" />
-            </label>
-            <label className="block space-y-2 text-sm font-bold text-slate-700">
-              <span>Mobile number</span>
-              <input type="tel" value={formData.mobileNumber} onChange={(e) => handleInputChange('mobileNumber', e.target.value)} className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100" placeholder="10-digit delivery contact" />
-            </label>
-            <label className="block space-y-2 text-sm font-bold text-slate-700">
-              <span>Delivery address</span>
-              <textarea value={formData.address} onChange={(e) => handleInputChange('address', e.target.value)} className="h-28 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100" placeholder="Complete street address, landmarks, pincode" />
-            </label>
+          <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+            Fill delivery details carefully, select a payment option, and place your Mobisphere order.
+          </p>
 
-            <div className="rounded-[1.5rem] bg-slate-50 p-5 text-xs font-semibold leading-6 text-slate-500">
-              <p className="mb-1 font-black uppercase tracking-wider text-slate-900">Cash on delivery available</p>
-              Confirm the order now and pay the final amount when your product is delivered or picked up.
+          {stockValidation.hasIssue && (
+            <div className="mt-5 rounded-[1.5rem] border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700">
+              <p className="font-black uppercase tracking-wider">
+                Stock issue found
+              </p>
+
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {stockValidation.issues.map((issue) => (
+                  <li key={issue}>{issue}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <form onSubmit={handlePlaceOrder} className="mt-6 space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block space-y-2 text-sm font-bold text-slate-700">
+                <span>Full Name</span>
+
+                <input
+                  type="text"
+                  value={formData.fullName}
+                  onChange={(event) =>
+                    handleInputChange("fullName", event.target.value)
+                  }
+                  className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-slate-400"
+                  placeholder="Receiver name"
+                />
+              </label>
+
+              <label className="block space-y-2 text-sm font-bold text-slate-700">
+                <span>Mobile Number</span>
+
+                <input
+                  type="tel"
+                  value={formData.mobileNumber}
+                  onChange={(event) =>
+                    handleInputChange("mobileNumber", event.target.value)
+                  }
+                  className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-slate-400"
+                  placeholder="10-digit delivery contact"
+                />
+              </label>
             </div>
 
-            <button type="submit" className="w-full rounded-full bg-emerald-400 py-4 text-sm font-black text-slate-950 shadow-lg transition hover:-translate-y-1 hover:bg-emerald-300">
-              Confirm & place order
+            <label className="block space-y-2 text-sm font-bold text-slate-700">
+              <span>Delivery Address</span>
+
+              <textarea
+                value={formData.address}
+                onChange={(event) =>
+                  handleInputChange("address", event.target.value)
+                }
+                className="h-24 w-full resize-none rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-slate-400"
+                placeholder="Complete street address, landmarks, pincode"
+              />
+            </label>
+
+            <section className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-4 sm:p-5">
+              <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
+                    Payment Method
+                  </p>
+                  <h2 className="mt-1 text-xl font-black text-slate-950">
+                    Choose how you want to pay
+                  </h2>
+                </div>
+                <span className="w-fit rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600 shadow-sm">
+                  {selectedPayment.status}
+                </span>
+              </div>
+
+              <div className="grid gap-3">
+                {paymentOptions.map((option) => {
+                  const active = paymentMethod === option.id
+
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => handlePaymentMethodChange(option.id)}
+                      className={`text-left rounded-3xl border p-4 transition ${
+                        option.disabled
+                          ? "cursor-not-allowed border-slate-200 bg-white/60 opacity-70"
+                          : active
+                            ? "border-slate-950 bg-white shadow-lg"
+                            : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-xl text-white">
+                          {option.icon}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-black text-slate-950">{option.title}</p>
+                            <span className={`rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-wider ${active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                              {option.badge}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs font-bold leading-5 text-slate-500">{option.description}</p>
+                        </div>
+                        <span className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${active ? "border-emerald-500 bg-emerald-500" : "border-slate-300 bg-white"}`}>
+                          {active && <span className="h-2 w-2 rounded-full bg-white" />}
+                        </span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {paymentMethod === "upi" && (
+                <div className="mt-4 rounded-3xl border border-emerald-100 bg-emerald-50 p-4 text-xs font-bold text-emerald-800">
+                  <p className="font-black uppercase tracking-wider text-emerald-900">UPI Payment Details</p>
+                  <p className="mt-2">UPI ID: <span className="font-black">{STORE_UPI_ID}</span></p>
+                  <p className="mt-1 text-emerald-700">Complete payment in your UPI app, then enter UTR / transaction ID below.</p>
+                </div>
+              )}
+
+              {isManualPayment(paymentMethod) && (
+                <label className="mt-4 block space-y-2 text-sm font-bold text-slate-700">
+                  <span>UTR / Transaction ID</span>
+                  <input
+                    type="text"
+                    value={transactionId}
+                    onChange={(event) => setTransactionId(event.target.value)}
+                    className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold uppercase tracking-wider text-slate-900 outline-none transition focus:border-slate-400"
+                    placeholder="Enter payment transaction reference"
+                  />
+                </label>
+              )}
+
+              {paymentError && (
+                <p className="mt-3 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs font-black text-rose-700">
+                  {paymentError}
+                </p>
+              )}
+            </section>
+
+            <button
+              type="submit"
+              disabled={stockValidation.hasIssue || isPlacingOrder}
+              className={`w-full rounded-full py-3.5 text-sm font-black transition ${
+                stockValidation.hasIssue || isPlacingOrder
+                  ? "cursor-not-allowed bg-slate-200 text-slate-500"
+                  : "bg-emerald-600 text-white hover:bg-emerald-700"
+              }`}
+            >
+              {stockValidation.hasIssue
+                ? "Cannot Place Order"
+                : isPlacingOrder
+                  ? "Placing Order..."
+                  : "Confirm & Place Order"}
             </button>
           </form>
-        </section>
+        </div>
 
-        <aside className="space-y-5 lg:sticky lg:top-28 lg:self-start">
-          <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-2xl">
-            <h2 className="text-2xl font-black text-slate-950">Order summary</h2>
-            <div className="mt-5 space-y-3">
-              {checkoutItems.map((item, index) => (
-                <div key={`${item.productId}-${index}`} className="flex gap-3 rounded-2xl bg-slate-50 p-3">
-                  <img src={item.image} alt={item.title} className="h-16 w-16 rounded-xl object-contain" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-black text-slate-950">{item.title}</p>
-                    <p className="mt-1 text-xs font-bold text-slate-500">Qty {item.quantity}</p>
-                    <p className="mt-1 text-sm font-black text-emerald-700">₹{(item.price * item.quantity).toLocaleString()}</p>
+        <aside className="space-y-6">
+          <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:rounded-[2rem] sm:p-8">
+            <h2 className="text-xl font-black text-slate-950">
+              Order Summary
+            </h2>
+
+            <div className="mt-4 space-y-3">
+              {checkoutItems.map((item, index) => {
+                const quantity = Number(item.quantity || 1)
+                const price = Number(item.price || 0)
+                const itemTotal = price * quantity
+                const image = item.image || "/images/IPhone 16 Pro Max.png"
+                const stockQty = getStockQuantity(item)
+                const minStockAlert = getMinimumStockAlert(item)
+                const stockStatus = getStockStatusFromNumbers(
+                  stockQty,
+                  minStockAlert
+                )
+
+                return (
+                  <div
+                    key={`${item.productId}-${index}`}
+                    className="grid grid-cols-[82px_1fr] gap-4 rounded-2xl bg-slate-50 p-3 sm:grid-cols-[92px_1fr] sm:p-4"
+                  >
+                    <div className="flex h-[82px] w-[82px] items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-slate-100 via-white to-slate-200 p-2 shadow-inner sm:h-[92px] sm:w-[92px]">
+                      <img
+                        src={image}
+                        alt={item.title || "Product"}
+                        className={`h-full max-h-full w-full max-w-full object-contain ${
+                          stockStatus.type === "out" ? "opacity-50 grayscale" : ""
+                        }`}
+                      />
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <p className="line-clamp-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">
+                          {item.brand || "Mobisphere"}
+                        </p>
+
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider ${stockStatus.className}`}
+                        >
+                          {stockStatus.label}
+                        </span>
+                      </div>
+
+                      <h3 className="line-clamp-2 text-sm font-black leading-5 text-slate-950">
+                        {item.title || "Mobisphere Product"}
+                      </h3>
+
+                      <p className="mt-1 text-xs font-bold text-slate-500">
+                        Qty: {quantity} Unit
+                      </p>
+
+                      <p className="mt-1 text-xs font-bold text-slate-500">
+                        Available Stock: {stockQty} Unit
+                      </p>
+
+                      <p className="mt-1 text-sm font-black text-slate-900">
+                        ₹{itemTotal.toLocaleString()}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
-            <div className="mt-5 rounded-2xl border border-slate-100 p-3">
-              <div className="flex gap-2">
-                <input value={formData.couponCode} onChange={(e) => handleInputChange('couponCode', e.target.value)} className="min-w-0 flex-1 rounded-full bg-slate-50 px-4 py-3 text-xs font-bold uppercase outline-none" placeholder="Coupon code" />
-                <button type="button" onClick={handleApplyCoupon} className="rounded-full bg-slate-950 px-4 py-3 text-xs font-black text-white">Apply</button>
+            <div className="mt-6 space-y-3 border-b border-slate-100 pb-4 text-sm font-bold">
+              <div className="flex justify-between gap-4 text-slate-600">
+                <span>Items total</span>
+                <span>₹{basePrice.toLocaleString()}</span>
               </div>
-              {couponError && <p className="mt-2 text-xs font-bold text-rose-600">{couponError}</p>}
-              {couponSuccess && <p className="mt-2 text-xs font-bold text-emerald-700">{couponSuccess}</p>}
+
+              <div className="flex justify-between gap-4 text-slate-600">
+                <span>Shipping fee</span>
+                <span className="text-emerald-600">FREE</span>
+              </div>
+
+              {discount > 0 && (
+                <div className="flex justify-between gap-4 text-red-600">
+                  <span>Coupon discount</span>
+                  <span>-₹{discountAmount.toLocaleString()}</span>
+                </div>
+              )}
             </div>
 
-            <div className="mt-6 space-y-3 border-t border-slate-100 pt-5 text-sm font-bold text-slate-600">
-              <div className="flex justify-between"><span>Subtotal</span><span className="text-slate-950">₹{basePrice.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span>Discount</span><span className="text-emerald-700">− ₹{discountAmount.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span>Delivery</span><span>Free</span></div>
+            <div className="mt-4 flex justify-between gap-4 text-base font-black text-slate-950">
+              <span>Total cost</span>
+              <span>₹{finalPrice.toLocaleString()}</span>
             </div>
-            <div className="mt-5 flex items-end justify-between">
-              <span className="text-xs font-black uppercase tracking-wider text-slate-400">Final amount</span>
-              <span className="text-3xl font-black text-slate-950">₹{finalPrice.toLocaleString()}</span>
+
+            <div className="mt-5 rounded-3xl bg-slate-950 p-4 text-xs font-bold text-white">
+              <p className="font-black uppercase tracking-wider text-emerald-300">Selected Payment</p>
+              <p className="mt-2 text-sm font-black">{selectedPayment.title}</p>
+              <p className="mt-1 text-slate-400">Status after order: {selectedPayment.status}</p>
             </div>
+          </div>
+
+          <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:rounded-[2rem] sm:p-6">
+            <h3 className="mb-3 text-sm font-black uppercase tracking-wider text-slate-900">
+              Apply Store Coupon
+            </h3>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={formData.couponCode}
+                onChange={(event) =>
+                  handleInputChange("couponCode", event.target.value)
+                }
+                className="w-full min-w-0 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-900 outline-none focus:border-slate-400"
+                placeholder="PROMO20"
+              />
+
+              <button
+                type="button"
+                onClick={applyCoupon}
+                className="shrink-0 rounded-full bg-slate-950 px-5 text-xs font-black text-white transition hover:bg-slate-800"
+              >
+                Apply
+              </button>
+            </div>
+
+            {couponError && (
+              <p className="mt-2 pl-2 text-xs font-bold text-red-600">
+                {couponError}
+              </p>
+            )}
+
+            {couponSuccess && (
+              <p className="mt-2 pl-2 text-xs font-bold text-emerald-600">
+                {couponSuccess}
+              </p>
+            )}
           </div>
         </aside>
       </div>
