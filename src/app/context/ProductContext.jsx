@@ -12,7 +12,7 @@ import { productData } from "@/app/components/common/ProductCart"
 import { supabase } from "@/lib/supabase"
 
 export const PRODUCT_STORAGE_KEY = "mobisphereProducts"
-const PRODUCT_TABLE_NAME = "products"
+const PRODUCT_TABLE_NAME = "mobisphere_products"
 
 function normalizeNumber(value, fallback = 0) {
   const number = Number(value)
@@ -23,7 +23,7 @@ function normalizeProduct(product) {
   const safeTitle = product?.title || "Untitled Product"
   const stockQty = Math.max(
     normalizeNumber(
-      product?.stockQty ?? product?.stock_quantity ?? product?.stock ?? product?.quantity,
+      product?.stockQty ?? product?.stock_quantity ?? product?.stock_qty ?? product?.stock ?? product?.quantity,
       0
     ),
     0
@@ -212,6 +212,28 @@ export function ProductProvider({ children }) {
     queueMicrotask(() => {
       syncProductsFromSupabase()
     })
+  }, [syncProductsFromSupabase])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined
+
+    const handleFocus = () => {
+      syncProductsFromSupabase()
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        syncProductsFromSupabase()
+      }
+    }
+
+    window.addEventListener("focus", handleFocus)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener("focus", handleFocus)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
   }, [syncProductsFromSupabase])
 
   const setProducts = useCallback((updater) => {
