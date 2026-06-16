@@ -654,16 +654,36 @@ export default function IntegratedAdminPanelDashboard() {
       throw new Error('No active admin profile found. Create admin account with the access code.')
     }
 
-    const profile = data
+    let profile = data
 
     if (isEmailVerified(user)) {
-      await supabase
+      const verifiedEmail = String(user.email || profile.email || '').toLowerCase()
+      const verifiedUpdate = {
+        email_verified_at: user.email_confirmed_at || user.confirmed_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+
+      if (verifiedEmail) {
+        verifiedUpdate.email = verifiedEmail
+        verifiedUpdate.pending_email = null
+        verifiedUpdate.email_change_requested_at = null
+      }
+
+      const { data: syncedProfile } = await supabase
         .from(ADMIN_PROFILES_TABLE_NAME)
-        .update({
-          email_verified_at: user.email_confirmed_at || user.confirmed_at || new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
+        .update(verifiedUpdate)
         .eq('id', user.id)
+        .select('*')
+        .maybeSingle()
+
+      if (syncedProfile) {
+        profile = syncedProfile
+      } else {
+        profile = {
+          ...profile,
+          ...verifiedUpdate,
+        }
+      }
     }
 
     if (profile.active === false) {
@@ -1291,31 +1311,23 @@ export default function IntegratedAdminPanelDashboard() {
         throw new Error('Admin session expired. Please login again.')
       }
 
-      const authUpdates = {
-        data: {
-          ...(user.user_metadata || {}),
-          full_name: fullName,
-        },
-      }
-
-      if (nextEmail && nextEmail !== String(user.email || '').toLowerCase()) {
-        authUpdates.email = nextEmail
-      }
-
-      if (newPassword) {
-        authUpdates.password = newPassword
-      }
-
-      const { error: updateAuthError } = await supabase.auth.updateUser(authUpdates)
-      if (updateAuthError) throw updateAuthError
+      const currentEmail = String(user.email || adminProfile?.email || '').toLowerCase()
+      const emailChanged = Boolean(nextEmail && nextEmail !== currentEmail)
+      const now = new Date().toISOString()
 
       const profileUpdate = {
         id: user.id,
         full_name: fullName,
-        email: nextEmail,
+        email: currentEmail || nextEmail,
         role: adminProfile?.role || 'admin',
         active: adminProfile?.active !== false,
-        updated_at: new Date().toISOString(),
+        email_verified_at: user.email_confirmed_at || user.confirmed_at || adminProfile?.email_verified_at || null,
+        updated_at: now,
+      }
+
+      if (emailChanged) {
+        profileUpdate.pending_email = nextEmail
+        profileUpdate.email_change_requested_at = now
       }
 
       const { data: updatedProfile, error: profileError } = await supabase
@@ -1326,6 +1338,46 @@ export default function IntegratedAdminPanelDashboard() {
 
       if (profileError) throw profileError
 
+      const { error: metadataError } = await supabase.auth.updateUser({
+        data: {
+          ...(user.user_metadata || {}),
+          full_name: fullName,
+        },
+      })
+
+      if (metadataError) {
+        console.warn('Admin metadata update warning:', metadataError)
+      }
+
+      if (newPassword) {
+        const { error: passwordError } = await supabase.auth.updateUser({
+          password: newPassword,
+        })
+
+        if (passwordError) {
+          throw new Error(`Admin name saved, but password update failed: ${getReadableAuthError(passwordError)}`)
+        }
+      }
+
+      let emailChangeRequested = false
+
+      if (emailChanged) {
+        const { error: emailError } = await supabase.auth.updateUser(
+          {
+            email: nextEmail,
+          },
+          {
+            emailRedirectTo: getAdminEmailRedirectUrl(),
+          }
+        )
+
+        if (emailError) {
+          throw new Error(`Admin name saved, but email verification email could not be sent: ${getReadableAuthError(emailError)}`)
+        }
+
+        emailChangeRequested = true
+      }
+
       const nextProfile = {
         ...(adminProfile || {}),
         ...(updatedProfile || {}),
@@ -1333,26 +1385,26 @@ export default function IntegratedAdminPanelDashboard() {
       }
 
       setAdminProfile(nextProfile)
-      setUsername(nextProfile.full_name || nextProfile.email || nextEmail)
+      setUsername(fullName)
       setProfileForm({
-        fullName: nextProfile.full_name || fullName,
-        email: nextProfile.email || nextEmail,
+        fullName,
+        email: nextProfile.email || currentEmail || nextEmail,
         newPassword: '',
         confirmNewPassword: '',
       })
 
       saveJson(ADMIN_SESSION_KEY, {
         userId: user.id,
-        email: nextProfile.email || nextEmail,
-        username: nextProfile.email || nextEmail,
-        name: nextProfile.full_name || fullName,
+        email: nextProfile.email || currentEmail || nextEmail,
+        username: nextProfile.email || currentEmail || nextEmail,
+        name: fullName,
         provider: 'supabase',
       })
 
       setProfileSaveState('saved')
       setMessage(
-        authUpdates.email
-          ? '✅ Admin profile saved. Email change may need confirmation from your inbox.'
+        emailChangeRequested
+          ? `✅ Admin name saved. Verification email sent to ${nextEmail}. Confirm that email, then login with the new email.`
           : '✅ Admin profile saved successfully.'
       )
     } catch (error) {
@@ -1361,8 +1413,8 @@ export default function IntegratedAdminPanelDashboard() {
       setMessage(error?.message || 'Admin profile update failed.')
     } finally {
       setIsUpdatingProfile(false)
-      setTimeout(() => setProfileSaveState('idle'), 2600)
-      setTimeout(() => setMessage(''), 4500)
+      setTimeout(() => setProfileSaveState('idle'), 3200)
+      setTimeout(() => setMessage(''), 6500)
     }
   }
 
@@ -2533,7 +2585,7 @@ export default function IntegratedAdminPanelDashboard() {
 
                       <div className="flex flex-col gap-3 rounded-3xl border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-xs font-bold leading-5 text-slate-500">
-                          Email changes may need inbox confirmation depending on Supabase Auth settings. Password change applies to this logged-in admin.
+                          Admin name saves immediately. If email is changed, a verification link is sent first; the new email becomes active only after confirmation.
                         </p>
 
                         <button
