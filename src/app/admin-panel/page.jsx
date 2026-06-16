@@ -15,6 +15,8 @@ const ORDERS_STORAGE_KEY = 'mobisphereOrders'
 const ORDERS_TABLE_NAME = 'mobisphere_orders'
 const COUPONS_TABLE_NAME = 'mobisphere_coupons'
 const SALE_CAMPAIGNS_TABLE_NAME = 'mobisphere_sale_campaigns'
+const ADMIN_PROFILES_TABLE_NAME = 'mobisphere_admin_profiles'
+const PRODUCT_IMAGE_BUCKET = 'mobisphere-product-images'
 const ADMIN_ACCESS_KEY = 'ALT+SHIFT+A'
 
 function loadJson(key) {
@@ -42,6 +44,66 @@ function fileToDataUrl(file) {
     reader.onerror = () => resolve('')
     reader.readAsDataURL(file)
   })
+}
+
+function slugifyFilePart(value) {
+  return String(value || 'mobisphere-product')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'mobisphere-product'
+}
+
+function getFileExtension(file) {
+  const nameExtension = String(file?.name || '')
+    .split('.')
+    .pop()
+    ?.toLowerCase()
+
+  if (nameExtension && nameExtension.length <= 5) return nameExtension
+
+  const type = String(file?.type || '')
+
+  if (type.includes('png')) return 'png'
+  if (type.includes('webp')) return 'webp'
+  if (type.includes('jpeg') || type.includes('jpg')) return 'jpg'
+
+  return 'jpg'
+}
+
+async function uploadProductImageToStorage(file, productId, title) {
+  if (!file || file.size === 0) return ''
+
+  if (!supabase?.storage?.from) {
+    return fileToDataUrl(file)
+  }
+
+  const safeProductId = slugifyFilePart(productId || Date.now())
+  const safeTitle = slugifyFilePart(title)
+  const extension = getFileExtension(file)
+  const filePath = `${safeProductId}/${Date.now()}-${safeTitle}.${extension}`
+
+  try {
+    const { error } = await supabase.storage
+      .from(PRODUCT_IMAGE_BUCKET)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+        contentType: file.type || undefined,
+      })
+
+    if (error) throw error
+
+    const { data } = supabase.storage
+      .from(PRODUCT_IMAGE_BUCKET)
+      .getPublicUrl(filePath)
+
+    return data?.publicUrl || ''
+  } catch (error) {
+    console.error('Mobisphere product image upload error:', error)
+
+    return fileToDataUrl(file)
+  }
 }
 
 function getStockQuantity(product) {
@@ -391,7 +453,8 @@ function campaignToSupabase(campaign) {
 export default function IntegratedAdminPanelDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
-  const [adminUsers, setAdminUsers] = useState([])
+  const [, setAdminUsers] = useState([])
+  const [adminProfile, setAdminProfile] = useState(null)
 
   // Admin Login / Signup states
   const [regName, setRegName] = useState('')
@@ -535,6 +598,46 @@ export default function IntegratedAdminPanelDashboard() {
     }
   }, [])
 
+  const loadAdminProfile = useCallback(async (user) => {
+    if (!user?.id) return null
+
+    const { data, error } = await supabase
+      .from(ADMIN_PROFILES_TABLE_NAME)
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (error) throw error
+
+    if (!data) {
+      await supabase.auth.signOut()
+      localStorage.removeItem(ADMIN_SESSION_KEY)
+      throw new Error('No active admin profile found. Create admin account with the access code.')
+    }
+
+    const profile = data
+
+    if (profile.active === false) {
+      await supabase.auth.signOut()
+      localStorage.removeItem(ADMIN_SESSION_KEY)
+      throw new Error('This admin account is inactive.')
+    }
+
+    const displayName = profile.full_name || profile.email || user.email || 'Admin'
+
+    setAdminProfile(profile)
+    setUsername(displayName)
+    saveJson(ADMIN_SESSION_KEY, {
+      userId: user.id,
+      email: profile.email || user.email || '',
+      username: profile.email || user.email || '',
+      name: displayName,
+      provider: 'supabase',
+    })
+
+    return profile
+  }, [])
+
   const handleSyncAllData = useCallback(async (showFeedback = true) => {
     if (showFeedback === true) setIsSyncing(true)
 
@@ -562,30 +665,57 @@ export default function IntegratedAdminPanelDashboard() {
   }, [fetchData, refreshProductsFromSupabase])
 
   useEffect(() => {
-    const session = loadJson(ADMIN_SESSION_KEY)
+    let isMounted = true
+
     const storedAdmins = loadJson(ADMIN_USERS_KEY)
     const storedCoupons = loadJson(COUPON_STORAGE_KEY) || []
     const storedSaleCampaigns = loadJson(SALE_CAMPAIGNS_STORAGE_KEY) || []
     const storedOrders = loadJson(ORDERS_STORAGE_KEY)
 
-    queueMicrotask(() => {
-      if (session) {
-        setIsLoggedIn(true)
-        setUsername(session.username || 'Admin')
-      }
+    queueMicrotask(async () => {
       setAdminUsers(Array.isArray(storedAdmins) ? storedAdmins : [])
       setCoupons(Array.isArray(storedCoupons) ? storedCoupons.map((coupon) => ({ active: coupon.active !== false, expiresAt: coupon.expiresAt || coupon.expiryDate || '', ...coupon })) : [])
       setSaleCampaigns(Array.isArray(storedSaleCampaigns) ? storedSaleCampaigns.map((campaign) => ({ active: campaign.active !== false, scope: campaign.scope || 'all', discountType: campaign.discountType || 'percent', ...campaign })) : [])
+
       if (Array.isArray(storedOrders) && storedOrders.length > 0) {
         setOrders(storedOrders)
       }
-      setHydrated(true)
+
+      try {
+        const { data, error } = await supabase.auth.getSession()
+
+        if (error) throw error
+
+        const session = data?.session
+
+        if (session?.user) {
+          await loadAdminProfile(session.user)
+          if (isMounted) setIsLoggedIn(true)
+          await fetchData(false)
+        } else {
+          localStorage.removeItem(ADMIN_SESSION_KEY)
+          if (isMounted) {
+            setIsLoggedIn(false)
+            setAdminProfile(null)
+          }
+        }
+      } catch (error) {
+        console.error('Supabase admin session check error:', error)
+        localStorage.removeItem(ADMIN_SESSION_KEY)
+        if (isMounted) {
+          setIsLoggedIn(false)
+          setAdminProfile(null)
+          setMessage(error?.message || 'Admin session could not be verified.')
+        }
+      } finally {
+        if (isMounted) setHydrated(true)
+      }
     })
 
-    if (session) {
-      queueMicrotask(() => fetchData())
+    return () => {
+      isMounted = false
     }
-  }, [fetchData])
+  }, [fetchData, loadAdminProfile])
 
   // Analytics Graph Logic
   const chartAnalytics = useMemo(() => {
@@ -870,87 +1000,136 @@ export default function IntegratedAdminPanelDashboard() {
     resetAuthForm()
   }
 
-  const handleAuthSubmit = (e) => {
+  const handleAuthSubmit = async (e) => {
     e.preventDefault()
-    const uname = username.trim()
+
+    const email = username.trim().toLowerCase()
     const cleanName = regName.trim()
     const cleanAccessKey = adminAccessKey.trim().toUpperCase()
 
-    if (!uname || !password) {
-      setMessage('Please enter username and password.')
+    if (!email || !password) {
+      setMessage('Please enter email and password.')
       return
     }
 
-    if (isRegistering) {
-      if (!cleanName) {
-        setMessage('Please enter admin full name.')
-        return
-      }
+    if (!email.includes('@')) {
+      setMessage('Please enter a valid email address.')
+      return
+    }
 
-      if (password.length < 6) {
-        setMessage('Password must be at least 6 characters.')
-        return
-      }
-
-      if (password !== confirmPassword) {
-        setMessage('Passwords do not match.')
-        return
-      }
-
-      if (cleanAccessKey !== ADMIN_ACCESS_KEY) {
-        setMessage('Invalid admin access code.')
-        return
-      }
-
-      const exists = adminUsers.some((admin) => String(admin.username || '').toLowerCase() === uname.toLowerCase())
-      if (exists) {
-        setMessage('This username already exists. Use another username.')
-        return
-      }
-
-      const newAdmin = {
-        id: Date.now().toString(),
-        name: cleanName,
-        username: uname,
-        password,
-        createdAt: new Date().toISOString()
-      }
-      const updatedAdmins = [...adminUsers, newAdmin]
-
-      setAdminUsers(updatedAdmins)
-      saveJson(ADMIN_USERS_KEY, updatedAdmins)
-      saveJson(ADMIN_SESSION_KEY, { username: uname, name: cleanName })
-      setIsLoggedIn(true)
-      setUsername(uname)
+    try {
       setMessage('')
-      fetchData()
-      return
+
+      if (isRegistering) {
+        if (!cleanName) {
+          setMessage('Please enter admin full name.')
+          return
+        }
+
+        if (password.length < 6) {
+          setMessage('Password must be at least 6 characters.')
+          return
+        }
+
+        if (password !== confirmPassword) {
+          setMessage('Passwords do not match.')
+          return
+        }
+
+        if (cleanAccessKey !== ADMIN_ACCESS_KEY) {
+          setMessage('Invalid admin access code.')
+          return
+        }
+
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: cleanName,
+              role: 'admin',
+            },
+          },
+        })
+
+        if (error) throw error
+
+        const user = data?.user
+
+        if (!user?.id) {
+          setMessage('Admin account could not be created. Try again.')
+          return
+        }
+
+        const profileRow = {
+          id: user.id,
+          full_name: cleanName,
+          email,
+          role: 'admin',
+          active: true,
+          updated_at: new Date().toISOString(),
+        }
+
+        const { error: profileError } = await supabase
+          .from(ADMIN_PROFILES_TABLE_NAME)
+          .upsert(profileRow, { onConflict: 'id' })
+
+        if (profileError) throw profileError
+
+        if (!data?.session) {
+          setIsRegistering(false)
+          setPassword('')
+          setConfirmPassword('')
+          setAdminAccessKey('')
+          setMessage('Admin account created. Please login with your email and password.')
+          return
+        }
+
+        await loadAdminProfile(user)
+        setIsLoggedIn(true)
+        setMessage('')
+        await fetchData(false)
+        return
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) throw error
+
+      const user = data?.user
+
+      if (!user?.id) {
+        setMessage('Admin login failed. Try again.')
+        return
+      }
+
+      await loadAdminProfile(user)
+      setIsLoggedIn(true)
+      setPassword('')
+      setMessage('')
+      await fetchData(false)
+    } catch (error) {
+      console.error('Supabase admin auth error:', error)
+      setIsLoggedIn(false)
+      setAdminProfile(null)
+      localStorage.removeItem(ADMIN_SESSION_KEY)
+      setMessage(error?.message || 'Admin authentication failed.')
     }
-
-    if (!Array.isArray(adminUsers) || adminUsers.length === 0) {
-      setMessage('No admin account found. Create admin account using Sign Up.')
-      return
-    }
-
-    const validAdmin = adminUsers.find(
-      (admin) => String(admin.username || '').toLowerCase() === uname.toLowerCase() && admin.password === password
-    )
-
-    if (!validAdmin) {
-      setMessage('Invalid username or password.')
-      return
-    }
-
-    saveJson(ADMIN_SESSION_KEY, { username: validAdmin.username, name: validAdmin.name || validAdmin.username })
-    setIsLoggedIn(true)
-    setUsername(validAdmin.username)
-    setMessage('')
-    fetchData()
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+    } catch (error) {
+      console.error('Supabase logout error:', error)
+    }
+
     localStorage.removeItem(ADMIN_SESSION_KEY)
     setIsLoggedIn(false)
+    setAdminProfile(null)
     resetAuthForm()
   }
 
@@ -1383,19 +1562,23 @@ export default function IntegratedAdminPanelDashboard() {
 
   const handleSaveProduct = async (e) => {
     e.preventDefault()
+
     const formData = new FormData(e.target)
     const imageFile = formData.get('image')
-    const uploadedImage = imageFile && imageFile.size > 0 ? await fileToDataUrl(imageFile) : ''
-    const imageUrl = uploadedImage || editingProduct?.image || '/images/IPhone 16 Pro Max.png'
     const brand = String(formData.get('brand') || 'Other Models').trim()
     const title = String(formData.get('title') || 'Untitled Product').trim()
+    const productId = editingProduct ? String(editingProduct.id) : Date.now().toString()
+    const uploadedImage = imageFile && imageFile.size > 0
+      ? await uploadProductImageToStorage(imageFile, productId, title)
+      : ''
+    const imageUrl = uploadedImage || editingProduct?.image || '/images/IPhone 16 Pro Max.png'
     const stockQty = Math.max(Number(formData.get('stockQty') || editingProduct?.stockQty || 0), 0)
     const minStockAlert = Math.max(Number(formData.get('minStockAlert') || editingProduct?.minStockAlert || 3), 0)
     const purchasePrice = Math.max(Number(formData.get('purchasePrice') || editingProduct?.purchasePrice || 0), 0)
     const supplierName = String(formData.get('supplierName') || editingProduct?.supplierName || '').trim()
 
     const newProd = {
-      id: editingProduct ? editingProduct.id : Date.now().toString(),
+      id: productId,
       title,
       brand,
       price: Number(formData.get('price')),
@@ -1418,11 +1601,12 @@ export default function IntegratedAdminPanelDashboard() {
         Tools: formData.get('tools')
       }
     }
-    setLocalProducts(prev => editingProduct ? prev.map(p => p.id === newProd.id ? newProd : p) : [...prev, newProd])
+
+    setLocalProducts(prev => editingProduct ? prev.map(p => String(p.id) === String(newProd.id) ? newProd : p) : [...prev, newProd])
     setSelectedBrand(brand)
     setInventoryView('products')
     setEditingProduct(null)
-    setMessage(`Product ${editingProduct ? 'updated' : 'added'} successfully!`)
+    setMessage(`Product ${editingProduct ? 'updated' : 'added'} successfully${uploadedImage ? ' with Supabase Storage image' : ''}!`)
   }
 
   const handleDeleteProduct = (id) => {
@@ -1629,14 +1813,14 @@ export default function IntegratedAdminPanelDashboard() {
                 )}
 
                 <div>
-                  <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Username</label>
+                  <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Email Address</label>
                   <input
-                    type="text"
+                    type="email"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className="w-full rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm font-bold text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10"
-                    placeholder="Enter admin username"
-                    autoComplete="username"
+                    placeholder="Enter admin email"
+                    autoComplete="email"
                     required
                   />
                 </div>
@@ -1701,7 +1885,7 @@ export default function IntegratedAdminPanelDashboard() {
               </form>
 
               <p className="mt-5 text-center text-[11px] font-semibold leading-5 text-slate-500">
-                This is a local admin login system. For real production security, connect proper backend authentication later.
+                Admin access is protected with Supabase Auth and the private access code.
               </p>
             </div>
           </div>
@@ -1717,7 +1901,7 @@ export default function IntegratedAdminPanelDashboard() {
       <div className="mb-8 rounded-[2rem] bg-white p-8 shadow-xl border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
         <div>
           <p className="text-xs uppercase tracking-widest text-emerald-500 font-bold">● System Dashboard Live</p>
-          <h1 className="text-4xl font-black text-slate-900 mt-2">✨ {greeting}, {username}! 👋</h1>
+          <h1 className="text-4xl font-black text-slate-900 mt-2">✨ {greeting}, {adminProfile?.full_name || username}! 👋</h1>
           <p className="text-sm text-slate-500 mt-2 italic">Use this panel to manage customers and enquiries. Shortcut: Alt + Shift + A</p>
         </div>
         <div className="flex flex-col items-end gap-3">
@@ -2521,12 +2705,13 @@ export default function IntegratedAdminPanelDashboard() {
                         <textarea name="description" rows="4" defaultValue={editingProduct?.description || ''} placeholder="Describe the phone features..." className="w-full mt-1 p-3 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 text-slate-900 bg-white"></textarea>
                       </div>
                       <div className="md:col-span-2">
-                        <label className="text-[10px] font-black uppercase text-slate-400">Product Image (Local File)</label>
+                        <label className="text-[10px] font-black uppercase text-slate-400">Product Image (Supabase Storage)</label>
                         <div className="mt-1 flex items-center gap-4">
                           {editingProduct?.image && (
                             <img src={editingProduct.image} alt="Preview" className="h-12 w-12 rounded-lg border border-slate-200 bg-slate-50 object-contain p-1 shadow-sm" />
                           )}
                           <input type="file" name="image" accept="image/*" className="w-full p-2 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900 bg-white cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 transition" />
+                          <p className="text-[10px] font-bold text-slate-500">Image will upload to Supabase Storage bucket: mobisphere-product-images.</p>
                         </div>
                       </div>
                     </div>
